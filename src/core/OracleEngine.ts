@@ -7,9 +7,9 @@ import { NarrativeEngine } from '../parser/NarrativeEngine.js';
 import { computeTemporalPhase, phaseToString } from '../utils/TemporalMath.js';
 import { deterministicHexagramSelect } from '../utils/DeterministicHash.js';
 
-import registryJson from '../../data/hexagram-registry.json' assert { type: 'json' };
-import weightsJson from '../../data/emotional-weights.json' assert { type: 'json' };
-import reflectionsJson from '../../data/temporal-reflections.json' assert { type: 'json' };
+import registryJson from '../../data/hexagram-registry.json' with { type: 'json' };
+import weightsJson from '../../data/emotional-weights.json' with { type: 'json' };
+import reflectionsJson from '../../data/temporal-reflections.json' with { type: 'json' };
 
 export class OracleEngine {
   private config: OracleConfig;
