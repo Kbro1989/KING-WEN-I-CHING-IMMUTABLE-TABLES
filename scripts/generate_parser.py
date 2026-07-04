@@ -1,5 +1,15 @@
+#!/usr/bin/env python3
+"""Runnable entry point: generate TS parser/narrative modules."""
+from __future__ import annotations
 
-# EmotionalParser.ts
+import os
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+output_dir = REPO
+for sub in ["data", "src/core", "src/parser", "src/types", "src/utils", "tests"]:
+    os.makedirs(os.path.join(output_dir, sub), exist_ok=True)
+
 emotional_parser = '''import { EmotionalVector, OracleQuery, UserContext } from '../types/oracle.js';
 
 export class EmotionalParser {
@@ -34,10 +44,6 @@ export class EmotionalParser {
 }
 '''
 
-with open(f"{output_dir}/src/parser/EmotionalParser.ts", "w") as f:
-    f.write(emotional_parser)
-
-# NarrativeEngine.ts
 narrative_engine = '''import { ReflectionSet, TemporalState, HexagramState, EmotionalVector, EmotionalWeightEntry } from '../types/oracle.js';
 
 export class NarrativeEngine {
@@ -50,7 +56,7 @@ export class NarrativeEngine {
   ) {
     this.temporalReflections = new Map();
     this.emotionalWeights = new Map();
-    
+
     for (const [id, data] of Object.entries(reflectionsJson)) {
       this.temporalReflections.set(parseInt(id), data);
     }
@@ -68,7 +74,7 @@ export class NarrativeEngine {
     if (!reflections) throw new Error(`No reflections for hexagram ${hexagram.id}`);
 
     const weights = this.emotionalWeights.get(hexagram.id);
-    
+
     const past = this.modulateVoice(reflections.past, 'past', temporal, emotional, weights);
     const present = this.modulateVoice(reflections.present, 'present', temporal, emotional, weights);
     const future = this.modulateVoice(reflections.future, 'future', temporal, emotional, weights);
@@ -95,7 +101,9 @@ export class NarrativeEngine {
 }
 '''
 
-with open(f"{output_dir}/src/parser/NarrativeEngine.ts", "w") as f:
+with open(os.path.join(output_dir, "src/parser/EmotionalParser.ts"), "w", encoding="utf-8") as f:
+    f.write(emotional_parser)
+with open(os.path.join(output_dir, "src/parser/NarrativeEngine.ts"), "w", encoding="utf-8") as f:
     f.write(narrative_engine)
 
 print("✅ src/parser/EmotionalParser.ts")

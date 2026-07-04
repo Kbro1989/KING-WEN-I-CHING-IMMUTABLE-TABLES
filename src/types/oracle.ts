@@ -1,8 +1,6 @@
-
-# Generate TypeScript type definitions
-oracle_types = '''// ============================================================
+// ============================================================
 // ORACLE EMOTIONAL STATE MACHINE — TYPE DEFINITIONS
-// Pipeline: 1(question) → 3(temporal) → 64(hexagram|emotion) → 3(temporal) → 2(supsets) → 1(resolve)
+// Pipeline: 1(question) -> 3(temporal) -> 64(hexagram|emotion) -> 3(temporal) -> 2(subsets) -> 1(resolve)
 // ============================================================
 
 export type TemporalPhase = 0 | 1 | 2; // 0=past(yin), 1=present(yang), 2=future(yao)
@@ -95,9 +93,3 @@ export interface OracleConfig {
   deterministic: boolean;
   emotional_smoothing: number;
 }
-'''
-
-with open(f"{output_dir}/src/types/oracle.ts", "w", encoding="utf-8") as f:
-    f.write(oracle_types)
-
-print("✅ src/types/oracle.ts")
