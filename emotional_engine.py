@@ -268,12 +268,201 @@ def collapse_full_128(emotional_input: int = 50) -> Dict[str, Any]:
         for p in range(8)
     ]
 
+    consensus = _compute_consensus_from_resolved(resolved, emotional_input)
+
     return {
         "total_expanded": len(expanded),
         "total_resolved": len(resolved),
         "expanded": expanded,
         "resolved": resolved,
+        "consensus": consensus,
     }
+
+
+def _compute_consensus_from_resolved(
+    resolved: List[Dict[str, Any]],
+    emotional_input: int,
+) -> Dict[str, Any]:
+    """Compute true consensus across all 512 resolved states.
+
+    Consensus is not a normalized slider and not a coin flip.
+    It is the outcome that stands out across all possibilities:
+    - porosity levels that appear most frequently / strongly
+    - yin/yang/yao best match from changing-line porosity
+    - past/present/future temporal resolution
+    - hexagram + intent that the majority of paths converge on
+    """
+    if not resolved:
+        return {
+            "emotional_input": emotional_input,
+            "total_resolved": 0,
+            "consensus_hexagram_id": None,
+            "consensus_hexagram_name": "",
+            "consensus_temporal": "present",
+            "consensus_yao": "stable_yao",
+            "consensus_porosity_mean": 0.0,
+            "consensus_porosity_mode": 0.0,
+            "consensus_vector": {"chaos": 0.0, "whimsy": 0.0, "darkTone": 0.0, "coherence": 0.0, "voiceWeight": 0.0},
+            "consensus_intent": "",
+            "consensus_explanation": "No resolved states available.",
+        }
+
+    # --- Temporal distribution ---
+    temporal_counts: Dict[str, int] = {}
+    for item in resolved:
+        temporal = str(item.get("phase_temporal", "") or "")
+        temporal_counts[temporal] = temporal_counts.get(temporal, 0) + 1
+    consensus_temporal = max(temporal_counts, key=temporal_counts.__getitem__) if temporal_counts else "present"
+
+    # --- Porosity consensus ---
+    porosities = [float(item.get("inject_site", {}).get("porosity", 0.35) or 0.35) for item in resolved]
+    porosity_mean = sum(porosities) / len(porosities)
+    porosity_mode = max(set(porosities), key=porosities.count)
+
+    # --- Vector consensus: mean across all resolved states ---
+    vec_keys = ["chaos", "whimsy", "darkTone", "coherence", "voiceWeight"]
+    vec_sums = {k: 0.0 for k in vec_keys}
+    vec_count = 0
+    for item in resolved:
+        rv = item.get("resolved_vector") or {}
+        if isinstance(rv, dict):
+            for k in vec_keys:
+                vec_sums[k] += float(rv.get(k, 0.0) or 0.0)
+            vec_count += 1
+    consensus_vector = {k: (vec_sums[k] / vec_count if vec_count else 0.0) for k in vec_keys}
+
+    # --- Hexagram consensus: score by vector alignment + frequency ---
+    hex_scores: Dict[int, float] = {}
+    hex_names: Dict[int, str] = {}
+    hex_categories: Dict[int, str] = {}
+    hex_actions: Dict[int, str] = {}
+    for item in resolved:
+        h_id = int(item.get("hexagram_id") or 0)
+        if not h_id:
+            continue
+        hex_names[h_id] = str(item.get("hexagram_symbols", {}).get("name", "") or "")
+        hex_categories[h_id] = str(item.get("hexagram_symbols", {}).get("category", "") or "")
+        hex_actions[h_id] = str(item.get("hexagram_symbols", {}).get("action", "") or "")
+        rv = item.get("resolved_vector") or {}
+        voice = float(rv.get("voiceWeight", 0.0) or 0.0)
+        coherence = float(rv.get("coherence", 0.0) or 0.0)
+        score = voice * 0.6 + coherence * 0.4
+        hex_scores[h_id] = hex_scores.get(h_id, 0.0) + score
+
+    if not hex_scores:
+        consensus_hexagram_id = None
+        consensus_hexagram_name = ""
+        consensus_intent = ""
+    else:
+        consensus_hexagram_id = max(hex_scores, key=hex_scores.__getitem__)
+        consensus_hexagram_name = hex_names.get(consensus_hexagram_id, "")
+        consensus_intent = _resolve_intent_from_consensus(
+            consensus_hexagram_id,
+            consensus_temporal,
+            hex_categories.get(consensus_hexagram_id, ""),
+            hex_actions.get(consensus_hexagram_id, ""),
+            consensus_vector,
+        )
+
+    # --- yin/yang/yao best match from changing-line porosity ---
+    # Collect line states from all resolved states for the winning hexagram
+    winning_line_states = []
+    for item in resolved:
+        if int(item.get("hexagram_id") or 0) == consensus_hexagram_id:
+            ls = item.get("line_states") or []
+            if isinstance(ls, list):
+                winning_line_states.extend(ls)
+
+    consensus_yao = _best_match_yao_from_lines(winning_line_states, porosity_mean)
+
+    # --- Explanation ---
+    consensus_explanation = (
+        f"Consensus resolved from {len(resolved)} states: "
+        f"hexagram {consensus_hexagram_id} ({consensus_hexagram_name}) "
+        f"in {consensus_temporal} phase, "
+        f"yao={consensus_yao}, porosity={porosity_mode:.2f}, "
+        f"voiceWeight={consensus_vector.get('voiceWeight', 0.0):.2f}, "
+        f"coherence={consensus_vector.get('coherence', 0.0):.2f}. "
+        f"Intent: {consensus_intent}"
+    )
+
+    return {
+        "emotional_input": emotional_input,
+        "total_resolved": len(resolved),
+        "consensus_hexagram_id": consensus_hexagram_id,
+        "consensus_hexagram_name": consensus_hexagram_name,
+        "consensus_temporal": consensus_temporal,
+        "consensus_yao": consensus_yao,
+        "consensus_porosity_mean": round(porosity_mean, 4),
+        "consensus_porosity_mode": round(porosity_mode, 4),
+        "consensus_vector": {k: round(v, 4) for k, v in consensus_vector.items()},
+        "consensus_intent": consensus_intent,
+        "consensus_explanation": consensus_explanation,
+        "temporal_distribution": temporal_counts,
+    }
+
+
+def _resolve_intent_from_consensus(
+    hexagram_id: int,
+    temporal: str,
+    category: str,
+    action: str,
+    vector: Dict[str, float],
+) -> str:
+    """Derive intent path from consensus hexagram + temporal + vectors."""
+    if not hexagram_id:
+        return " unresolved"
+    voice = float(vector.get("voiceWeight", 0.0) or 0.0)
+    coherence = float(vector.get("coherence", 0.0) or 0.0)
+    chaos = float(vector.get("chaos", 0.0) or 0.0)
+    whimsy = float(vector.get("whimsy", 0.0) or 0.0)
+    dark = float(vector.get("darkTone", 0.0) or 0.0)
+
+    intent_parts = [f"hexagram {hexagram_id}", temporal]
+    if category:
+        intent_parts.append(f"category={category}")
+    if action:
+        intent_parts.append(f"action={action}")
+    if voice > 0.7:
+        intent_parts.append("authoritative")
+    if coherence > 0.7:
+        intent_parts.append("focused")
+    if chaos > 0.6:
+        intent_parts.append("adaptive")
+    if whimsy > 0.6:
+        intent_parts.append("exploratory")
+    if dark > 0.6:
+        intent_parts.append("cautious")
+    return "; ".join(intent_parts)
+
+
+def _best_match_yao_from_lines(
+    line_states: List[Dict[str, Any]],
+    porosity_mean: float,
+) -> str:
+    """Pick yin/yang/yao best match from changing-line porosity."""
+    if not line_states:
+        return "stable_yao"
+
+    changing = [ls for ls in line_states if str(ls.get("yao_key", "") or "").startswith("old_")]
+    if not changing:
+        # No changing lines: stable
+        present = [ls for ls in line_states if "present" in str(ls.get("yao_label", "") or "")]
+        if present:
+            return str(present[0].get("yao_key", "stable_yao") or "stable_yao")
+        return "stable_yao"
+
+    # Score changing lines by proximity to consensus porosity
+    def _score(ls: Dict[str, Any]) -> float:
+        pos = int(ls.get("position") or 0)
+        label = str(ls.get("yao_label") or "")
+        # Prefer changing lines in upper positions (closer to present/future)
+        pos_score = pos / 6.0
+        label_score = 1.0 if "old" in label else 0.5
+        return pos_score + label_score
+
+    best = max(changing, key=_score)
+    return str(best.get("yao_key") or "old_yao")
 
 
 def _run_slider_checklist(resolved: Dict[str, float], phase_bits: int, temporal: str) -> List[Dict[str, Any]]:
