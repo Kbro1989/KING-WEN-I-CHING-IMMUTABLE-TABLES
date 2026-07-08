@@ -43,6 +43,30 @@ def _clamp(value: float, lo: float = 0.0, hi: float = 1.0) -> float:
     return max(lo, min(hi, value))
 
 
+def _symbol_color(*, chinese: str = "", unicode_symbol: str = "", kind: str | None = None) -> dict[str, str]:
+    """Deterministic color keyed to the actual Chinese symbol text.
+
+    Returns base + temporal-shifted colors for image-map capture.
+    """
+    import hashlib
+
+    seed = chinese.strip() or unicode_symbol.strip() or "hex-unknown"
+    digest = hashlib.sha1(seed.encode("utf-8")).hexdigest()[:8]
+    hue = int(digest[:6], 16) % 360
+
+    shift = {"past": -25.0, "present": 0.0, "future": 25.0}.get(kind or "", 0.0)
+    shifted = (hue + shift) % 360.0
+
+    return {
+        "base": f"hsl({hue}, 72%, 54%)",
+        "past": f"hsl({int((hue - 25.0) % 360)}, 65%, 48%)",
+        "present": f"hsl({int(hue)}, 72%, 54%)",
+        "future": f"hsl({int((hue + 25.0) % 360)}, 65%, 48%)",
+        "symbol": seed,
+        "kind": kind or "base",
+    }
+
+
 def _tau_for_resolved(item: Dict[str, Any]) -> float:
     """Map resolved state T_i to scalar τ ∈ [0, 1].
 
