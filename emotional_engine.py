@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import Any, Dict, List, Tuple
 
 from kingwen_ternary_tables_complete import (
@@ -40,6 +41,46 @@ YAO_ORDER: Final[List[str]] = [
 
 def _clamp(value: float, lo: float = 0.0, hi: float = 1.0) -> float:
     return max(lo, min(hi, value))
+
+
+def _tau_for_resolved(item: Dict[str, Any]) -> float:
+    """Map resolved state T_i to scalar τ ∈ [0, 1].
+
+    T_i is represented by:
+      v = ternary line state (0=yin, 1=yang, 2=yao)
+      s = phase ordinal modulo 3
+      e = (hexagram_id - 1) % 3
+
+    τ = (v + s + e) / 6
+    """
+    ternary_state = 0
+    for ls in item.get("line_states", [])[:1]:
+        ternary_state = int(ls.get("ternary_state") or 0)
+    phase_ordinal = int(item.get("phase_bits", 0) or 0) % 3
+    hex_ordinal = int(item.get("hexagram_id", 1) or 1) % 3
+    return (ternary_state + phase_ordinal + hex_ordinal) / 6.0
+
+
+def _mode_of_tau(tau_values: List[float]) -> float:
+    """Modal estimate of τ using histogram binning."""
+    if not tau_values:
+        return 0.5
+    bins = 20
+    counts = [0] * bins
+    for t in tau_values:
+        idx = min(bins - 1, max(0, int(t * bins)))
+        counts[idx] += 1
+    max_idx = max(range(bins), key=counts.__getitem__)
+    return (max_idx + 0.5) / bins
+
+
+def _gaussian_weight(tau: float, mu: float, sigma: float) -> float:
+    """Relative Gaussian weight; omit normalization constant because
+    argmax/Σ are invariant under positive scaling."""
+    if sigma <= 1e-9:
+        return 1.0 if abs(tau - mu) < 1e-9 else 0.0
+    diff = tau - mu
+    return math.exp(-(diff * diff) / (2.0 * sigma * sigma))
 
 
 def _as_tuple5(vec: Tuple[float, ...]) -> Tuple[float, float, float, float, float]:
@@ -115,11 +156,12 @@ def expand_hexagram(
     inject = HEXAGRAM_INJECTION_SITE.get(hexagram_id)
     if inject is None:
         inject = HEXAGRAM_INJECTION_SITE[1]
-    porosity = inject["porosity"]
+    porosity_index = inject["porosity"]
+    porosity_norm = porosity_index / 4.0
     primary_vec = _pool_by_name(inject["primary_pool"])
     secondary_vec = _pool_by_name(inject["secondary_pool"])
 
-    porosity_meta = POROSITY_LEVELS[porosity]
+    porosity_meta = POROSITY_LEVELS[porosity_index]
     porosity_lo, porosity_hi = porosity_meta["window"]
     slider_factor = _clamp(emotional_input / 100.0)
     bleed = _clamp(porosity_lo + (porosity_hi - porosity_lo) * slider_factor)
@@ -136,6 +178,7 @@ def expand_hexagram(
         yao_key = _line_yao_key(ternary_state, PHASE_INFO[phase_bits]["temporal"])
         phase_line_states.append({
             "position": line_pos,
+            "ternary_state": ternary_state,
             "yao_key": yao_key,
             "yao_label": _yao_vocabulary_map().get(yao_key, ""),
         })
@@ -168,7 +211,8 @@ def expand_hexagram(
         "inject_site": {
             "primary_pool": inject["primary_pool"],
             "secondary_pool": inject["secondary_pool"],
-            "porosity": porosity,
+            "porosity": porosity_index,
+            "porosity_norm": porosity_norm,
             "porosity_label": porosity_meta["label"],
             "porosity_window": porosity_meta["window"],
             "porosity_description": porosity_meta["description"],
@@ -285,12 +329,14 @@ def _compute_consensus_from_resolved(
 ) -> Dict[str, Any]:
     """Compute true consensus across all 512 resolved states.
 
-    Consensus is not a normalized slider and not a coin flip.
-    It is the outcome that stands out across all possibilities:
-    - porosity levels that appear most frequently / strongly
-    - yin/yang/yao best match from changing-line porosity
-    - past/present/future temporal resolution
-    - hexagram + intent that the majority of paths converge on
+    Follows the open-center Gaussian injection graph:
+      E -> P -> sigma
+      tau(T_i) per resolved state
+      mu = mode(tau)
+      w_i = Gaussian(tau(T_i); mu, sigma)
+      W_j = sum w_i * 1_{hexagram(T_i)=H_j}
+      H* = argmax W_j
+      yao_k = argmax_y yin_k/yang_k/yao_k weighted by w_i
     """
     if not resolved:
         return {
@@ -300,6 +346,7 @@ def _compute_consensus_from_resolved(
             "consensus_hexagram_name": "",
             "consensus_temporal": "present",
             "consensus_yao": "stable_yao",
+            "consensus_line_states": [],
             "consensus_porosity_mean": 0.0,
             "consensus_porosity_mode": 0.0,
             "consensus_vector": {"chaos": 0.0, "whimsy": 0.0, "darkTone": 0.0, "coherence": 0.0, "voiceWeight": 0.0},
@@ -307,36 +354,45 @@ def _compute_consensus_from_resolved(
             "consensus_explanation": "No resolved states available.",
         }
 
-    # --- Temporal distribution ---
+    # Temporal distribution remains frequency-based.
     temporal_counts: Dict[str, int] = {}
     for item in resolved:
         temporal = str(item.get("phase_temporal", "") or "")
         temporal_counts[temporal] = temporal_counts.get(temporal, 0) + 1
     consensus_temporal = max(temporal_counts, key=temporal_counts.__getitem__) if temporal_counts else "present"
 
-    # --- Porosity consensus ---
+    # Porosity consensus remains arithmetic mean/mode across resolved states.
     porosities = [float(item.get("inject_site", {}).get("porosity", 0.35) or 0.35) for item in resolved]
     porosity_mean = sum(porosities) / len(porosities)
     porosity_mode = max(set(porosities), key=porosities.count)
+    porosity_norms = [float(item.get("inject_site", {}).get("porosity_norm", porosity_mean / 4.0) or porosity_mean / 4.0) for item in resolved]
 
-    # --- Vector consensus: mean across all resolved states ---
+    # Map each resolved state to tau and compute open-center mode.
+    tau_values: List[float] = [_tau_for_resolved(item) for item in resolved]
+    mu = _mode_of_tau(tau_values)
+    sigma = max(1e-9, (sum(porosity_norms) / len(porosity_norms)) / 2.0) if porosity_norms else 1e-9
+
+    raw_weights: List[float] = [_gaussian_weight(t, mu, sigma) for t in tau_values]
+    weight_sum = sum(raw_weights)
+    weights = [w / weight_sum for w in raw_weights] if weight_sum > 1e-12 else raw_weights
+    weight_sum = sum(weights)
+
+    # Weighted vector consensus.
     vec_keys = ["chaos", "whimsy", "darkTone", "coherence", "voiceWeight"]
     vec_sums = {k: 0.0 for k in vec_keys}
-    vec_count = 0
-    for item in resolved:
+    for item, w in zip(resolved, weights):
         rv = item.get("resolved_vector") or {}
         if isinstance(rv, dict):
             for k in vec_keys:
-                vec_sums[k] += float(rv.get(k, 0.0) or 0.0)
-            vec_count += 1
-    consensus_vector = {k: (vec_sums[k] / vec_count if vec_count else 0.0) for k in vec_keys}
+                vec_sums[k] += float(rv.get(k, 0.0) or 0.0) * w
+    consensus_vector = {k: (vec_sums[k] / weight_sum if weight_sum else 0.0) for k in vec_keys}
 
-    # --- Hexagram consensus: score by vector alignment + frequency ---
+    # Weighted hexagram consensus.
     hex_scores: Dict[int, float] = {}
     hex_names: Dict[int, str] = {}
     hex_categories: Dict[int, str] = {}
     hex_actions: Dict[int, str] = {}
-    for item in resolved:
+    for item, w in zip(resolved, weights):
         h_id = int(item.get("hexagram_id") or 0)
         if not h_id:
             continue
@@ -346,13 +402,14 @@ def _compute_consensus_from_resolved(
         rv = item.get("resolved_vector") or {}
         voice = float(rv.get("voiceWeight", 0.0) or 0.0)
         coherence = float(rv.get("coherence", 0.0) or 0.0)
-        score = voice * 0.6 + coherence * 0.4
+        score = (voice * 0.6 + coherence * 0.4) * w
         hex_scores[h_id] = hex_scores.get(h_id, 0.0) + score
 
     if not hex_scores:
         consensus_hexagram_id = None
         consensus_hexagram_name = ""
         consensus_intent = ""
+        line_states: List[Dict[str, Any]] = []
     else:
         consensus_hexagram_id = max(hex_scores, key=hex_scores.__getitem__)
         consensus_hexagram_name = hex_names.get(consensus_hexagram_id, "")
@@ -363,43 +420,82 @@ def _compute_consensus_from_resolved(
             hex_actions.get(consensus_hexagram_id, ""),
             consensus_vector,
         )
+        line_states = _weighted_line_states_from_resolved(resolved, weights, consensus_hexagram_id)
 
-    # --- yin/yang/yao best match from changing-line porosity ---
-    # Collect line states from all resolved states for the winning hexagram
-    winning_line_states = []
-    for item in resolved:
-        if int(item.get("hexagram_id") or 0) == consensus_hexagram_id:
-            ls = item.get("line_states") or []
-            if isinstance(ls, list):
-                winning_line_states.extend(ls)
-
-    consensus_yao = _best_match_yao_from_lines(winning_line_states, porosity_mean)
-
-    # --- Explanation ---
-    consensus_explanation = (
+    explanation = (
         f"Consensus resolved from {len(resolved)} states: "
         f"hexagram {consensus_hexagram_id} ({consensus_hexagram_name}) "
         f"in {consensus_temporal} phase, "
-        f"yao={consensus_yao}, porosity={porosity_mode:.2f}, "
-        f"voiceWeight={consensus_vector.get('voiceWeight', 0.0):.2f}, "
-        f"coherence={consensus_vector.get('coherence', 0.0):.2f}. "
+        f"mu={mu:.4f}, sigma={sigma:.4f}, weight_sum={weight_sum:.4f}, "
+        f"porosity={porosity_mode:.4f}, "
+        f"voiceWeight={consensus_vector.get('voiceWeight', 0.0):.4f}, "
+        f"coherence={consensus_vector.get('coherence', 0.0):.4f}. "
         f"Intent: {consensus_intent}"
     )
 
+    yaolabel = line_states[0].get("yao_key") if line_states else "stable_yao"
     return {
         "emotional_input": emotional_input,
         "total_resolved": len(resolved),
         "consensus_hexagram_id": consensus_hexagram_id,
         "consensus_hexagram_name": consensus_hexagram_name,
         "consensus_temporal": consensus_temporal,
-        "consensus_yao": consensus_yao,
-        "consensus_porosity_mean": round(porosity_mean, 4),
-        "consensus_porosity_mode": round(porosity_mode, 4),
-        "consensus_vector": {k: round(v, 4) for k, v in consensus_vector.items()},
+        "consensus_yao": yaolabel,
+        "consensus_line_states": line_states,
+        "consensus_porosity_mean": porosity_mean,
+        "consensus_porosity_mode": porosity_mode,
+        "consensus_vector": consensus_vector,
         "consensus_intent": consensus_intent,
-        "consensus_explanation": consensus_explanation,
-        "temporal_distribution": temporal_counts,
+        "consensus_explanation": explanation,
     }
+
+
+def _weighted_line_states_from_resolved(
+    resolved: List[Dict[str, Any]],
+    weights: List[float],
+    hexagram_id: int,
+) -> List[Dict[str, Any]]:
+    """Weighted yin/yang/yao vote per line k from resolved states.
+
+    For each line position k in 1..6, aggregate normalized weights by
+    yin/yao/yang labels across all resolved states of the winning hexagram,
+    then return the winning label for each position.
+    """
+    if not resolved or not weights:
+        return []
+
+    vote_sums: Dict[int, Dict[str, float]] = {}
+    for item, w in zip(resolved, weights):
+        if int(item.get("hexagram_id") or 0) != hexagram_id:
+            continue
+        for ls in item.get("line_states", []):
+            pos = int(ls.get("position") or 0)
+            if not pos:
+                continue
+            label = str(ls.get("yao_key") or "stable_yao")
+            bucket = vote_sums.setdefault(pos, {"yin": 0.0, "yang": 0.0, "yao": 0.0})
+            if label.startswith("old_yin") or label.startswith("stable_yin") or label.startswith("young_yin"):
+                bucket["yin"] += w
+            elif label.startswith("old_yang") or label.startswith("stable_yang") or label.startswith("new_yang"):
+                bucket["yang"] += w
+            else:
+                bucket["yao"] += w
+
+    line_states: List[Dict[str, Any]] = []
+    for pos in range(1, 7):
+        bucket = vote_sums.get(pos)
+        if not bucket:
+            line_states.append({"position": pos, "yao_key": "stable_yao", "yao_label": "stable_yao"})
+            continue
+        winner = max(bucket.items(), key=lambda kv: kv[1])[0]
+        label_map = {
+            "yin": "old_yin" if bucket["yin"] >= bucket["yao"] and bucket["yin"] >= bucket["yang"] else "stable_yin",
+            "yang": "old_yang" if bucket["yang"] >= bucket["yao"] and bucket["yang"] >= bucket["yin"] else "stable_yang",
+            "yao": "old_yao" if bucket["yao"] >= bucket["yin"] and bucket["yao"] >= bucket["yang"] else "stable_yao",
+        }
+        yao_key = label_map[winner]
+        line_states.append({"position": pos, "yao_key": yao_key, "yao_label": _yao_vocabulary_map().get(yao_key, "")})
+    return line_states
 
 
 def _resolve_intent_from_consensus(
