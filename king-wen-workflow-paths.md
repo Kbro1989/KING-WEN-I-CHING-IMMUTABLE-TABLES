@@ -24,7 +24,7 @@ No guessing. Paths are exact. Consumers are exact.
 - Active consumers:
   - `src/core/OracleEngine.ts`
   - `src/parser/NarrativeEngine.ts`
-  - `OpenJarvas/src/openjarvis/emotion/kingwen.py`
+  - `OpenJarvis/src/openjarvis/emotion/kingwen.py` (JSON data consumption only)
 - Reactive dependents: generator scripts, deprecated mirrors
 
 ### `data/emotional-weights.json`
@@ -35,7 +35,7 @@ No guessing. Paths are exact. Consumers are exact.
 - Active consumers:
   - `src/core/OracleEngine.ts`
   - `src/parser/NarrativeEngine.ts`
-  - `OpenJarvas/src/openjarvis/emotion/kingwen.py`
+  - `OpenJarvis/src/openjarvis/emotion/kingwen.py` (JSON data consumption only)
 - Reactive dependents: generator scripts, deprecated mirrors
 
 ### `data/temporal-reflections.json`
@@ -46,7 +46,7 @@ No guessing. Paths are exact. Consumers are exact.
 - Active consumers:
   - `src/core/OracleEngine.ts`
   - `src/parser/NarrativeEngine.ts`
-  - `OpenJarvas/src/openjarvis/emotion/kingwen.py`
+  - `OpenJarvis/src/openjarvis/emotion/kingwen.py` (JSON data consumption only)
 - Reactive dependents: generator scripts, deprecated mirrors
 
 ### `KING_WEN_TABLES.py`
@@ -79,7 +79,7 @@ No guessing. Paths are exact. Consumers are exact.
   - `src/utils/TemporalMath.ts`
 - Outputs: `OracleResponse`
 - Active consumers:
-  - `OpenJarvas/src/openjarvis/emotion/kingwen.py`
+  - None (OpenJarvis implements equivalent logic in Python without TS imports)
 - Reactive dependents: tests, deprecated mirrors
 
 ### `src/parser/EmotionalParser.ts`
@@ -180,7 +180,7 @@ No guessing. Paths are exact. Consumers are exact.
 ## Plugin Workflow Paths
 
 ### Active workflow 1: Consultation
-1. `OpenJarvas/src/openjarvis/emotion/kingwen.py` loads:
+1. `OpenJarvis/src/openjarvis/emotion/kingwen.py` loads:
    - `data/hexagram-registry.json`
    - `data/emotional-weights.json`
    - `data/temporal-reflections.json`
@@ -191,18 +191,18 @@ No guessing. Paths are exact. Consumers are exact.
    - `reflections.past/present/future`
    - `trainingNotes`
 4. Active consumers append payload to:
-   - prompt sections via `OpenJarvas/src/openjarvis/prompt/builder.py`
-   - response Oracle Console via `OpenJarvas/src/openjarvis/agents/_stubs.py`
-   - CLI response via `OpenJarvas/src/openjarvis/cli/ask.py`
-   - chat REPL response via `OpenJarvas/src/openjarvis/cli/chat_cmd.py`
-   - channel response via `OpenJarvas/src/openjarvis/agents/channel_agent.py`
+   - prompt sections via `OpenJarvis/src/openjarvis/prompt/builder.py`
+   - response Oracle Console via `OpenJarvis/src/openjarvis/agents/_stubs.py`
+   - CLI response via `OpenJarvis/src/openjarvis/cli/ask.py`
+   - chat REPL response via `OpenJarvis/src/openjarvis/cli/chat_cmd.py`
+   - channel response via `OpenJarvis/src/openjarvis/agents/channel_agent.py`
 
 ### Active workflow 2: Morning digest voice
-1. `OpenJarvas/src/openjarvis/agents/morning_digest.py` loads provider via `_load_kingwen_emotion_provider(config)`
+1. `OpenJarvis/src/openjarvis/agents/morning_digest.py` loads provider via `_load_kingwen_emotion_provider(config)`
 2. Calls `provider.consult(text="morning-digest", session_id="morning-digest")`
 3. Calls `provider.voice_preset(tts_backend, voice_weight)`
 4. Stores `voice_id` and `speed` on agent instance
-5. `OpenJarvas/src/openjarvas/system/orchestrator.py` and `OpenJarvas/src/openjarvas/sdk.py` wire provider when `digest.emotion_enabled` is true
+5. `OpenJarvis/src/openjarvis/system/orchestrator.py` and `OpenJarvis/src/openjarvis/sdk.py` wire provider when `digest.emotion_enabled` is true
 
 ### Active workflow 3: Deterministic selection in TS runtime
 1. `src/core/OracleEngine.ts` loads tables into maps

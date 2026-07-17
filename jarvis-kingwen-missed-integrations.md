@@ -9,7 +9,7 @@ Rule: exact file paths, exact line numbers, no guessing, no fabrication.
 ---
 
 ## Critical typo correction
-Both docs use `OpenJarvas`. Live repo is `OpenJarvis`.
+Both docs previously used `OpenJarvas`. Live repo is `OpenJarvis`. (Corrected.)
 All paths below use `C:\Users\krist\Desktop\OpenJarvis`.
 
 ---
@@ -113,13 +113,11 @@ All paths below use `C:\Users\krist\Desktop\OpenJarvis`.
   - `DummyProvider` implements `consult(text, session_id)` returning `hexagram_id` and `emotional_deltas.voiceWeight`
   - `DummyProvider.voice_preset(tts_backend, voice_weight)` returns dict with `backend`, `voice_id`, `speed`
   - Asserts `agent._voice_id == "kingwen-voice"`, `agent._voice_speed == 1.05`, `agent._last_emotion_payload`
-- Gap: docs mention tests but miss the exact test double contract and assertions.
-
-### 11. TS workspace is documented as consumed by OpenJarvas, but isn’t imported in OpenJarvas
-- Docs claim `OpenJarvas/src/openjarvis/emotion/kingwen.py` consumes `src/core/OracleEngine.ts`.
+### 11. TS workspace is documented as consumed by OpenJarvis, but isn’t imported in OpenJarvis
+- Docs claim `OpenJarvis/src/openjarvis/emotion/kingwen.py` consumes `src/core/OracleEngine.ts`.
 - Actual code: `C:\Users\krist\Desktop\OpenJarvis\src\openjarvis\emotion\kingwen.py` reads raw JSON tables only.
-- No TS runtime import of `OracleEngine`, `NarrativeEngine`, `TemporalMath`, `DeterministicHash` exists in OpenJarvas.
-- Gap: docs overstate the TS runtime dependency. The TS workspace is a source-of-truth table layer; the runtime consumption is Python-only in OpenJarvas.
+- No TS runtime import of `OracleEngine`, `NarrativeEngine`, `TemporalMath`, `DeterministicHash` exists in OpenJarvis.
+- Gap: docs overstate the TS runtime dependency. The TS workspace is a source-of-truth table layer; the runtime consumption is Python-only in OpenJarvis.
 
 ### 12. Docs do not document `ollama_launch_cmd.py` `kingwen` task fit
 - File: `C:\Users\krist\Desktop\OpenJarvis\src\openjarvis\cli\ollama_launch_cmd.py`
@@ -128,12 +126,12 @@ All paths below use `C:\Users\krist\Desktop\OpenJarvis`.
   - `"kingwen": ("gemma4:latest", "qwen3.6:27b", "qwen2.5-coder:7b-instruct-q4_K_M")`
 - Gap: docs list `ollama_launch_cmd.py` but miss the exact task-to-model mapping.
 
-### 13. Fake/default text fallback in kingwen.py
+### 13. Resolved: Fake/default text fallback in kingwen.py
 - File: `C:\Users\krist\Desktop\OpenJarvis\src\openjarvis\emotion\kingwen.py`
-- Line 60
+- Line 551-552
 - Exact behavior:
-  - `if not text: text = "OpenJarvas session context"`
-- Gap: docs do not document this fallback. It conflicts with the hard rule against fake strings. Must be treated as a regression.
+  - Raises `ValueError` for empty text input (`if not text: raise ValueError(...)`) instead of defaulting to `"OpenJarvis session context"`.
+- Gap: resolved in code but docs should record this validation behavior instead of the old fallback regression.
 
 ### 14. `get_kingwen_workspace_dir()` precedence not documented
 - File: `C:\Users\krist\Desktop\OpenJarvis\src\openjarvis\core\paths.py`
@@ -142,6 +140,19 @@ All paths below use `C:\Users\krist\Desktop\OpenJarvis`.
   - `KING_WEN_IMMUTABLE_TABLES` env override
   - fallback: `Path.cwd().resolve()`
 - Gap: docs mention path resolution but do not document the exact precedence or cwd fallback.
+
+### 15. DB-backed Telemetry, Event Bus, and Managed Agent Persistence
+- Docs do not document the telemetry and rehydration persistence surfaces.
+- File: `C:\Users\krist\Desktop\OpenJarvis\src\openjarvis\agents\manager.py`
+- Lines 133, 604, 615, 619, 621, 632, 681, 683, 688, 690, 699
+  - Persists `tool_calls_json` to local agent message history.
+- File: `C:\Users\krist\Desktop\OpenJarvis\src\openjarvis\traces\collector.py`
+- Line 64
+  - Persists telemetry event logs to SQLite TraceStore.
+- File: `C:\Users\krist\Desktop\OpenJarvis\src\openjarvis\server\agent_manager_routes.py`
+  - Routes `/v1/managed-agents` endpoints for session state, messages, and learning rehydration.
+- File: `C:\Users\krist\Desktop\OpenJarvis\src\openjarvis\server\ws_bridge.py`
+  - Routes `WS /v1/agents/events` for live streaming turn updates.
 
 ---
 
@@ -160,7 +171,8 @@ All paths below use `C:\Users\krist\Desktop\OpenJarvis`.
 | `king_wen_codebasemap.md` | `core/config.py` schema | `core/config.py:1512-1530` |
 | `king_wen_codebasemap.md` | test contract | `tests/agents/test_morning_digest.py:67-125` |
 | `king_wen_codebasemap.md` | TS runtime dependency overstated | no TS import in `OpenJarvis/src/openjarvis/emotion/kingwen.py` |
-| `king-wen-workflow-paths.md` | repo name typo: `OpenJarvas` → `OpenJarvis` | all OpenJarvas paths |
+| `king-wen-workflow-paths.md` | repo name typo: `OpenJarvas` → `OpenJarvis` (corrected) | all OpenJarvis paths |
 | `king-wen-workflow-paths.md` | `ollama_launch_cmd.py` kingwen task fit | `cli/ollama_launch_cmd.py:26` |
 | `king-wen-workflow-paths.md` | `core/paths.py` precedence | `core/paths.py:125-143` |
 | both | fake/default text fallback | `emotion/kingwen.py:60` |
+| both | DB/trace/telemetry persistence surfaces | `agents/manager.py`, `traces/collector.py`, `server/agent_manager_routes.py`, `server/ws_bridge.py` |

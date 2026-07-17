@@ -72,6 +72,7 @@ class ExpandHandler(BaseHTTPRequestHandler):
             "expanded_count": len(expanded),
             "resolved_count": len(resolved),
             "resolved": resolved,
+            "consensus": result.get("consensus", {}),
         }
         self._send_json(200, response)
 
