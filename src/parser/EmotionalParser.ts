@@ -23,6 +23,14 @@ export class EmotionalParser {
     return base;
   }
 
+  /**
+   * Extract the 3-dimensional emotional tuple for the POG3 substrate.
+   * Maps 5-dim EmotionalVector → [chaos, whimsy, darkTone] for IntentVector.
+   */
+  toIntentEmotional(vec: EmotionalVector): [number, number, number] {
+    return [vec.chaos, vec.whimsy, vec.darkTone];
+  }
+
   private applyContext(vec: EmotionalVector, ctx: UserContext): void {
     if (ctx.fatigue !== undefined) {
       vec.chaos = Math.min(1, vec.chaos + (ctx.fatigue / 100) * 0.3);
