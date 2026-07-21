@@ -9,7 +9,7 @@ Rule: exact file paths, exact line numbers, no guessing, no fabrication.
 ---
 
 ## Critical typo correction
-Both docs previously used `OpenJarvas`. Live repo is `OpenJarvis`. (Corrected.)
+Both docs previously used `openjarvis`. Live repo is `OpenJarvis`. (Corrected.)
 All paths below use `C:\Users\krist\Desktop\OpenJarvis`.
 
 ---
@@ -171,7 +171,7 @@ All paths below use `C:\Users\krist\Desktop\OpenJarvis`.
 | `king_wen_codebasemap.md` | `core/config.py` schema | `core/config.py:1512-1530` |
 | `king_wen_codebasemap.md` | test contract | `tests/agents/test_morning_digest.py:67-125` |
 | `king_wen_codebasemap.md` | TS runtime dependency overstated | no TS import in `OpenJarvis/src/openjarvis/emotion/kingwen.py` |
-| `king-wen-workflow-paths.md` | repo name typo: `OpenJarvas` → `OpenJarvis` (corrected) | all OpenJarvis paths |
+| `king-wen-workflow-paths.md` | repo name typo: `openjarvis` → `OpenJarvis` (corrected) | all OpenJarvis paths |
 | `king-wen-workflow-paths.md` | `ollama_launch_cmd.py` kingwen task fit | `cli/ollama_launch_cmd.py:26` |
 | `king-wen-workflow-paths.md` | `core/paths.py` precedence | `core/paths.py:125-143` |
 | both | fake/default text fallback | `emotion/kingwen.py:60` |

@@ -72,7 +72,7 @@ duplicate_sets = {sha: rels for sha, rels in sha_groups.items() if len(rels) > 1
 
 dominion_keywords = {
     'king-wen / kingwen': ['kingwen', 'king-wen', 'king_wen', 'openjarvis-kingwen-integration', 'kingwen-oracle-advisory', 'kingwen-truth-reconciliation'],
-    'openjarvis / jarvis': ['openjarvis', 'jarvis', 'openjarvas'],
+    'openjarvis / jarvis': ['openjarvis', 'jarvis', 'openjarvis'],
     'open design / moa': ['open-design', 'open_design', 'od-', 'design-bridge', 'open-design-setup'],
     'megatron / training': ['megatron', 'training', 'pretrain', 'dataset'],
     'rsmv / gaming / cache': ['rsmv', 'pog2', 'cache', 'rune', 'jagex', 'model-identity-kit'],
