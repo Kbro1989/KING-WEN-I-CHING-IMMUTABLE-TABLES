@@ -1,0 +1,73 @@
+import sys, os; output_dir = r"C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES"
+for _sub in ["data","src/core","src/parser","src/types","src/utils","tests"]: os.makedirs(os.path.join(output_dir,_sub), exist_ok=True)
+#!/usr/bin/env python3
+
+# DeterministicHash.ts
+det_hash = '''// SHA256-based deterministic selection — no Math.random()
+
+export async function deterministicHash(input: string): Promise<Uint8Array> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(input);
+  return new Uint8Array(await crypto.subtle.digest('SHA-256', data));
+}
+
+export async function deterministicIndex(
+  input: string, 
+  maxExclusive: number
+): Promise<number> {
+  const hash = await deterministicHash(input);
+  const view = new DataView(hash.buffer);
+  const int = view.getUint32(0);
+  return int % maxExclusive;
+}
+
+export async function deterministicHexagramSelect(
+  tick: number,
+  sessionId: string,
+  previousHex: number,
+  selector: string
+): Promise<number> {
+  const input = `${tick}:${sessionId}:${previousHex}:${selector}`;
+  return (await deterministicIndex(input, 64)) + 1;
+}
+'''
+
+with open(f"{output_dir}/src/utils/DeterministicHash.ts", "w") as f:
+    f.write(det_hash)
+
+# TemporalMath.ts
+temporal_math = '''import { TemporalPhase, TemporalSubstate, TemporalState } from '../types/oracle.js';
+
+export function computeTemporalPhase(
+  tick: number,
+  emotionalInput: number
+): TemporalState {
+  const phase = (tick % 3) as TemporalPhase;
+  
+  const substate: TemporalSubstate = 
+    emotionalInput < 33 ? 'old' :
+    emotionalInput > 66 ? 'young' : 
+    'transition';
+
+  const baseWeight = 0.6;
+  const sideWeight = 0.2;
+
+  return {
+    dominantPhase: phase,
+    substate,
+    pastWeight: phase === 0 ? baseWeight : sideWeight,
+    presentWeight: phase === 1 ? baseWeight : sideWeight,
+    futureWeight: phase === 2 ? baseWeight : sideWeight,
+  };
+}
+
+export function phaseToString(phase: TemporalPhase): string {
+  return ['past', 'present', 'future'][phase];
+}
+'''
+
+with open(f"{output_dir}/src/utils/TemporalMath.ts", "w") as f:
+    f.write(temporal_math)
+
+print("✅ src/utils/DeterministicHash.ts")
+print("✅ src/utils/TemporalMath.ts")
