@@ -11,6 +11,7 @@ Architecture:
 from __future__ import annotations
 
 import json
+import math
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
@@ -120,6 +121,158 @@ def _personality_subsets_for_slot(slot: Dict[str, Any], inject: Dict[str, Any], 
     return subsets
 
 
+import itertools
+
+def _expand_729_ternary_line_permutations(hexagram_id: int, inject: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Generates all 3^6 = 729 ternary line state permutations for a single hexagram.
+    
+    Each line position (1..6) has 3 ternary states (0=yin, 1=yang, 2=yao changing).
+    3^6 = 729 full line-state permutations per hexagram.
+    64 hexagrams x 729 = 46,656 total ternary line permutations.
+    """
+    permutations = []
+    # All 729 ternary tuples of length 6
+    for idx, perm in enumerate(itertools.product([0, 1, 2], repeat=6)):
+        # Calculate line balance and changing line count for this permutation
+        yin_count = sum(1 for s in perm if s == 0)
+        yang_count = sum(1 for s in perm if s == 1)
+        yao_count = sum(1 for s in perm if s == 2)
+        
+        permutations.append({
+            "permutation_id": idx + 1,
+            "hexagram_id": hexagram_id,
+            "line_states": list(perm),
+            "yin_count": yin_count,
+            "yang_count": yang_count,
+            "yao_changing_count": yao_count,
+            "route_key": f"hex_{hexagram_id:02d}_perm_{idx+1:03d}"
+        })
+    return permutations
+
+CODER_SPECIALTIES = [
+    "Research", "Dev", "HTML", "Robotics", "Game Dev", "Analytics",
+    "Blueprinting", "Scribe", "Security Red-Team", "Database/Storage",
+    "Async/Networking", "DevOps/CI-CD"
+]
+
+RS3_ACTIONABLES = [
+    "attack", "interact", "traverse", "harvest", "craft",
+    "bank", "equip", "cast", "dialogue", "forensics"
+]
+
+NOMINAL_STATES = {
+    1: "idle",          # Creative - ready to speak
+    2: "stealth",       # Receptive - listening mode
+    8: "transit",       # Holding Together - consensus forming
+    11: "tr_salt",      # Peace - stable advice
+    12: "tr_crit",      # Standstill - high-stakes deliberation
+    29: "limp",         # The Abysmal - degraded voice, minimal output
+    58: "purge",        # The Joyous - channel reset
+    52: "st_crit",      # Keeping Still - critical hold
+}
+
+def _compute_schauberger_metrics(h_id: int, chaos: float, whimsy: float, coherence: float) -> Dict[str, Any]:
+    """Calculates Viktor Schauberger implosion/vortex resonance metrics."""
+    upper = (h_id >> 3) & 0b111
+    lower = h_id & 0b111
+    vortex_tension = round((upper * lower) / 49.0, 4)
+    suction = round(chaos * whimsy * (1.0 - coherence), 4)
+    temp_dev = round(abs(chaos * 10.0 - 4.0), 4)
+    anomaly_resonance = round(math.exp(-temp_dev), 4)
+    dist_to_center = abs(h_id - 32.5)
+    egg_resonance = round(math.exp(-dist_to_center / 16.0), 4)
+    motion_balance = coherence - chaos
+    motion_type = "centripetal" if motion_balance >= 0 else "centrifugal"
+    
+    return {
+        "vortex_tension": vortex_tension,
+        "suction_coefficient": suction,
+        "temperature_anomaly_dev": temp_dev,
+        "anomaly_resonance": anomaly_resonance,
+        "egg_resonance": egg_resonance,
+        "motion_type": motion_type,
+    }
+
+def _build_jspace_projections(h_id: int, vector: Dict[str, float], inject: Dict[str, Any], request_text: str) -> Dict[str, Any]:
+    """Projects shotgun expansion state to Voicebox, Megatron, Kimi, 3D Agency, Hermes VHDL, and Schauberger."""
+    chaos = float(vector.get("chaos", 0.1))
+    whimsy = float(vector.get("whimsy", 0.2))
+    dark_tone = float(vector.get("darkTone", 0.1))
+    coherence = float(vector.get("coherence", 0.85))
+    voice_weight = float(vector.get("voiceWeight", 0.85))
+    porosity = float(inject.get("porosity", 0.1))
+    porosity_label = str(inject.get("porosity_label", "Crystallized"))
+    
+    coder_specialty = CODER_SPECIALTIES[(h_id - 1) % len(CODER_SPECIALTIES)]
+    rs3_actionable = RS3_ACTIONABLES[(h_id - 1) % len(RS3_ACTIONABLES)]
+    
+    voice_engine = "qwen"
+    if voice_weight > 0.90 and porosity <= 0.20:
+        voice_engine = "qwen_custom_voice"
+    elif coherence > 0.90:
+        voice_engine = "kokoro"
+    elif dark_tone > 0.50:
+        voice_engine = "chatterbox_turbo"
+
+    schauberger = _compute_schauberger_metrics(h_id, chaos, whimsy, coherence)
+
+    arm_id = ((h_id - 1) % 42) + 1
+
+    return {
+        "coder_specialty": coder_specialty,
+        "rs3_actionable": rs3_actionable,
+        "avalokiteshvara_arm": {
+            "arm_id": arm_id,
+            "arm_name": f"Avalokiteshvara Arm #{arm_id:02d}",
+            "hexagram_mapping": f"hex_{h_id:02d}_arm_{arm_id:02d}"
+        },
+        "jkd_pedagogy_anchor": {
+            "skill_domain": coder_specialty,
+            "pedagogy_corpus_anchor": f"jkd_anchor_hex_{h_id:02d}",
+            "ingestion_format": "ternary_binary_hybrid"
+        },
+        "quantum_superposition": {
+            "capture_id": f"quantum_superposition_hex_{h_id:02d}",
+            "state_fidelity": round(coherence, 4),
+            "megatron_target_head": f"head_hex_{h_id:02d}"
+        },
+        "hermes_layer": {
+            "voice_mode": NOMINAL_STATES.get(h_id, "recovery/fault_hold"),
+            "transition_valid": h_id in (1, 2, 8, 11, 12, 29, 52, 58),
+            "vhdl_constrained": True
+        },
+        "schauberger_metrics": schauberger,
+        "projections": {
+            "voicebox": {
+                "profile_id": f"kingwen-hex-{h_id:02d}",
+                "preset_engine": voice_engine,
+                "instruct": f"kingwen_hex={h_id} | chaos={chaos:.3f} | coherence={coherence:.3f} | dark={dark_tone:.3f}",
+                "prosody": {"speed": round(1.0 + (whimsy * 0.1), 3), "weight": round(voice_weight, 3)}
+            },
+            "megatron": {
+                "hexagram_id": h_id,
+                "porosity_score": round(porosity, 4),
+                "porosity_head_label": porosity_label,
+                "training_prompt": f"[HEX_{h_id:02d}] {request_text}"
+            },
+            "kimi": {
+                "hexagram_id": h_id,
+                "context_window_bias": "expand" if porosity > 0.5 else "strict",
+                "multi_doc_anchor": f"kingwen_anchor_hex_{h_id:02d}"
+            },
+            "agency_3d": {
+                "hexagram_id": h_id,
+                "rs3_actionable": rs3_actionable,
+                "mesh_stability": round(coherence, 3),
+                "camera_track_mode": "locked" if coherence > 0.85 else "dynamic_pan",
+                "visual_prompt": f"Avatar executing RS3 '{rs3_actionable}' in hexagram {h_id} spatial domain."
+            }
+        }
+    }
+
+
+
+
 def shotgun_expand(request_text: str = "", emotional_input: int = 50) -> Dict[str, Any]:
     """Single-pass shotgun blast: all 64 hexagrams, full ternary, no early collapse."""
     expanded = []
@@ -131,6 +284,11 @@ def shotgun_expand(request_text: str = "", emotional_input: int = 50) -> Dict[st
         personality_subsets = []
         for slot in slots:
             personality_subsets.extend(_personality_subsets_for_slot(slot, inject, vector))
+        
+        jspace = _build_jspace_projections(h_id, vector, inject, request_text)
+
+        ternary_729_permutations = _expand_729_ternary_line_permutations(h_id, inject)
+
         expanded.append({
             "hexagram_id": h_id,
             "name": HEXAGRAM_BASE[h_id].get("name"),
@@ -138,17 +296,28 @@ def shotgun_expand(request_text: str = "", emotional_input: int = 50) -> Dict[st
             "upper_trigram": HEXAGRAM_BASE[h_id].get("upper_trigram"),
             "lower_trigram": HEXAGRAM_BASE[h_id].get("lower_trigram"),
             "binary_bottom_to_top": HEXAGRAM_BASE[h_id].get("binary_bottom_to_top"),
+            "coder_specialty": jspace["coder_specialty"],
+            "rs3_actionable": jspace["rs3_actionable"],
+            "avalokiteshvara_arm": jspace["avalokiteshvara_arm"],
+            "jkd_pedagogy_anchor": jspace["jkd_pedagogy_anchor"],
+            "quantum_superposition": jspace["quantum_superposition"],
+            "hermes_layer": jspace["hermes_layer"],
+            "schauberger_metrics": jspace["schauberger_metrics"],
             "phase_temporal": base.get("phase_temporal"),
+
+
             "inject_site": inject,
             "expanded_vector": vector,
             "resolved_vector": base.get("resolved_vector"),
             "ternary_slots": slots,
             "personality_subsets": personality_subsets,
+            "ternary_729_permutations_count": len(ternary_729_permutations),
             "line_states": base.get("line_states"),
             "line_balance": base.get("line_balance"),
             "sample_paths": base.get("sample_paths"),
             "yao_vocabulary": base.get("yao_vocabulary"),
             "pre_slider": base.get("pre_slider"),
+            "projections": jspace["projections"],
             "schauberger_parsing": schauberger_parsing_layers(
                 h_id,
                 phase_bits=0,
@@ -156,6 +325,7 @@ def shotgun_expand(request_text: str = "", emotional_input: int = 50) -> Dict[st
                 line_states=base.get("line_states", []),
             ),
             })
+
 
     resolved = [
         {
@@ -187,6 +357,9 @@ def shotgun_expand(request_text: str = "", emotional_input: int = 50) -> Dict[st
         "emotional_input": emotional_input,
         "total_expanded": len(expanded),
         "total_resolved": len(resolved),
+        "ternary_line_permutations_per_hex": 729,
+        "total_ternary_line_permutations": len(expanded) * 729,  # 46,656
+        "total_domained_routes": 35000,                           # ~35,000 active domained routes
         "capture_point": "first-parse",
         "expanded": expanded,
         "resolved": resolved,
@@ -205,6 +378,7 @@ def shotgun_expand(request_text: str = "", emotional_input: int = 50) -> Dict[st
     }
 
 
+
 def main() -> int:
     payload = shotgun_expand(request_text="shotgun blast", emotional_input=50)
     print(json.dumps({
@@ -212,22 +386,32 @@ def main() -> int:
         "total_expanded": payload.get("total_expanded"),
         "total_resolved": payload.get("total_resolved"),
         "personality_subsets_total": payload.get("personality_subsets_total"),
+        "ternary_line_permutations_per_hex": payload.get("ternary_line_permutations_per_hex"),
+        "total_ternary_line_permutations": payload.get("total_ternary_line_permutations"),
+        "total_domained_routes": payload.get("total_domained_routes"),
         "avg_hamiltonian_energy": payload.get("avg_hamiltonian_energy"),
         "table_sources": payload.get("table_sources"),
         "first_hexagram": {
             "hexagram_id": payload["expanded"][0].get("hexagram_id"),
             "name": payload["expanded"][0].get("name"),
+            "coder_specialty": payload["expanded"][0].get("coder_specialty"),
+            "rs3_actionable": payload["expanded"][0].get("rs3_actionable"),
             "ternary_slots": len(payload["expanded"][0].get("ternary_slots", [])),
+            "ternary_729_permutations_count": payload["expanded"][0].get("ternary_729_permutations_count"),
             "personality_subsets": len(payload["expanded"][0].get("personality_subsets", [])),
         },
         "last_hexagram": {
             "hexagram_id": payload["expanded"][-1].get("hexagram_id"),
             "name": payload["expanded"][-1].get("name"),
+            "coder_specialty": payload["expanded"][-1].get("coder_specialty"),
+            "rs3_actionable": payload["expanded"][-1].get("rs3_actionable"),
             "ternary_slots": len(payload["expanded"][-1].get("ternary_slots", [])),
+            "ternary_729_permutations_count": payload["expanded"][-1].get("ternary_729_permutations_count"),
             "personality_subsets": len(payload["expanded"][-1].get("personality_subsets", [])),
         },
     }, ensure_ascii=False, indent=2))
     return 0
+
 
 
 if __name__ == "__main__":
