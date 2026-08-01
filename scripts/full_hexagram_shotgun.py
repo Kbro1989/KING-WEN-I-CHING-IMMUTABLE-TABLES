@@ -289,6 +289,10 @@ def shotgun_expand(request_text: str = "", emotional_input: int = 50) -> Dict[st
 
         ternary_729_permutations = _expand_729_ternary_line_permutations(h_id, inject)
 
+        category = HEXAGRAM_BASE[h_id].get("category", "")
+        action = HEXAGRAM_BASE[h_id].get("action", "")
+        training_notes = EMOTIONAL_WEIGHTS.get(str(h_id), {}).get("trainingNotes", "")
+
         expanded.append({
             "hexagram_id": h_id,
             "name": HEXAGRAM_BASE[h_id].get("name"),
@@ -298,6 +302,20 @@ def shotgun_expand(request_text: str = "", emotional_input: int = 50) -> Dict[st
             "binary_bottom_to_top": HEXAGRAM_BASE[h_id].get("binary_bottom_to_top"),
             "coder_specialty": jspace["coder_specialty"],
             "rs3_actionable": jspace["rs3_actionable"],
+            "category": category,
+            "action": action,
+            "domain_vector": {
+                "chaos": float(vector.get("chaos", 0.0) or 0.0),
+                "whimsy": float(vector.get("whimsy", 0.0) or 0.0),
+                "darkTone": float(vector.get("darkTone", 0.0) or 0.0),
+                "coherence": float(vector.get("coherence", 0.0) or 0.0),
+                "voiceWeight": float(vector.get("voiceWeight", 0.0) or 0.0),
+            },
+            "training_notes": training_notes,
+            "hexagram_symbols": base.get("hexagram_symbols", {}),
+            "intent": base.get("intent", {}),
+            "phase_bits": base.get("phase_bits", 0),
+            "request_text": request_text,
             "avalokiteshvara_arm": jspace["avalokiteshvara_arm"],
             "jkd_pedagogy_anchor": jspace["jkd_pedagogy_anchor"],
             "quantum_superposition": jspace["quantum_superposition"],
@@ -330,6 +348,20 @@ def shotgun_expand(request_text: str = "", emotional_input: int = 50) -> Dict[st
     resolved = [
         {
             "hexagram_id": h_id,
+            "category": HEXAGRAM_BASE[h_id].get("category", ""),
+            "action": HEXAGRAM_BASE[h_id].get("action", ""),
+            "coder_specialty": CODER_SPECIALTIES[(h_id - 1) % len(CODER_SPECIALTIES)],
+            "rs3_actionable": RS3_ACTIONABLES[(h_id - 1) % len(RS3_ACTIONABLES)],
+            "training_notes": EMOTIONAL_WEIGHTS.get(str(h_id), {}).get("trainingNotes", ""),
+            "hexagram_symbols": HEXAGRAM_BASE[h_id],
+            "intent": {"dominant_intent": "", "intensity": 0.0},
+            "domain_vector": {
+                "chaos": 0.0,
+                "whimsy": 0.0,
+                "darkTone": 0.0,
+                "coherence": 0.0,
+                "voiceWeight": 0.0,
+            },
             "phase_bits": p,
             "phase_temporal": PHASE_INFO[p]["temporal"],
             "inject_site": expand_hexagram(h_id, request_text, phase_bits=p, emotional_input=0).get("inject_site", {}),
