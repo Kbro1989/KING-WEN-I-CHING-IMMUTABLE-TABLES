@@ -84,9 +84,36 @@ PERSONALITIES = {
 }
 
 # Skill-card domains per binary position (1=yang,0=yin) — 6 slots = 6 tool domains
+# Preserves all existing paths; adds legal crosswalk / law-breaker detection paths.
 SKILL_CARD_DOMAINS = {
-    "1": ["generation", "initiation", "architecture", "deployment", "api-design", "creative"],
-    "0": ["integration", "maintenance", "debugging", "refactoring", "stability", "receptive"],
+    "1": [
+        "generation",
+        "initiation",
+        "architecture",
+        "deployment",
+        "api-design",
+        "creative",
+        "legal-crosswalk",
+        "constitutional-analysis",
+        "citation-resolution",
+        "conflict-detection",
+        "jurisdiction-comparison",
+        "source-verification",
+    ],
+    "0": [
+        "integration",
+        "maintenance",
+        "debugging",
+        "refactoring",
+        "stability",
+        "receptive",
+        "legal-crosswalk",
+        "constitutional-analysis",
+        "citation-resolution",
+        "conflict-detection",
+        "jurisdiction-comparison",
+        "source-verification",
+    ],
 }
 
 # Tool-native mappings for Jarvis
@@ -103,6 +130,50 @@ TOOL_NATIVE_MAP = {
     "refactoring": "refactor",
     "stability": "stabilize",
     "receptive": "listen",
+    "legal-crosswalk": "state-conflicts",
+    "constitutional-analysis": "diff-readout",
+    "citation-resolution": "citeurl",
+    "conflict-detection": "law-breakers",
+    "jurisdiction-comparison": "state-compare",
+    "source-verification": "source-check",
+}
+
+# Derived legal-path card seeds by hexagram category/action.
+# These are appended after the 6 primary binary slots so existing
+# consumers still see the same first 6 cards in the same order.
+LEGAL_CARD_SEEDS = {
+    "sovereign": [
+        "conflict-detection",
+        "jurisdiction-comparison",
+        "constitutional-analysis",
+        "source-verification",
+        "legal-crosswalk",
+        "citation-resolution",
+    ],
+    "transformer": [
+        "constitutional-analysis",
+        "citation-resolution",
+        "legal-crosswalk",
+        "conflict-detection",
+        "source-verification",
+        "jurisdiction-comparison",
+    ],
+    "dissipator": [
+        "source-verification",
+        "legal-crosswalk",
+        "jurisdiction-comparison",
+        "conflict-detection",
+        "constitutional-analysis",
+        "citation-resolution",
+    ],
+    "boundary": [
+        "jurisdiction-comparison",
+        "conflict-detection",
+        "citation-resolution",
+        "source-verification",
+        "legal-crosswalk",
+        "constitutional-analysis",
+    ],
 }
 
 # Phase routing
@@ -137,18 +208,37 @@ except Exception:
     pass
 
 
-def skill_cards_for_binary(binary: str):
+def skill_cards_for_binary(binary: str, category: str = ""):
     cards = []
     for idx, bit in enumerate(binary):
-        domain = SKILL_CARD_DOMAINS.get(bit, ["unknown"])[idx % len(SKILL_CARD_DOMAINS.get(bit, ["unknown"]))]
+        domain_list = SKILL_CARD_DOMAINS.get(bit, ["unknown"])
+        domain = domain_list[idx % len(domain_list)]
         tool = TOOL_NATIVE_MAP.get(domain, "unknown")
-        cards.append({
-            "slot": idx + 1,
-            "bit": bit,
-            "domain": domain,
-            "jarvis_tool": tool,
-            "symbol": {"1": "{", "0": "["}.get(bit, "?"),
-        })
+        cards.append(
+            {
+                "slot": idx + 1,
+                "bit": bit,
+                "domain": domain,
+                "jarvis_tool": tool,
+                "symbol": {"1": "{", "0": "["}.get(bit, "?"),
+            }
+        )
+
+    # Append legal-path cards from extended crosswalk domain set.
+    # These are additional paths only; they do not modify or replace
+    # the existing 6 binary-slot cards.
+    legal_seeds = LEGAL_CARD_SEEDS.get(category or "", [])
+    for legal_idx, domain in enumerate(legal_seeds, start=len(cards) + 1):
+        tool = TOOL_NATIVE_MAP.get(domain, "unknown")
+        cards.append(
+            {
+                "slot": legal_idx,
+                "bit": "L",
+                "domain": domain,
+                "jarvis_tool": tool,
+                "symbol": "⟦",
+            }
+        )
     return cards
 
 
@@ -214,7 +304,7 @@ for h_id_str, entry in registry.items():
         "personality": personality,
         "inverted_id": inverted_id,
         "inversion_pair": sorted([h_id, inverted_id]) if inverted_id else None,
-        "skill_cards": skill_cards_for_binary(binary),
+        "skill_cards": skill_cards_for_binary(binary, entry.get("category", "")),
         "domain_vectors": {
             "sovereign": 0.9 if entry.get("category") == "sovereign" else 0.4,
             "transformer": 0.9 if entry.get("category") == "transformer" else 0.4,
