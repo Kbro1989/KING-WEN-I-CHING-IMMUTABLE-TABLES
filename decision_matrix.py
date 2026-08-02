@@ -110,39 +110,43 @@ def _porosity_window_score(porosity_norm: float, emotional_input: int) -> float:
 # Axis 3: neighbor continuity — previous/next hex emotional distance
 # ---------------------------------------------------------------------------
 def _neighbor_continuity_score(resolved_item: Dict[str, Any], registry: Dict[str, Any]) -> float:
+    """Paired-differential continuity: vector delta between current and neighbors."""
     hex_id = int(resolved_item.get("hexagram_id") or 0)
     if not hex_id:
         return 0.0
     prev_id = ((hex_id - 2) % 64) + 1
     next_id = (hex_id % 64) + 1
     current_vec = resolved_item.get("resolved_vector") or {}
-    current_mag = _safe_mean([float(current_vec.get(k, 0.0) or 0.0) for k in VEC_KEYS])
-    prev_mag = _safe_mean([
-        float(registry.get(str(prev_id), {}).get("emotional_weights", {}).get(k, 0.0) or 0.0)
-        for k in VEC_KEYS
-    ])
-    next_mag = _safe_mean([
-        float(registry.get(str(next_id), {}).get("emotional_weights", {}).get(k, 0.0) or 0.0)
-        for k in VEC_KEYS
-    ])
-    avg_neighbor = (prev_mag + next_mag) / 2.0
-    return _clamp(1.0 - abs(current_mag - avg_neighbor))
+    prev_vec = registry.get(str(prev_id), {}).get("resolved_vector") or registry.get(str(prev_id), {}).get("emotional_weights") or {}
+    next_vec = registry.get(str(next_id), {}).get("resolved_vector") or registry.get(str(next_id), {}).get("emotional_weights") or {}
+    prev_dy = [float(current_vec.get(k, 0.0) or 0.0) - float(prev_vec.get(k, 0.0) or 0.0) for k in VEC_KEYS]
+    next_dy = [float(current_vec.get(k, 0.0) or 0.0) - float(next_vec.get(k, 0.0) or 0.0) for k in VEC_KEYS]
+    prev_dist = sum(d * d for d in prev_dy) ** 0.5
+    next_dist = sum(d * d for d in next_dy) ** 0.5
+    avg_dist = (prev_dist + next_dist) / 2.0
+    return _clamp(1.0 - avg_dist)
 
 
 # ---------------------------------------------------------------------------
 # Axis 4: Hamiltonian alignment — trajectory/phase fit
 # ---------------------------------------------------------------------------
 def _hamiltonian_alignment_score(resolved_item: Dict[str, Any]) -> float:
-    """Simplified Hamiltonian alignment from momentum minus line-state Lagrangian."""
+    """Hamiltonian alignment from per-axis phase derivative minus paired ternary Lagrangian."""
     rv = resolved_item.get("resolved_vector") or {}
+    ev = resolved_item.get("expanded_vector") or {}
     lb = resolved_item.get("line_balance") or {}
     momentum = [float(rv.get(k, 0.0) or 0.0) for k in VEC_KEYS]
-    lagrangian = (
-        abs(lb.get("yin_ratio", 0.0) - lb.get("yang_ratio", 0.0)) * 0.5
-        + lb.get("yao_ratio", 0.0) * 0.3
-        + lb.get("changing_ratio", 0.0) * 0.2
-    )
-    pq_dot = sum(momentum) * 1.0  # phase shift rate proxy
+    q_dot = [float(rv.get(k, 0.0) or 0.0) - float(ev.get(k, 0.0) or 0.0) for k in VEC_KEYS]
+    pq_dot = sum(m * qd for m, qd in zip(momentum, q_dot))
+
+    yin_count = float(lb.get("yin_count", 0) or 0)
+    yang_count = float(lb.get("yang_count", 0) or 0)
+    yao_count = float(lb.get("yao_count", 0) or 0)
+    changing_count = float(lb.get("changing_count", 0) or 0)
+    dy = yang_count - yin_count
+    yao_dy = yao_count - 3.0
+    changing_dy = changing_count - (6.0 - changing_count)
+    lagrangian = abs(dy) * 0.5 + abs(yao_dy) * 0.3 + abs(changing_dy) * 0.2
     return _clamp(pq_dot - lagrangian)
 
 

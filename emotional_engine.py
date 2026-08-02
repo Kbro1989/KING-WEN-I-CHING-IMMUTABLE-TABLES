@@ -373,20 +373,46 @@ def _compute_intent_match(hexagram_id: int, category: str, action: str, intent_d
 # =============================================================================
 
 
-def _hamiltonian_energy(resolved_vector: List[float], line_balance: Dict[str, Any], phase_shift: List[float]) -> float:
-    """ℋ(p,q,t) = Σ p_i q̇^i - ℒ
+def _hamiltonian_energy(
+    resolved_vector: List[float],
+    expanded_vector: List[float],
+    line_balance: Dict[str, Any],
+) -> float:
+    """ℋ(p,q,t) = Σ p_i · q̇^i - ℒ
 
-    - p_i : resolved vector axes as momentum
-    - q̇^i: phase shift rate
-    - ℒ   : line-state Lagrangian from yin/yang/yao balance
+    - p_i     : resolved vector axis as momentum
+    - q̇^i    : per-axis phase derivative = resolved[i] - expanded[i]
+    - ℒ       : line-state Lagrangian from paired ternary differentials
+
+    Boolean is forbidden in this layer. All state comparisons use signed
+    quantitative differentials. Final gating only.
     """
     momentum = [max(0.0, float(v)) for v in resolved_vector]
+    q_dot = [float(rv) - float(ev) for rv, ev in zip(resolved_vector, expanded_vector)]
+    pq_dot = sum(m * qd for m, qd in zip(momentum, q_dot))
+
+    # Paired ternary differentials — no absolute ratios
+    yin_count = float(line_balance.get("yin_count", 0) or 0)
+    yang_count = float(line_balance.get("yang_count", 0) or 0)
+    yao_count = float(line_balance.get("yao_count", 0) or 0)
+    changing_count = float(line_balance.get("changing_count", 0) or 0)
+    old_yang_count = float(line_balance.get("old_yang_count", 0) or 0)
+    old_yin_count = float(line_balance.get("old_yin_count", 0) or 0)
+    old_yao_count = float(line_balance.get("old_yao_count", 0) or 0)
+    stable_yao_count = float(line_balance.get("stable_yao_count", 0) or 0)
+    stable_yin_count = float(line_balance.get("stable_yin_count", 0) or 0)
+
+    dy = yang_count - yin_count                      # signed binary differential
+    yao_dy = yao_count - 3.0                        # yao vs neutral midpoint (6/2)
+    changing_dy = changing_count - (6.0 - changing_count)  # changing vs stable
+    old_dy = old_yang_count - old_yin_count         # old_yang vs old_yin
+    stable_dy = stable_yao_count - stable_yin_count # stable ternary opposition
+
     lagrangian = (
-        abs(line_balance.get("yin_ratio", 0.0) - line_balance.get("yang_ratio", 0.0)) * 0.5
-        + line_balance.get("yao_ratio", 0.0) * 0.3
-        + line_balance.get("changing_ratio", 0.0) * 0.2
+        abs(dy) * 0.5
+        + abs(yao_dy) * 0.3
+        + abs(changing_dy) * 0.2
     )
-    pq_dot = sum(m * abs(s) for m, s in zip(momentum, phase_shift))
     return _clamp(pq_dot - lagrangian)
 
 
@@ -790,10 +816,21 @@ def collapse_full_128(emotional_input: int = 50, request_text: str = "") -> Dict
     
     expanded_hamiltonian_energy = []
     for item in expanded:
-        phase_shift = [0.0, 0.0, 0.0, 0.0, 0.0]
         expanded_vector = item.get("expanded_vector") or {}
+        vec = [float(expanded_vector.get(k, 0.0) or 0.0) for k in VEC_KEYS]
+        # Pre-slider: resolved == expanded, so q_dot = 0 and energy = -ℒ
         expanded_hamiltonian_energy.append(
-            _hamiltonian_energy([float(expanded_vector.get(k, 0.0) or 0.0) for k in ["chaos", "whimsy", "darkTone", "coherence", "voiceWeight"]], item.get("line_balance", {}), phase_shift)
+            _hamiltonian_energy(vec, vec, item.get("line_balance", {}))
+        )
+
+    resolved_hamiltonian_energy = []
+    for item in resolved:
+        resolved_vector = item.get("resolved_vector") or {}
+        expanded_vector = item.get("expanded_vector") or {}
+        rv = [float(resolved_vector.get(k, 0.0) or 0.0) for k in VEC_KEYS]
+        ev = [float(expanded_vector.get(k, 0.0) or 0.0) for k in VEC_KEYS]
+        resolved_hamiltonian_energy.append(
+            _hamiltonian_energy(rv, ev, item.get("line_balance", {}))
         )
     
     # Voice ensemble: summary of all 512 resolved states as simultaneous voices
@@ -855,9 +892,13 @@ def collapse_full_128(emotional_input: int = 50, request_text: str = "") -> Dict
         "consensus": consensus,
         "voice_ensemble": voice_ensemble,
         "expanded_hamiltonian_energy": expanded_hamiltonian_energy,
-        "avg_hamiltonian_energy": sum(expanded_hamiltonian_energy) / max(1, len(expanded_hamiltonian_energy)),
-        "min_hamiltonian_energy": min(expanded_hamiltonian_energy) if expanded_hamiltonian_energy else 0.0,
-        "max_hamiltonian_energy": max(expanded_hamiltonian_energy) if expanded_hamiltonian_energy else 0.0,
+        "avg_expanded_hamiltonian_energy": sum(expanded_hamiltonian_energy) / max(1, len(expanded_hamiltonian_energy)),
+        "min_expanded_hamiltonian_energy": min(expanded_hamiltonian_energy) if expanded_hamiltonian_energy else 0.0,
+        "max_expanded_hamiltonian_energy": max(expanded_hamiltonian_energy) if expanded_hamiltonian_energy else 0.0,
+        "resolved_hamiltonian_energy": resolved_hamiltonian_energy,
+        "avg_resolved_hamiltonian_energy": sum(resolved_hamiltonian_energy) / max(1, len(resolved_hamiltonian_energy)),
+        "min_resolved_hamiltonian_energy": min(resolved_hamiltonian_energy) if resolved_hamiltonian_energy else 0.0,
+        "max_resolved_hamiltonian_energy": max(resolved_hamiltonian_energy) if resolved_hamiltonian_energy else 0.0,
     }
 
 

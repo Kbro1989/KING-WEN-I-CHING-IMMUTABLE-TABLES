@@ -174,13 +174,9 @@ def multi_layer_expand(request_text: str = "", emotional_input: int = 50) -> Dic
     # Hamiltonian energy over all expanded hexagrams
     expanded_hamiltonian_energy = []
     for item in expanded:
-        expanded_vector = item.get("expanded_vector") or {}
+        vec = [float(item.get("expanded_vector", {}).get(k, 0.0) or 0.0) for k in ["chaos", "whimsy", "darkTone", "coherence", "voiceWeight"]]
         expanded_hamiltonian_energy.append(
-            _hamiltonian_energy(
-                [float(expanded_vector.get(k, 0.0) or 0.0) for k in ["chaos", "whimsy", "darkTone", "coherence", "voiceWeight"]],
-                item.get("line_balance", {}),
-                [0.0, 0.0, 0.0, 0.0, 0.0],
-            )
+            _hamiltonian_energy(vec, vec, item.get("line_balance", {}))
         )
 
     return {

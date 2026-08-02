@@ -32,12 +32,18 @@ def verify_jacobian_hamiltonian_gaussian():
 
     # 1. HAMILTONIAN ENERGY VERIFICATION
     sample_vec = [0.35, 0.25, 0.45, 0.85, 0.90]
-    line_balance = {"yin_ratio": 0.5, "yang_ratio": 0.5, "changing_ratio": 0.0}
     target_vec = [0.30, 0.20, 0.40, 0.80, 0.85]
-    
-    energy = _hamiltonian_energy(sample_vec, line_balance, target_vec)
+    line_balance = {
+        "yin_count": 3, "yang_count": 3,
+        "yao_count": 0, "changing_count": 0,
+        "old_yang_count": 0, "old_yin_count": 0,
+        "old_yao_count": 0, "stable_yao_count": 0,
+        "stable_yin_count": 3, "stable_yang_count": 3,
+    }
+
+    energy = _hamiltonian_energy(sample_vec, target_vec, line_balance)
     print(f"\n[1. HAMILTONIAN ENERGY EQUATION]")
-    print(f"  - Formula: H = ||v - u||^2 + lambda1 * (1 - coherence) + lambda2 * line_imbalance")
+    print(f"  - Formula: H = p·q̇ - ℒ")
     print(f"  - Sample Energy Score: {energy:.6f}")
 
     # 2. GAUSSIAN CONSENSUS KERNEL VERIFICATION

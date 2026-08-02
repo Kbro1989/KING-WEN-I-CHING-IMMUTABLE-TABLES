@@ -117,6 +117,7 @@ select:focus { outline: none; border-color: #4ECDC4; }
     <div class="kw-tab" onclick="showTab('vectors', this)">Vector Space</div>
     <div class="kw-tab" onclick="showTab('matrix', this)">State Matrix</div>
     <div class="kw-tab" onclick="showTab('shotgun', this)">Shotgun Blast</div>
+    <div class="kw-tab" onclick="showTab('masking', this)">Quantum Masking</div>
   </div>
 
   <div id="tab-grid" class="kw-panel active">
@@ -196,6 +197,22 @@ select:focus { outline: none; border-color: #4ECDC4; }
     <div style="text-align:center; margin-bottom:12px; color:#888; font-size:13px;">Full 512-state shotgun blast — no collapse to dominant state</div>
     <div class="kw-phase-grid" id="shotgunGrid"></div>
   </div>
+
+  <div id="tab-masking" class="kw-panel">
+    <div style="text-align:center; margin-bottom:12px; color:#888; font-size:13px;">Quantum masking state per hexagram — deterministic category/action mapping</div>
+    <div class="kw-legend">
+      <div class="kw-legend-item"><div class="kw-legend-dot" style="background:#00CED1"></div>PASS</div>
+      <div class="kw-legend-item"><div class="kw-legend-dot" style="background:#FF6B6B"></div>SEVER</div>
+      <div class="kw-legend-item"><div class="kw-legend-dot" style="background:#4ECDC4"></div>ZERO_ROT</div>
+      <div class="kw-legend-item"><div class="kw-legend-dot" style="background:#FFD700"></div>ATTENTION</div>
+      <div class="kw-legend-item"><div class="kw-legend-dot" style="background:#9370DB"></div>MEASURE</div>
+    </div>
+    <div class="kw-grid" id="maskingGrid"></div>
+    <div id="maskingDetail" style="margin-top:16px; padding:12px; background:#1a1a2e; border-radius:8px; display:none;">
+      <div style="font-size:12px; color:#888; margin-bottom:8px; text-transform:uppercase; letter-spacing:1px;">Masking Detail</div>
+      <div id="maskingDetailContent"></div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -205,6 +222,74 @@ const rawExpanded = [{"hexagram_id":1,"request_text":"","phase_bits":0,"hexagram
 const catColors = {"Sovereign": "#FFD700", "Transformer": "#4ECDC4", "Dissipator": "#FF6B6B", "Boundary": "#95E1D3"};
 const actionSymbols = {"ASSERT": "▲", "YIELD": "▼", "ADAPT": "◆", "WAIT": "○"};
 const phaseColors = {"past": "#4ECDC4", "present": "#FFD700", "future": "#FF6B6B", "transition": "#9370DB", "resolution": "#FF8C00", "dissolution": "#708090", "crystallization": "#00CED1", "void": "#2F4F4F"};
+const maskingColors = {"PASS": "#00CED1", "SEVER": "#FF6B6B", "ZERO_ROT": "#4ECDC4", "ATTENTION": "#FFD700", "MEASURE": "#9370DB"};
+const maskingLabels = {"PASS": "PASS", "SEVER": "SEVER", "ZERO_ROT": "ZERO_ROT", "ATTENTION": "ATTENTION", "MEASURE": "MEASURE"};
+const maskingMap = {
+  1: {state:"PASS", rule:"singularity_high_count"},
+  2: {state:"ATTENTION", rule:"strong_non_adversarial_default"},
+  3: {state:"ATTENTION", rule:"strong_non_adversarial_default"},
+  4: {state:"PASS", rule:"singularity_high_count"},
+  5: {state:"SEVER", rule:"adversarial_pair_boundary"},
+  6: {state:"SEVER", rule:"adversarial_pair_boundary"},
+  7: {state:"ZERO_ROT", rule:"sparse_non_adversarial_default"},
+  8: {state:"ZERO_ROT", rule:"sparse_non_adversarial_default"},
+  9: {state:"ATTENTION", rule:"mid_non_adversarial_default"},
+  10: {state:"ATTENTION", rule:"mid_non_adversarial_default"},
+  11: {state:"SEVER", rule:"adversarial_pair_boundary"},
+  12: {state:"SEVER", rule:"adversarial_pair_boundary"},
+  13: {state:"ZERO_ROT", rule:"sparse_non_adversarial_default"},
+  14: {state:"ATTENTION", rule:"mid_non_adversarial_default"},
+  15: {state:"MEASURE", rule:"void_zero_papers"},
+  16: {state:"ZERO_ROT", rule:"sparse_non_adversarial_default"},
+  17: {state:"PASS", rule:"singularity_high_count"},
+  18: {state:"ZERO_ROT", rule:"sparse_non_adversarial_default"},
+  19: {state:"SEVER", rule:"adversarial_pair_boundary"},
+  20: {state:"MEASURE", rule:"void_zero_papers"},
+  21: {state:"SEVER", rule:"adversarial_pair_boundary"},
+  22: {state:"ATTENTION", rule:"mid_non_adversarial_default"},
+  23: {state:"SEVER", rule:"adversarial_pair_boundary"},
+  24: {state:"SEVER", rule:"adversarial_pair_boundary"},
+  25: {state:"SEVER", rule:"adversarial_pair_boundary"},
+  26: {state:"SEVER", rule:"adversarial_pair_boundary"},
+  27: {state:"ATTENTION", rule:"strong_non_adversarial_default"},
+  28: {state:"ATTENTION", rule:"strong_non_adversarial_default"},
+  29: {state:"ZERO_ROT", rule:"sparse_non_adversarial_default"},
+  30: {state:"MEASURE", rule:"void_zero_papers"},
+  31: {state:"ZERO_ROT", rule:"sparse_non_adversarial_default"},
+  32: {state:"ZERO_ROT", rule:"sparse_non_adversarial_default"},
+  33: {state:"SEVER", rule:"adversarial_pair_boundary"},
+  34: {state:"PASS", rule:"singularity_high_count"},
+  35: {state:"ATTENTION", rule:"mid_non_adversarial_default"},
+  36: {state:"SEVER", rule:"adversarial_pair_boundary"},
+  37: {state:"PASS", rule:"singularity_high_count"},
+  38: {state:"SEVER", rule:"adversarial_pair_boundary"},
+  39: {state:"SEVER", rule:"adversarial_pair_boundary"},
+  40: {state:"MEASURE", rule:"void_zero_papers"},
+  41: {state:"ATTENTION", rule:"mid_non_adversarial_default"},
+  42: {state:"PASS", rule:"singularity_high_count"},
+  43: {state:"ATTENTION", rule:"strong_non_adversarial_default"},
+  44: {state:"ATTENTION", rule:"mid_non_adversarial_default"},
+  45: {state:"ZERO_ROT", rule:"sparse_non_adversarial_default"},
+  46: {state:"ZERO_ROT", rule:"sparse_non_adversarial_default"},
+  47: {state:"SEVER", rule:"adversarial_pair_boundary"},
+  48: {state:"PASS", rule:"singularity_high_count"},
+  49: {state:"ZERO_ROT", rule:"sparse_non_adversarial_default"},
+  50: {state:"ZERO_ROT", rule:"sparse_non_adversarial_default"},
+  51: {state:"SEVER", rule:"adversarial_pair_boundary"},
+  52: {state:"PASS", rule:"override_3d_monad_capability_critical"},
+  53: {state:"PASS", rule:"override_3d_monad_capability_critical"},
+  54: {state:"ZERO_ROT", rule:"sparse_non_adversarial_default"},
+  55: {state:"ZERO_ROT", rule:"sparse_non_adversarial_default"},
+  56: {state:"ZERO_ROT", rule:"sparse_non_adversarial_default"},
+  57: {state:"ZERO_ROT", rule:"sparse_non_adversarial_default"},
+  58: {state:"ZERO_ROT", rule:"sparse_non_adversarial_default"},
+  59: {state:"ZERO_ROT", rule:"sparse_non_adversarial_default"},
+  60: {state:"ATTENTION", rule:"mid_non_adversarial_default"},
+  61: {state:"ATTENTION", rule:"mid_non_adversarial_default"},
+  62: {state:"ZERO_ROT", rule:"sparse_non_adversarial_default"},
+  63: {state:"SEVER", rule:"adversarial_pair_boundary"},
+  64: {state:"ATTENTION", rule:"mid_non_adversarial_default"}, 
+};
 const phases = ["past", "present", "future", "transition", "resolution", "dissolution", "crystallization", "void"];
 
 const vectorKeys = ['chaos','whimsy','darkTone','coherence','voiceWeight'];
@@ -223,6 +308,7 @@ function showTab(tab, el) {
   if(tab === 'vectors') renderVectorSpace();
   if(tab === 'matrix') renderMatrix();
   if(tab === 'shotgun') renderShotgun();
+  if(tab === 'masking') renderMasking();
 }
 
 function esc(s) {
@@ -241,7 +327,8 @@ function renderGrid() {
       '<div class="kw-cell-id">' + h.id + '</div>' +
       '<div class="kw-cell-unicode">' + esc(h.unicode) + '</div>' +
       '<div class="kw-cell-name">' + esc(h.name) + '</div>' +
-      '<div class="kw-cell-action">' + (actionSymbols[h.action] || '') + '</div>';
+      '<div class="kw-cell-action">' + (actionSymbols[h.action] || '') + '</div>' +
+      '<div class="kw-cell-mask" style="background:' + (maskingColors[maskingMap[h.id] || 'PASS'] || '#888') + '22; color:' + (maskingColors[maskingMap[h.id] || 'PASS'] || '#888') + '; border-top:1px solid ' + (maskingColors[maskingMap[h.id] || 'PASS'] || '#888') + '44;">' + (maskingLabels[maskingMap[h.id] || 'PASS'] || 'PASS') + '</div>';
     cell.onclick = () => showDetail(h.id);
     grid.appendChild(cell);
   });
@@ -467,6 +554,48 @@ function renderMatrix() {
   }
 
   table.innerHTML = html;
+}
+
+function renderMasking() {
+  const grid = document.getElementById('maskingGrid');
+  grid.innerHTML = '';
+  hexagrams.forEach(h => {
+    const cell = document.createElement('div');
+    cell.className = 'kw-cell';
+    const mask = maskingMap[h.id] || 'PASS';
+    cell.style.borderColor = (maskingColors[mask] || '#888') + '40';
+    cell.innerHTML = '<div class="kw-cell-cat" style="background:' + (catColors[h.category] || '#888') + '\"></div>' +
+      '<div class="kw-cell-id">' + h.id + '</div>' +
+      '<div class="kw-cell-unicode">' + esc(h.unicode) + '</div>' +
+      '<div class="kw-cell-name">' + esc(h.name) + '</div>' +
+      '<div class="kw-cell-mask" style="background:' + (maskingColors[mask] || '#888') + '22; color:' + (maskingColors[mask] || '#888') + '; border-top:1px solid ' + (maskingColors[mask] || '#888') + '44;">' + mask + '</div>';
+    cell.onclick = () => {
+      const detail = document.getElementById('maskingDetail');
+      const content = document.getElementById('maskingDetailContent');
+      const state = resolved.find(r => r.hexagram_id === h.id && r.phase_bits === selectedPhase) || resolved.find(r => r.hexagram_id === h.id);
+      const pairId = h.id % 2 === 0 ? h.id - 1 : h.id + 1;
+      const pair = hexagrams.find(x => x.id === pairId);
+      const pairMask = maskingMap[pairId] || 'PASS';
+      content.innerHTML =
+        '<div style="display:flex; gap:16px; flex-wrap:wrap;">' +
+        '<div><strong>Hexagram:</strong> ' + h.id + '. ' + esc(h.name) + '</div>' +
+        '<div><strong>Masking:</strong> <span style="color:' + (maskingColors[mask] || '#888') + '">' + mask + '</span></div>' +
+        '<div><strong>Category/Action:</strong> ' + esc(h.category) + ' / ' + esc(h.action) + '</div>' +
+        '<div><strong>Inversion Pair:</strong> ' + pairId + '. ' + esc(pair ? pair.name : '') + ' [' + pairMask + ']</div>' +
+        '<div><strong>Porosity:</strong> ' + (h.porosity != null ? h.porosity.toFixed(3) : '') + '</div>' +
+        '<div><strong>Phase:</strong> ' + (state ? esc(state.phase_temporal) : '') + '</div>' +
+        '</div>' +
+        '<div style="margin-top:12px;"><div style="font-size:12px; color:#888; margin-bottom:8px; text-transform:uppercase; letter-spacing:1px;">Vector</div><div class="kw-vectors">' +
+        (state ? '<div class="kw-vector"><div class="kw-vector-name">Chaos</div><div class="kw-vector-bar"><div class="kw-vector-fill" style="width:' + ((state.expanded_vector.chaos || 0) * 100) + '%; background:#FF6B6B"></div></div><div class="kw-vector-value" style="color:#FF6B6B">' + (state.expanded_vector.chaos || 0).toFixed(3) + '</div></div>' +
+        '<div class="kw-vector"><div class="kw-vector-name">Whimsy</div><div class="kw-vector-bar"><div class="kw-vector-fill" style="width:' + ((state.expanded_vector.whimsy || 0) * 100) + '%; background:#4ECDC4"></div></div><div class="kw-vector-value" style="color:#4ECDC4">' + (state.expanded_vector.whimsy || 0).toFixed(3) + '</div></div>' +
+        '<div class="kw-vector"><div class="kw-vector-name">Dark</div><div class="kw-vector-bar"><div class="kw-vector-fill" style="width:' + ((state.expanded_vector.darkTone || 0) * 100) + '%; background:#8B4513"></div></div><div class="kw-vector-value" style="color:#8B4513">' + (state.expanded_vector.darkTone || 0).toFixed(3) + '</div></div>' +
+        '<div class="kw-vector"><div class="kw-vector-name">Coherence</div><div class="kw-vector-bar"><div class="kw-vector-fill" style="width:' + ((state.expanded_vector.coherence || 0) * 100) + '%; background:#FFD700"></div></div><div class="kw-vector-value" style="color:#FFD700">' + (state.expanded_vector.coherence || 0).toFixed(3) + '</div></div>' +
+        '<div class="kw-vector"><div class="kw-vector-name">Voice</div><div class="kw-vector-bar"><div class="kw-vector-fill" style="width:' + ((state.expanded_vector.voiceWeight || 0) * 100) + '%; background:#9370DB"></div></div><div class="kw-vector-value" style="color:#9370DB">' + (state.expanded_vector.voiceWeight || 0).toFixed(3) + '</div></div>' : '') +
+        '</div>';
+      detail.style.display = 'block';
+    };
+    grid.appendChild(cell);
+  });
 }
 
 function renderShotgun() {

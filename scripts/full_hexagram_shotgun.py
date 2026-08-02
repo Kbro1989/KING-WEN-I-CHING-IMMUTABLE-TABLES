@@ -374,13 +374,9 @@ def shotgun_expand(request_text: str = "", emotional_input: int = 50) -> Dict[st
 
     energies = []
     for item in expanded:
-        vec = item.get("expanded_vector") or {}
+        vec = [float(item.get("expanded_vector", {}).get(k, 0.0) or 0.0) for k in ["chaos", "whimsy", "darkTone", "coherence", "voiceWeight"]]
         energies.append(
-            _hamiltonian_energy(
-                [float(vec.get(k, 0.0) or 0.0) for k in ["chaos", "whimsy", "darkTone", "coherence", "voiceWeight"]],
-                item.get("line_balance", {}),
-                [0.0, 0.0, 0.0, 0.0, 0.0],
-            )
+            _hamiltonian_energy(vec, vec, item.get("line_balance", {}))
         )
 
     return {
