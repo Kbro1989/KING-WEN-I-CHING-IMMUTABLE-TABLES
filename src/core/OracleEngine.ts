@@ -80,11 +80,13 @@ export class LocalOracleClient {
 
 export class OracleEngine {
   client: LocalOracleClient;
+  deterministic: boolean;
 
-  constructor(config: { localUrl?: string } = {}) {
+  constructor(config: { localUrl?: string; deterministic?: boolean } = {}) {
     this.client = new LocalOracleClient({
       url: config.localUrl || DEFAULT_LOCAL_URL,
     });
+    this.deterministic = config.deterministic ?? true;
   }
 
   loadRegistry(): void {
@@ -177,6 +179,10 @@ function mapExpandResponse(payload: any, query: OracleQuery): any {
       voiceWeight: Number(resolvedVector.voiceWeight ?? 0),
     },
     state_str: query.state_str,
+    expanded_state: Array.isArray(payload.expanded) ? payload.expanded : [],
+    resolved_state: Array.isArray(payload.resolved) ? payload.resolved : [],
+    runtime_consensus: payload.consensus ?? {},
+    runtime_source: payload.source ?? 'local-python',
   };
 }
 
