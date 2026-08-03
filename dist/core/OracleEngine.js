@@ -65,10 +65,12 @@ export class LocalOracleClient {
 }
 export class OracleEngine {
     client;
+    deterministic;
     constructor(config = {}) {
         this.client = new LocalOracleClient({
             url: config.localUrl || DEFAULT_LOCAL_URL,
         });
+        this.deterministic = config.deterministic ?? true;
     }
     loadRegistry() {
         this.client.loadRegistry();
@@ -148,6 +150,10 @@ function mapExpandResponse(payload, query) {
             voiceWeight: Number(resolvedVector.voiceWeight ?? 0),
         },
         state_str: query.state_str,
+        expanded_state: Array.isArray(payload.expanded) ? payload.expanded : [],
+        resolved_state: Array.isArray(payload.resolved) ? payload.resolved : [],
+        runtime_consensus: payload.consensus ?? {},
+        runtime_source: payload.source ?? 'local-python',
     };
 }
 function phaseLabel(phase) {

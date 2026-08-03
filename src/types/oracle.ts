@@ -86,6 +86,10 @@ export interface OracleResponse {
   category: HexagramCategory;
   emotional_deltas: EmotionalVector;
   state_str?: string;
+  expanded_state?: unknown[];
+  resolved_state?: unknown[];
+  runtime_consensus?: Record<string, unknown>;
+  runtime_source?: string;
 }
 
 export interface OracleConfig {

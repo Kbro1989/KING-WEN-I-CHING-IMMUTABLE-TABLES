@@ -32,6 +32,32 @@ class ExpandHandler(BaseHTTPRequestHandler):
         self._send_json(204, {"ok": True})
 
     def do_POST(self) -> None:  # noqa: N802
+        if self.path == "/capture":
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                raw = self.rfile.read(length) if length else b"{}"
+                body = json.loads(raw.decode("utf-8") or "{}")
+            except Exception:
+                return self._send_json(400, {"error": "Bad JSON"})
+
+            record = {
+                "ts": __import__('time').time(),
+                "session_id": str(body.get("session_id") or "unknown"),
+                "event_type": str(body.get("event_type") or "widget_interaction"),
+                "hexagram_id": body.get("hexagram_id"),
+                "phase_bits": body.get("phase_bits"),
+                "phase_temporal": body.get("phase_temporal"),
+                "interaction": body.get("interaction"),
+                "payload": body.get("payload", {}),
+            }
+            capture_path = Path(__file__).resolve().parent / "DATASETS" / "shotgun_captures.jsonl"
+            try:
+                with open(capture_path, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(record, default=str) + "\n")
+            except Exception:
+                pass
+            return self._send_json(200, {"ok": True, "captured": True})
+
         if self.path != "/expand":
             return self._send_json(404, {"error": "Not Found", "path": self.path})
 
