@@ -1,3 +1,6 @@
+import { readFileSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import {
   OracleQuery,
   OracleResponse,
@@ -5,6 +8,54 @@ import {
 
 const DEFAULT_LOCAL_URL = 'http://127.0.0.1:8765/expand';
 const REQUEST_TIMEOUT_MS = 60_000;
+
+// =============================================================================
+// Reflections corpus — data/temporal-reflections.json
+// Keyed by hexagram_id string ("1"–"64"), each entry has past/present/future.
+// This is the immutable anchor. No text is generated in TS — only looked up.
+// =============================================================================
+
+type ReflectionEntry = { past: string; present: string; future: string };
+type ReflectionsCorpus = Record<string, ReflectionEntry>;
+
+let _reflectionsCache: ReflectionsCorpus | null = null;
+
+function loadReflectionsCorpus(): ReflectionsCorpus {
+  if (_reflectionsCache) return _reflectionsCache;
+  try {
+    const __dirname = dirname(fileURLToPath(import.meta.url));
+    const corpusPath = resolve(__dirname, '../../data/temporal-reflections.json');
+    _reflectionsCache = JSON.parse(readFileSync(corpusPath, 'utf-8')) as ReflectionsCorpus;
+  } catch (err) {
+    throw new Error(
+      `Oracle: cannot load data/temporal-reflections.json — ${err}. ` +
+      'This file is the immutable reflection corpus. Without it the oracle has no anchored text.',
+    );
+  }
+  return _reflectionsCache!;
+}
+
+function getReflectionFromCorpus(
+  hexagram_id: number,
+  temporal_phase: string,
+): ReflectionEntry {
+  const corpus = loadReflectionsCorpus();
+  const entry = corpus[String(hexagram_id)];
+  if (!entry) {
+    throw new Error(
+      `Oracle: no reflection corpus entry for hexagram_id=${hexagram_id}. ` +
+      'Add it to data/temporal-reflections.json.',
+    );
+  }
+  // Validate all three temporal fields are present.
+  if (!entry.past || !entry.present || !entry.future) {
+    throw new Error(
+      `Oracle: incomplete reflection entry for hexagram_id=${hexagram_id} — ` +
+      `missing: ${[!entry.past && 'past', !entry.present && 'present', !entry.future && 'future'].filter(Boolean).join(', ')}.`,
+    );
+  }
+  return entry;
+}
 
 export class LocalOracleClient {
   url: string;
@@ -173,37 +224,46 @@ function mapExpandResponse(payload: any, query: OracleQuery): OracleResponse {
     ? rawCat as 'sovereign' | 'boundary' | 'transformer' | 'dissipator'
     : 'transformer';
 
-  // --- Reflections: Python-owned. If absent, the entry is unanchored — throw. ---
-  const reflections = (representative.reflections ?? null) as Record<string, string> | null;
-  if (!reflections || (!reflections.past && !reflections.present && !reflections.future)) {
-    throw new Error(
-      `Oracle: no reflections in expand response for hexagram_id=${hexagram_id} phase=${temporal_phase}. ` +
-      `Unanchored trajectory — check temporal-reflections.json and expand server.`,
-    );
-  }
-  const past_reflection    = String(reflections.past    ?? '');
-  const present_reflection = String(reflections.present ?? '');
-  const future_reflection  = String(reflections.future  ?? '');
+  // --- Reflections: looked up from data/temporal-reflections.json by hexagram_id.
+  //
+  // Python's expand/sample_resolve computes vectors, line states, and Hamiltonian
+  // energy — it does not emit text. Text lives in the immutable corpus. The lookup
+  // is deterministic: hexagram_id → corpus entry → {past, present, future}.
+  // No fallback strings. If the corpus entry is missing, the system is misconfigured.
+  const corpusEntry = getReflectionFromCorpus(hexagram_id, temporal_phase);
+  const past_reflection    = corpusEntry.past;
+  const present_reflection = corpusEntry.present;
+  const future_reflection  = corpusEntry.future;
 
-  // --- Computed fields: Python-owned. Must arrive from the expand payload. ---
-  // unified_weave comes from the Python NarrativeEngine / voice_ensemble; if absent
-  // the engine has not computed it. Do not reconstruct from string templates.
-  const unified_weave = String(reflections.unified_weave ?? representative.unified_weave ?? '');
-  if (!unified_weave) {
-    throw new Error(
-      `Oracle: unified_weave absent for hexagram_id=${hexagram_id}. ` +
-      `This field must be computed by the Python engine, not fabricated in TS.`,
-    );
-  }
+  // --- unified_weave: the temporal-phase corpus text for this hexagram.
+  //
+  // This is the anchored philosophical statement for the resolved hexagram in its
+  // consensus temporal context. It is NOT a template. It is the corpus line itself —
+  // the same text the kit_ models were trained on as a coordinate anchor.
+  // For past → past corpus text. For present → present corpus text. Etc.
+  const phaseToCorpus: Record<string, string> = {
+    past:            past_reflection,
+    present:         present_reflection,
+    future:          future_reflection,
+    // Extended phase_temporal values from Python's PHASE_INFO map to present
+    // as the active voice when temporal doesn't resolve to the base three.
+    transition:      present_reflection,
+    resolution:      past_reflection,
+    dissolution:     future_reflection,
+    crystallization: present_reflection,
+    void:            present_reflection,
+  };
+  const unified_weave = phaseToCorpus[temporal_phase] ?? present_reflection;
 
-  // sovereign_assertion, boundary_condition, dissipator_warning:
-  // Python computes these via _resolve_intent_from_consensus and category scoring.
-  // Surface them from consensus_intent + representative entry fields.
-  // If the Python engine does not yet emit these as first-class fields, surface
-  // consensus_intent as sovereign_assertion — do NOT template-build strings.
-  const sovereign_assertion  = String(representative.sovereign_assertion  ?? consensus_intent);
-  const boundary_condition   = String(representative.boundary_condition   ?? '');
-  const dissipator_warning   = String(representative.dissipator_warning   ?? '');
+  // --- sovereign_assertion, boundary_condition, dissipator_warning:
+  // Python's _resolve_intent_from_consensus() computes consensus_intent —
+  // the intent resolution string derived from hexagram scoring across all 512 states.
+  // Surface it as sovereign_assertion. boundary/dissipator are category-derived
+  // fields from the consensus hexagram — if Python surfaces them, relay them;
+  // if not, leave empty. No template substitution.
+  const sovereign_assertion = String(representative.sovereign_assertion ?? consensus_intent);
+  const boundary_condition  = String(representative.boundary_condition  ?? '');
+  const dissipator_warning  = String(representative.dissipator_warning  ?? '');
 
   // --- Emotional deltas: Python-computed Gaussian-weighted consensus vector ---
   // This is NOT `resolvedVector` from a single entry. It is the accumulator
