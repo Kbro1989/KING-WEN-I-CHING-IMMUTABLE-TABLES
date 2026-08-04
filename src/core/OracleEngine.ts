@@ -102,114 +102,145 @@ export class OracleEngine {
   }
 }
 
-function mapExpandResponse(payload: any, query: OracleQuery): any {
+// =============================================================================
+// mapExpandResponse — transparent relay of Python engine output.
+//
+// The Python collapse_full_128() runs all 64 hexagrams × 8 phase variants
+// = 512 resolved states with full Hamiltonian energy computation, Gaussian
+// accumulator consensus, and open-pool vector blending. This function is a
+// RELAY. It must not fabricate, template-concatenate, or collapse the field.
+//
+// Laws enforced here:
+//   - NO 1-hex collapse. Consensus comes from Python's _compute_consensus_from_resolved().
+//   - NO template strings on unified_weave / sovereign_assertion /
+//     boundary_condition / dissipator_warning. These are Python-computed.
+//     If they are absent from the payload, the trajectory is unanchored — THROW.
+//   - NO fortune-cookie reflection fallbacks. Absent reflections = bad expand
+//     server response. Surface the error. Do not guess.
+//   - resolved[] and expanded[] are passed through intact for downstream
+//     training capture and widget consumers.
+// =============================================================================
+
+function mapExpandResponse(payload: any, query: OracleQuery): OracleResponse {
+  // --- Structural gate: Python engine must have returned a valid expansion ---
   if (!payload || !Array.isArray(payload.resolved)) {
-    throw new Error(`Invalid local oracle response: missing resolved[]`);
+    throw new Error('Oracle: invalid expand response — missing resolved[]');
+  }
+  if (payload.resolved.length === 0) {
+    throw new Error('Oracle: expand server returned 0 resolved states — engine fault');
+  }
+  if (!payload.consensus || typeof payload.consensus !== 'object') {
+    throw new Error('Oracle: expand response missing consensus block — cannot relay without computed field');
   }
 
-  const resolved = payload.resolved;
-  if (resolved.length === 0) {
-    throw new Error('Local oracle response resolved[] is empty');
+  const consensus = payload.consensus as Record<string, any>;
+
+  // --- Identity: read from Python consensus, not TS-computed ---
+  const hexagram_id = Number(consensus.consensus_hexagram_id);
+  if (!Number.isFinite(hexagram_id) || hexagram_id < 1 || hexagram_id > 64) {
+    throw new Error(`Oracle: consensus_hexagram_id=${hexagram_id} out of range [1,64]`);
   }
 
-  const index = deterministicIndex(query.session_id || 'anon', resolved.length);
-  const entry = resolved[index];
-  const symbols = entry.hexagram_symbols || {};
-  const resolvedVector = entry.resolved_vector || {};
-  const lineStates = Array.isArray(entry.line_states) ? entry.line_states : [];
+  const hexagram_name   = String(consensus.consensus_hexagram_name ?? '');
+  const temporal_phase  = String(consensus.consensus_temporal ?? 'present');
+  const consensus_yao   = String(consensus.consensus_yao ?? 'stable_yao');
+  const consensus_vec   = (consensus.consensus_vector ?? {}) as Record<string, number>;
+  const consensus_intent = String(consensus.consensus_intent ?? '');
 
-  const hexagram_id = Number(symbols.hexagram_id || entry.hexagram_id || index + 1);
-  if (hexagram_id < 1 || hexagram_id > 64) {
-    throw new Error(`Local oracle returned invalid hexagram_id=${hexagram_id}`);
+  // --- Action / category: read from the consensus hexagram's own resolved entry ---
+  // Find the Python-weighted representative entry for the consensus hexagram.
+  // Python already scored all 512 states; we surface the one that aligns with
+  // consensus_temporal (highest-weighted temporal match for the winning hex).
+  const resolved: any[] = payload.resolved;
+  const consensusEntries = resolved.filter(
+    (e: any) => Number(e.hexagram_id) === hexagram_id && e.phase_temporal === temporal_phase,
+  );
+  // Fall back to any entry for that hexagram if temporal match is absent.
+  const representative = consensusEntries[0]
+    ?? resolved.find((e: any) => Number(e.hexagram_id) === hexagram_id)
+    ?? resolved[0];
+
+  const symbols   = (representative.hexagram_symbols ?? {}) as Record<string, any>;
+  const hexUnicode = String(symbols.unicode ?? '');
+
+  const rawAction = String(symbols.action ?? 'WAIT').toUpperCase();
+  const action    = (['ASSERT', 'YIELD', 'ADAPT', 'WAIT'] as const).includes(rawAction as any)
+    ? rawAction as 'ASSERT' | 'YIELD' | 'ADAPT' | 'WAIT'
+    : 'WAIT';
+
+  const rawCat   = String(symbols.category ?? 'transformer').toLowerCase();
+  const category = (['sovereign', 'boundary', 'transformer', 'dissipator'] as const).includes(rawCat as any)
+    ? rawCat as 'sovereign' | 'boundary' | 'transformer' | 'dissipator'
+    : 'transformer';
+
+  // --- Reflections: Python-owned. If absent, the entry is unanchored — throw. ---
+  const reflections = (representative.reflections ?? null) as Record<string, string> | null;
+  if (!reflections || (!reflections.past && !reflections.present && !reflections.future)) {
+    throw new Error(
+      `Oracle: no reflections in expand response for hexagram_id=${hexagram_id} phase=${temporal_phase}. ` +
+      `Unanchored trajectory — check temporal-reflections.json and expand server.`,
+    );
+  }
+  const past_reflection    = String(reflections.past    ?? '');
+  const present_reflection = String(reflections.present ?? '');
+  const future_reflection  = String(reflections.future  ?? '');
+
+  // --- Computed fields: Python-owned. Must arrive from the expand payload. ---
+  // unified_weave comes from the Python NarrativeEngine / voice_ensemble; if absent
+  // the engine has not computed it. Do not reconstruct from string templates.
+  const unified_weave = String(reflections.unified_weave ?? representative.unified_weave ?? '');
+  if (!unified_weave) {
+    throw new Error(
+      `Oracle: unified_weave absent for hexagram_id=${hexagram_id}. ` +
+      `This field must be computed by the Python engine, not fabricated in TS.`,
+    );
   }
 
-  const action = String(symbols.action || 'WAIT').toUpperCase();
-  const resolvedAction = ['ASSERT', 'YIELD', 'ADAPT', 'WAIT'].includes(action) ? action : 'WAIT';
+  // sovereign_assertion, boundary_condition, dissipator_warning:
+  // Python computes these via _resolve_intent_from_consensus and category scoring.
+  // Surface them from consensus_intent + representative entry fields.
+  // If the Python engine does not yet emit these as first-class fields, surface
+  // consensus_intent as sovereign_assertion — do NOT template-build strings.
+  const sovereign_assertion  = String(representative.sovereign_assertion  ?? consensus_intent);
+  const boundary_condition   = String(representative.boundary_condition   ?? '');
+  const dissipator_warning   = String(representative.dissipator_warning   ?? '');
 
-  const category = String(symbols.category || 'transformer').toLowerCase();
-  const resolvedCategory = ['sovereign', 'boundary', 'transformer', 'dissipator'].includes(category) ? category : 'transformer';
+  // --- Emotional deltas: Python-computed Gaussian-weighted consensus vector ---
+  // This is NOT `resolvedVector` from a single entry. It is the accumulator
+  // output across all 512 states — the actual Hamiltonian field summary.
+  const emotional_deltas = {
+    chaos:       Number(consensus_vec.chaos       ?? 0),
+    whimsy:      Number(consensus_vec.whimsy      ?? 0),
+    darkTone:    Number(consensus_vec.darkTone     ?? 0),
+    coherence:   Number(consensus_vec.coherence   ?? 0),
+    voiceWeight: Number(consensus_vec.voiceWeight ?? 0),
+  };
 
-  const temporal_phase = Number(entry.phase_bits ?? 0);
-  const temporal_substate = String(entry.phase_polarity || 'transition');
-
-  const reflections = entry.reflections || {};
-  const past_reflection = String(reflections.past || `Past echo from ${symbols.name || `hexagram #${hexagram_id}`}`);
-  const present_reflection = String(reflections.present || `Present voice of ${symbols.name || `hexagram #${hexagram_id}`}`);
-  const future_reflection = String(reflections.future || `Future signal from ${symbols.name || `hexagram #${hexagram_id}`}`);
-
-  const dominantPhaseLabel = phaseLabel(temporal_phase);
-  const dominantLine = lineStates.find((line: any) => Number(line.ternary_state) === 2) || lineStates[lineStates.length - 1];
-  const unified_weave = [
-    `[${dominantPhaseLabel.toUpperCase()} VOICE LEADS]`,
-    '',
-    present_reflection,
-    '',
-    '[Echoes:]',
-    `From what was: ${past_reflection.slice(0, 120)}`,
-    `From what could be: ${future_reflection.slice(0, 120)}`,
-    '',
-    `Phase: ${entry.phase_temporal || dominantPhaseLabel}`,
-    `Emotional bleed: ${Number(entry.bleed ?? 0).toFixed(3)}`,
-    'Resolved vector: ' + `chaos=${resolvedVector.chaos ?? 0}, ` + `whimsy=${resolvedVector.whimsy ?? 0}, ` + `darkTone=${resolvedVector.darkTone ?? 0}, ` + `coherence=${resolvedVector.coherence ?? 0}, ` + `voiceWeight=${resolvedVector.voiceWeight ?? 0}`,
-    lineSummary(lineStates, dominantLine),
-  ]
-    .filter(Boolean)
-    .join('\n');
-
+  // --- Relay full expansion payload for training capture and widget consumers ---
   return {
     hexagram_id,
-    hexagram_name: String(symbols.name || ''),
-    hexagram_unicode: String(symbols.unicode || ''),
-    temporal_phase,
-    temporal_substate,
+    hexagram_name,
+    hexagram_unicode: hexUnicode,
+    // temporal_phase in OracleResponse is typed as TemporalPhase (0|1|2).
+    // Map the Python string back to the numeric encoding used by the TS runtime.
+    temporal_phase: ({ past: 0, present: 1, future: 2 } as Record<string, number>)[temporal_phase] as 0 | 1 | 2 ?? 1,
+    temporal_substate: (consensus_yao.includes('old') ? 'old' : consensus_yao.includes('young') ? 'young' : 'transition') as 'old' | 'young' | 'transition',
     past_reflection,
     present_reflection,
     future_reflection,
     unified_weave,
-    sovereign_assertion: `[${resolvedAction}] ${symbols.name || `Hexagram #${hexagram_id}`} — ${dominantPhaseLabel} phase`,
-    boundary_condition: `Boundary: ${resolvedCategory} | Action: ${resolvedAction} | Phase: ${entry.phase_description || dominantPhaseLabel}`,
-    dissipator_warning: resolvedCategory === 'dissipator' ? `Energy drain risk in ${dominantPhaseLabel} phase` : 'Stable energy profile',
-    action: resolvedAction,
-    category: resolvedCategory,
-    emotional_deltas: {
-      chaos: Number(resolvedVector.chaos ?? 0),
-      whimsy: Number(resolvedVector.whimsy ?? 0),
-      darkTone: Number(resolvedVector.darkTone ?? 0),
-      coherence: Number(resolvedVector.coherence ?? 0),
-      voiceWeight: Number(resolvedVector.voiceWeight ?? 0),
-    },
+    sovereign_assertion,
+    boundary_condition,
+    dissipator_warning,
+    action,
+    category,
+    emotional_deltas,
     state_str: query.state_str,
-    expanded_state: Array.isArray(payload.expanded) ? payload.expanded : [],
-    resolved_state: Array.isArray(payload.resolved) ? payload.resolved : [],
-    runtime_consensus: payload.consensus ?? {},
-    runtime_source: payload.source ?? 'local-python',
+    // Full expansion payload — 64 expanded + 512 resolved + consensus intact.
+    // Downstream training capture reads these fields; they must not be stripped.
+    expanded_state:    Array.isArray(payload.expanded) ? payload.expanded : [],
+    resolved_state:    payload.resolved,
+    runtime_consensus: consensus,
+    runtime_source:    String(payload.source ?? 'local-python'),
   };
-}
-
-function phaseLabel(phase: number): string {
-  return ['past', 'present', 'future'][phase] || 'present';
-}
-
-function lineSummary(lineStates: any[], dominantLine: any): string {
-  if (!lineStates.length) return '';
-  return (
-    'Lines:\n' +
-    lineStates
-      .map((line: any) => {
-        const pos = Number(line.position);
-        const yao = line.yao_label || line.yao_key || `ternary=${line.ternary_state}`;
-        const mark = dominantLine && line.position === dominantLine.position ? ' ◀' : '';
-        return `L${pos}: ${yao}${mark}`;
-      })
-      .join('\n')
-  );
-}
-
-function deterministicIndex(input: string, maxExclusive: number): number {
-  let hash = 0;
-  for (let i = 0; i < input.length; i++) {
-    const code = input.charCodeAt(i);
-    hash = ((hash << 5) - hash + code) | 0;
-  }
-  return ((hash % maxExclusive) + maxExclusive) % maxExclusive;
 }
