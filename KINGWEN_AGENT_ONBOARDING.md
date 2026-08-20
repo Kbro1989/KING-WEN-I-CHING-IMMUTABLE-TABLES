@@ -192,10 +192,10 @@ COMPREHENSION GATE:
 SECTION 2: DISCOVERY PROCEDURE
 ═══════════════════════════════════════════════════════════════════════════════
 
-When assigned a task (e.g., "Fix B4 checkpoint failure"):
+When assigned a task (e.g., "Audit B4 sub-Hamiltonian checkpoint"):
 
 STEP 1: IDENTIFY THE LAYER
-  - B4 failure → Layer 3 (Runtime) + Layer 0 (Math Foundation)
+  - B4 Sub-Hamiltonian audit → Layer 3 (Runtime) + Layer 0 (Math Foundation)
   - TTS routing → Layer 2 (Embodiment) + Layer 3 (Runtime)
   - Widget tab order → Layer 4 (Interface)
   - relevance_score drift → Layer 5 (Corpus) + Layer 0 (Math)
