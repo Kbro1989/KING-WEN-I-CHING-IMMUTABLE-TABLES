@@ -107,8 +107,12 @@ begin
     end if;
 
     vortex_reg <= VORTEX_ROM(addr);
-    fid_reg    <= to_unsigned(2024 + ((hex_id * 17) mod 1000), 14); -- Q2.12 baseline
-    motion_reg <= '0'; -- 0 = Centripetal
+    -- Motion mode derivation: phase_bits 3,5,6,7 -> Centrifugal (1), 0,1,2,4 -> Centripetal (0)
+    if (addr mod 8 = 3 or addr mod 8 = 5 or addr mod 8 = 6 or addr mod 8 = 7) then
+      motion_reg <= '1'; -- 1 = Centrifugal
+    else
+      motion_reg <= '0'; -- 0 = Centripetal
+    end if;
   end process;
 
   process(clk, rst)

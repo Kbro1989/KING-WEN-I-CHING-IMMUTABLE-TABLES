@@ -111,4 +111,40 @@ export class HexagramRuntimeBridge {
     getEmotionalTimeseries() {
         return this.stateHistory.map(captureToTelemetry);
     }
+    /**
+     * Sub-Hamiltonian B4 Filter Check.
+     * Enforces semantic-mass conservation by ensuring root query_tokens
+     * and 512-state interference pattern validity.
+     */
+    validateSubHamiltonianB4(resolvedStates) {
+        if (!resolvedStates || !Array.isArray(resolvedStates) || resolvedStates.length === 0) {
+            return { valid: false, rejectedCount: 0, reason: 'Empty resolved states sequence' };
+        }
+        let rejected = 0;
+        for (const item of resolvedStates) {
+            if (typeof item !== 'object' || item === null) {
+                rejected += 1;
+                continue;
+            }
+            const state = item;
+            const intent = (typeof state.intent === 'object' && state.intent !== null)
+                ? state.intent
+                : undefined;
+            const tokens = (Array.isArray(state.query_tokens) ? state.query_tokens : undefined)
+                ?? (intent && Array.isArray(intent.query_tokens) ? intent.query_tokens : []);
+            const hasSemanticMass = Array.isArray(tokens) && tokens.length > 0;
+            const isVoidPhase = state.phase_temporal === 'void';
+            if (!hasSemanticMass && !isVoidPhase) {
+                rejected += 1;
+            }
+        }
+        if (rejected > 0) {
+            return {
+                valid: false,
+                rejectedCount: rejected,
+                reason: `B4 Sub-Hamiltonian Filter Violation: ${rejected}/${resolvedStates.length} states lack semantic mass query_tokens`,
+            };
+        }
+        return { valid: true, rejectedCount: 0 };
+    }
 }

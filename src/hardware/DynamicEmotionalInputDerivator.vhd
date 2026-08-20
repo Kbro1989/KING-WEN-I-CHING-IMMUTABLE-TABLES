@@ -41,7 +41,7 @@ begin
         if reset_n = '0' then
             char_sum <= (others => '0');
             derived_done <= '0';
-            emotional_input_out <= to_stdlogicvector(to_unsigned(52, 8));
+            emotional_input_out <= std_logic_vector(to_unsigned(52, 8));
             processing <= '0';
         elsif rising_edge(clk) then
             if start_derive = '1' then
