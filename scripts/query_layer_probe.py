@@ -11,8 +11,9 @@ import math
 import sys
 from pathlib import Path
 
-IMMUTABLE_PATH = Path(r"C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_ternary_tables_complete.py")
-ENGINE_PATH = Path(r"C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\emotional_engine.py")
+ROOT = Path(__file__).resolve().parent.parent
+IMMUTABLE_PATH = ROOT / "kingwen_ternary_tables_complete.py"
+ENGINE_PATH = ROOT / "emotional_engine.py"
 
 for path in [IMMUTABLE_PATH, ENGINE_PATH]:
     if not path.exists():
@@ -45,7 +46,7 @@ QUERIES = [
     "What is the minimal viable expression of this state?",
 ]
 
-OUTPUT_DIR = Path(r"C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\docs\query_probe")
+OUTPUT_DIR = ROOT / "docs" / "query_probe"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 

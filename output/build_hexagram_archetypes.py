@@ -3,9 +3,10 @@ import json, csv
 from pathlib import Path
 from collections import defaultdict
 
-shotgun_path = Path(r'C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_train_data\full_shotgun_expansion_all.jsonl')
-registry_path = Path(r'C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\data\hexagram-registry.json')
-out_dir = Path(r'C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\output')
+ROOT = Path(__file__).resolve().parent.parent
+shotgun_path = ROOT / "kingwen_train_data" / "full_shotgun_expansion_all.jsonl"
+registry_path = ROOT / "data" / "hexagram-registry.json"
+out_dir = ROOT / "output"
 out_dir.mkdir(exist_ok=True)
 
 # Load registry

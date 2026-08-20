@@ -6,7 +6,7 @@ import json
 import sys
 from pathlib import Path
 
-ROOT_KINGWEN = Path("C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES")
+ROOT_KINGWEN = Path(__file__).resolve().parent.parent.parent
 ROOT_OPENJARVIS = Path("C:/Users/krist/Desktop/OpenJarvis/src/openjarvis")
 ROOT_MEGATRON = Path("C:/Users/krist/Desktop/Megatron-LM-review/kingwen_train_data")
 

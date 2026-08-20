@@ -13,8 +13,9 @@ import json, re, csv
 from collections import defaultdict, Counter
 
 TEXT_DIR = Path('C:/Users/krist/Desktop/zotero/learning-corpus/.text')
-ARCHETYPES = Path('C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/output/hexagram_coder_archetypes.csv')
-OUT = Path('C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/output/hexagram_full_vocabulary.json')
+ROOT = Path(__file__).resolve().parent.parent
+ARCHETYPES = ROOT / "output" / "hexagram_coder_archetypes.csv"
+OUT = ROOT / "output" / "hexagram_full_vocabulary.json"
 
 archetypes = {}
 with ARCHETYPES.open('r', encoding='utf-8') as f:

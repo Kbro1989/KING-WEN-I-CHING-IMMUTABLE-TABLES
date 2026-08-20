@@ -10,7 +10,8 @@ import math
 import sys
 from pathlib import Path
 
-IMMUTABLE_PATH = Path(r"C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_ternary_tables_complete.py")
+ROOT = Path(__file__).resolve().parent.parent
+IMMUTABLE_PATH = ROOT / "kingwen_ternary_tables_complete.py"
 spec = importlib.util.spec_from_file_location("kwt_pool3", str(IMMUTABLE_PATH))
 mod = importlib.util.module_from_spec(spec)
 sys.modules["kwt_pool3"] = mod

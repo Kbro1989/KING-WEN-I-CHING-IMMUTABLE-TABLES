@@ -193,7 +193,7 @@ class LivePoolEngine:
     """
 
     def __init__(self, kingwen_root: Optional[Path] = None):
-        self.kingwen_root = kingwen_root or Path(r"C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES")
+        self.kingwen_root = kingwen_root or Path(__file__).resolve().parent
         sys.path.insert(0, str(self.kingwen_root))
         from emotional_engine import collapse_full_128  # noqa: E402
         self._collapse = collapse_full_128

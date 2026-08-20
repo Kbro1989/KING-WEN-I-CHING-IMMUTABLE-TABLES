@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 from collections import Counter
 
-ROOT = Path(r"C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES")
+ROOT = Path(__file__).resolve().parent.parent
 TEXT_DIR = Path(r"C:/Users/krist/Desktop/zotero/learning-corpus/.text")
 SHOTGUN = ROOT / "collapse_full_128_output.json"
 ARCHETYPES = ROOT / "output/hexagram_coder_archetypes.csv"

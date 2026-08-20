@@ -16,7 +16,7 @@ import sys
 from pathlib import Path
 from collections import defaultdict
 
-ROOT = Path("C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES")
+ROOT = Path(__file__).resolve().parent.parent.parent
 EXPORT_DIR = ROOT / "learn" / "exports"
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
 sys.path.insert(0, str(ROOT))
