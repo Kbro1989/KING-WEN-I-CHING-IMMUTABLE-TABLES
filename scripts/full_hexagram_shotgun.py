@@ -275,8 +275,11 @@ def _build_jspace_projections(h_id: int, vector: Dict[str, float], inject: Dict[
 
 
 
-def shotgun_expand(request_text: str = "", emotional_input: int = 50) -> Dict[str, Any]:
+def shotgun_expand(request_text: str = "", emotional_input: int | None = None) -> Dict[str, Any]:
     """Single-pass shotgun blast: all 64 hexagrams, full ternary, no early collapse."""
+    from emotional_engine import derive_dynamic_emotional_input
+    emotional_input = derive_dynamic_emotional_input(request_text, emotional_input)
+
     # Build personality map here — after all table imports are fully resolved
     # Module-level HEXAGRAM_PERSONALITY_MAP may be empty due to import-order;
     # calling build_hexagram_personality_map() at runtime guarantees HEXAGRAM_BASE is loaded.
@@ -284,7 +287,7 @@ def shotgun_expand(request_text: str = "", emotional_input: int = 50) -> Dict[st
 
     expanded = []
     for h_id in range(1, 65):
-        base = expand_hexagram(h_id, request_text, phase_bits=0, emotional_input=0)
+        base = expand_hexagram(h_id, request_text, phase_bits=0, emotional_input=emotional_input)
         inject = base.get("inject_site") or {}
         vector = base.get("expanded_vector") or {}
         slots = _ternary_slot_matrix(h_id, phase_bits=0)

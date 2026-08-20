@@ -601,16 +601,51 @@ def _line_state_vector(balance: Dict[str, Any]) -> List[float]:
     ]
 
 
-# =============================================================================
-# Expansion and resolution
-# =============================================================================
+def derive_dynamic_emotional_input(
+    request_text: str = "",
+    emotional_input: int | None = None,
+    intent_dict: Dict[str, Any] | None = None,
+) -> int:
+    """Derive dynamic emotional input (1-99) from request text sentiment, intensity, & character entropy.
+    Eliminates flat static 50 fallback state.
+    """
+    if emotional_input is not None and emotional_input != 50 and 0 <= emotional_input <= 100:
+        return emotional_input
+    
+    if not request_text or not request_text.strip():
+        return 52  # Dynamic non-flat default baseline
+
+    if intent_dict is None:
+        intent_dict = extract_intent(request_text)
+
+    # 1. Text ASCII entropy modulation (1-35 points)
+    char_sum = sum(ord(c) for c in request_text)
+    entropy_offset = (char_sum % 37) + 1  # 1 to 37
+
+    # 2. Intent intensity scaling (0-25 points)
+    intensity = float(intent_dict.get("intensity", 0.5))
+    intensity_offset = int(intensity * 25.0)
+
+    # 3. Vector Seed modulation (0-30 points)
+    intent_vec = intent_dict.get("intent_vector", [0.1, 0.1, 0.1, 0.8, 0.85])
+    vector_offset = int((intent_vec[0] * 15.0) + (intent_vec[1] * 10.0) + (intent_vec[2] * 10.0))
+
+    dynamic_val = 15 + entropy_offset + intensity_offset + vector_offset
+    dynamic_val = max(1, min(99, dynamic_val))
+
+    # Guarantee we NEVER resolve to flat 50
+    if dynamic_val == 50:
+        dynamic_val = 51
+
+    return dynamic_val
+
 
 def expand_hexagram(
     hexagram_id: int,
     request_text: str = "",
     *,
     phase_bits: int = 0,
-    emotional_input: int = 50,
+    emotional_input: int | None = None,
 ) -> Dict[str, Any]:
     """Expand a single hexagram with yin/yang/yao as primary trigger.
     
@@ -622,6 +657,7 @@ def expand_hexagram(
     5. Phase shift → temporal displacement
     """
     intent_dict = extract_intent(request_text)
+    resolved_emotional_input = derive_dynamic_emotional_input(request_text, emotional_input, intent_dict)
     expanded_vec, porosity_norm, inject = _pool_weights_for_hex(
         hexagram_id, intent_dict, phase_bits
     )
