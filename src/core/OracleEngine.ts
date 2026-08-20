@@ -64,7 +64,7 @@ export class LocalOracleClient {
     this.url = options.url || DEFAULT_LOCAL_URL;
   }
 
-  async consult(query: OracleQuery): Promise<any> {
+  async consult(query: OracleQuery): Promise<OracleResponse> {
     const body = {
       emotional_input: query.emotional_input ?? 50,
       session_id: query.session_id || 'anon',
@@ -74,7 +74,7 @@ export class LocalOracleClient {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
-    let response: any;
+    let response: Response;
     try {
       response = await fetch(this.url, {
         method: 'POST',
@@ -93,7 +93,7 @@ export class LocalOracleClient {
       throw new Error(`Local oracle engine error ${response.status}: ${text}`);
     }
 
-    const payload = await response.json();
+    const payload: unknown = await response.json();
     return mapExpandResponse(payload, query);
   }
 
@@ -105,7 +105,7 @@ export class LocalOracleClient {
     // No-op compatibility shim. Reflections are owned by the local Python engine.
   }
 
-  async evaluateForConsult(_env: any, _tick: any, sessionId: string, queryText: string): Promise<any> {
+  async evaluateForConsult(_env: unknown, _tick: unknown, sessionId: string, queryText: string): Promise<Record<string, unknown>> {
     const response = await this.consult({
       text: queryText,
       session_id: sessionId,
@@ -148,7 +148,7 @@ export class OracleEngine {
     this.client.loadReflections();
   }
 
-  async consult(query: OracleQuery = { text: '', session_id: 'anon' }): Promise<any> {
+  async consult(query: OracleQuery = { text: '', session_id: 'anon' }): Promise<OracleResponse> {
     return this.client.consult(query);
   }
 }
@@ -172,9 +172,14 @@ export class OracleEngine {
 //     training capture and widget consumers.
 // =============================================================================
 
-function mapExpandResponse(payload: any, query: OracleQuery): OracleResponse {
+function mapExpandResponse(rawPayload: unknown, query: OracleQuery): OracleResponse {
+  if (typeof rawPayload !== 'object' || rawPayload === null) {
+    throw new Error('Oracle: invalid expand response — payload must be an object');
+  }
+  const payload = rawPayload as Record<string, unknown>;
+
   // --- Structural gate: Python engine must have returned a valid expansion ---
-  if (!payload || !Array.isArray(payload.resolved)) {
+  if (!Array.isArray(payload.resolved)) {
     throw new Error('Oracle: invalid expand response — missing resolved[]');
   }
   if (payload.resolved.length === 0) {
@@ -184,7 +189,7 @@ function mapExpandResponse(payload: any, query: OracleQuery): OracleResponse {
     throw new Error('Oracle: expand response missing consensus block — cannot relay without computed field');
   }
 
-  const consensus = payload.consensus as Record<string, any>;
+  const consensus = payload.consensus as Record<string, unknown>;
 
   // --- Identity: read from Python consensus, not TS-computed ---
   const hexagram_id = Number(consensus.consensus_hexagram_id);
@@ -202,25 +207,25 @@ function mapExpandResponse(payload: any, query: OracleQuery): OracleResponse {
   // Find the Python-weighted representative entry for the consensus hexagram.
   // Python already scored all 512 states; we surface the one that aligns with
   // consensus_temporal (highest-weighted temporal match for the winning hex).
-  const resolved: any[] = payload.resolved;
+  const resolved = payload.resolved as Record<string, unknown>[];
   const consensusEntries = resolved.filter(
-    (e: any) => Number(e.hexagram_id) === hexagram_id && e.phase_temporal === temporal_phase,
+    (e) => Number(e.hexagram_id) === hexagram_id && e.phase_temporal === temporal_phase,
   );
   // Fall back to any entry for that hexagram if temporal match is absent.
   const representative = consensusEntries[0]
-    ?? resolved.find((e: any) => Number(e.hexagram_id) === hexagram_id)
+    ?? resolved.find((e) => Number(e.hexagram_id) === hexagram_id)
     ?? resolved[0];
 
-  const symbols   = (representative.hexagram_symbols ?? {}) as Record<string, any>;
+  const symbols   = (representative.hexagram_symbols ?? {}) as Record<string, unknown>;
   const hexUnicode = String(symbols.unicode ?? '');
 
   const rawAction = String(symbols.action ?? 'WAIT').toUpperCase();
-  const action    = (['ASSERT', 'YIELD', 'ADAPT', 'WAIT'] as const).includes(rawAction as any)
+  const action    = (['ASSERT', 'YIELD', 'ADAPT', 'WAIT'] as const).includes(rawAction as 'ASSERT' | 'YIELD' | 'ADAPT' | 'WAIT')
     ? rawAction as 'ASSERT' | 'YIELD' | 'ADAPT' | 'WAIT'
     : 'WAIT';
 
   const rawCat   = String(symbols.category ?? 'transformer').toLowerCase();
-  const category = (['sovereign', 'boundary', 'transformer', 'dissipator'] as const).includes(rawCat as any)
+  const category = (['sovereign', 'boundary', 'transformer', 'dissipator'] as const).includes(rawCat as 'sovereign' | 'boundary' | 'transformer' | 'dissipator')
     ? rawCat as 'sovereign' | 'boundary' | 'transformer' | 'dissipator'
     : 'transformer';
 
