@@ -35,8 +35,9 @@ PIPELINE_STAGES = [
     ("13. CollisionVis Physics & HLSL Shader Upgrade Bridge", [sys.executable, "-B", str(ROOT / "scripts" / "bridge_collisionvis_upgrade.py")]),
     ("14. RayeRen Neural Speech & KD Capability Vector Bridge", [sys.executable, "-B", str(ROOT / "scripts" / "bridge_rayeren_capability_vectors.py")]),
     ("15. Unbound Persona Domains & 27x27 Expansion Audit", [sys.executable, "-B", str(ROOT / "scripts" / "verify_unbound_persona_domains.py")]),
-    ("16. Save String V2.1 & Math Parity Audit", [sys.executable, str(ROOT / "scripts" / "verify_math_jacobian_hamiltonian.py")]),
-    ("17. Output Mismatch & Integrity Audit", [sys.executable, "-B", str(ROOT / "scripts" / "verify_output_mismatches.py")]),
+    ("16. QuantumLab 64-Grid Real-Time Transitional Mapping Bridge", [sys.executable, "-B", str(ROOT / "scripts" / "bridge_quantum_64_grid.py")]),
+    ("17. Save String V2.1 & Math Parity Audit", [sys.executable, str(ROOT / "scripts" / "verify_math_jacobian_hamiltonian.py")]),
+    ("18. Output Mismatch & Integrity Audit", [sys.executable, "-B", str(ROOT / "scripts" / "verify_output_mismatches.py")]),
 ]
 
 

@@ -143,18 +143,26 @@ export class HexagramRuntimeBridge {
    * Enforces semantic-mass conservation by ensuring root query_tokens
    * and 512-state interference pattern validity.
    */
-  validateSubHamiltonianB4(resolvedStates: any[]): { valid: boolean; rejectedCount: number; reason?: string } {
+  validateSubHamiltonianB4(resolvedStates: unknown[]): { valid: boolean; rejectedCount: number; reason?: string } {
     if (!resolvedStates || !Array.isArray(resolvedStates) || resolvedStates.length === 0) {
       return { valid: false, rejectedCount: 0, reason: 'Empty resolved states sequence' };
     }
 
     let rejected = 0;
-    for (const state of resolvedStates) {
-      // Ensure root query_tokens or nested intent query_tokens are present
-      const tokens = state.query_tokens ?? state.intent?.query_tokens ?? [];
+    for (const item of resolvedStates) {
+      if (typeof item !== 'object' || item === null) {
+        rejected += 1;
+        continue;
+      }
+      const state = item as Record<string, unknown>;
+      const intent = (typeof state.intent === 'object' && state.intent !== null)
+        ? (state.intent as Record<string, unknown>)
+        : undefined;
+
+      const tokens = (Array.isArray(state.query_tokens) ? state.query_tokens : undefined)
+        ?? (intent && Array.isArray(intent.query_tokens) ? intent.query_tokens : []);
+
       const hasSemanticMass = Array.isArray(tokens) && tokens.length > 0;
-      
-      // Allow void-state phase anchor if phase_temporal is void
       const isVoidPhase = state.phase_temporal === 'void';
 
       if (!hasSemanticMass && !isVoidPhase) {
