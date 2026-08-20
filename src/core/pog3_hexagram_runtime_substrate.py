@@ -434,26 +434,49 @@ class SaveStringAdapter:
         return ";".join(segments)
 
     def serialize_64_hexagram_shotgun_save_string(self, shotgun_payload: Dict[str, Any]) -> str:
-        """Serializes all 64 hexagram data sites as INDIVIDUALS into a lossless save string.
+        """Serializes 64 hexagram shotgun payload into a compact V2.1 token string.
 
-        Format:
-            KW64_V2.0::<PELLET_1_TOKENS>::<PELLET_2_TOKENS>::...::<PELLET_64_TOKENS>::<HASH>
+        Format V2.1:
+            KW64_SAVE_STRING_V2.1::<PELLET_1_TOKENS>::...::<PELLET_64_TOKENS>::<HASH>
         """
         pellets = shotgun_payload.get("pellets") or shotgun_payload.get("expanded") or []
-        tokens = ["KW64_SAVE_STRING_V2.0"]
+        tokens = ["KW64_SAVE_STRING_V2.1"]
         for p in pellets:
             hid = p.get("hexagram_id", 0)
             binary = p.get("binary") or p.get("binary_bottom_to_top") or "111111"
             cat = p.get("category") or "Sovereign"
             act = p.get("action") or "ASSERT"
+
+            # Personality tags from table or grounded_npc
+            tp = p.get("table_personality") or p.get("grounded_npc") or {}
+            agent_type = tp.get("agent_type") or "architect"
+            domain = tp.get("domain") or "assertion"
+            element = tp.get("element_subset") or "heaven"
+
             spec = p.get("coder_specialty") or "Dev"
             rs3 = p.get("rs3_actionable") or "interact"
+
+            # Topology & Color
+            rsmv_topo = p.get("rsmv_topology") or (p.get("grounded_npc", {}).get("rsmv_topology") or {})
+            rsmv_id = rsmv_topo.get("rsmv_model_id") or (1000 + hid)
+            kcol = p.get("k_color_map") or (p.get("grounded_npc", {}).get("k_color_map") or {})
+            blended_hex = kcol.get("blended_hex") or "#000000"
+
             vec = p.get("expanded_vector") or p.get("jspace_coordinate") or {}
             chaos = round(float(vec.get("chaos", 0.5)), 3)
             whimsy = round(float(vec.get("whimsy", 0.5)), 3)
             dark = round(float(vec.get("darkTone", 0.5)), 3)
             coherence = round(float(vec.get("coherence", 0.5)), 3)
             vweight = round(float(vec.get("voiceWeight", 0.5)), 3)
+
+            # Paired differentials
+            lb = p.get("line_balance") or {}
+            yin_c = float(lb.get("yin_count", 0) or 0)
+            yang_c = float(lb.get("yang_count", 0) or 0)
+            yao_c = float(lb.get("yao_count", 0) or 0)
+            dy_yang_yin = round(yang_c - yin_c, 2)
+            yao_dy = round(yao_c - 3.0, 2)
+
             inject = p.get("inject_site") or {}
             porosity = round(float(inject.get("porosity", 0.5)), 3)
             plabel = inject.get("porosity_label") or "Structured"
@@ -469,13 +492,12 @@ class SaveStringAdapter:
             qfid = round(float(qsup.get("state_fidelity", coherence)), 3)
 
             pellet_token = (
-                f"HEX{hid:02d}|{binary}|{cat}|{act}|{spec}|{rs3}|"
-                f"{chaos}|{whimsy}|{dark}|{coherence}|{vweight}|"
-                f"{porosity}|{plabel}|{vmode}|{vtension}|"
+                f"HEX{hid:02d}|{binary}|{cat}|{act}|{agent_type}|{domain}|{element}|{spec}|{rs3}|"
+                f"{rsmv_id}|{blended_hex}|{chaos}|{whimsy}|{dark}|{coherence}|{vweight}|"
+                f"{dy_yang_yin}|{yao_dy}|{porosity}|{vmode}|{vtension}|"
                 f"ARM{arm_id:02d}|{jkd_anchor}|{qfid}"
             )
             tokens.append(pellet_token)
-
 
         save_str = "::".join(tokens)
         digest = hashlib.sha256(save_str.encode("utf-8")).hexdigest()[:8]
@@ -483,46 +505,87 @@ class SaveStringAdapter:
 
     @staticmethod
     def deserialize_64_hexagram_shotgun_save_string(save_string: str) -> List[Dict[str, Any]]:
-        """Reconstructs all 64 individual hexagram state objects from the save string."""
+        """Reconstructs all 64 individual hexagram state objects from the save string (supports V2.0 & V2.1)."""
         parts = save_string.split("::")
-        if not parts or parts[0] != "KW64_SAVE_STRING_V2.0":
-            raise ValueError("Invalid 64-hexagram save string header")
-        
+        if not parts or not (parts[0] == "KW64_SAVE_STRING_V2.0" or parts[0] == "KW64_SAVE_STRING_V2.1"):
+            raise ValueError(f"Invalid 64-hexagram save string header: {parts[0] if parts else 'empty'}")
+
+        is_v21 = (parts[0] == "KW64_SAVE_STRING_V2.1")
         pellets = []
         # Exclude header and trailing checksum hash
         for item in parts[1:-1]:
             fields = item.split("|")
             if len(fields) < 15:
                 continue
-            pellet = {
-                "hexagram_id": int(fields[0].replace("HEX", "")),
-                "binary": fields[1],
-                "category": fields[2],
-                "action": fields[3],
-                "coder_specialty": fields[4],
-                "rs3_actionable": fields[5],
-                "expanded_vector": {
-                    "chaos": float(fields[6]),
-                    "whimsy": float(fields[7]),
-                    "darkTone": float(fields[8]),
-                    "coherence": float(fields[9]),
-                    "voiceWeight": float(fields[10]),
-                },
-                "inject_site": {
-                    "porosity": float(fields[11]),
-                    "porosity_label": fields[12],
-                },
-                "hermes_layer": {
-                    "voice_mode": fields[13],
-                },
-                "schauberger_metrics": {
-                    "vortex_tension": float(fields[14]),
+
+            if is_v21 and len(fields) >= 24:
+                # V2.1 24-token structure
+                pellet = {
+                    "hexagram_id": int(fields[0].replace("HEX", "")),
+                    "binary": fields[1],
+                    "category": fields[2],
+                    "action": fields[3],
+                    "table_personality": {
+                        "agent_type": fields[4],
+                        "domain": fields[5],
+                        "element_subset": fields[6],
+                    },
+                    "coder_specialty": fields[7],
+                    "rs3_actionable": fields[8],
+                    "rsmv_topology": {"rsmv_model_id": int(fields[9])},
+                    "k_color_map": {"blended_hex": fields[10]},
+                    "expanded_vector": {
+                        "chaos": float(fields[11]),
+                        "whimsy": float(fields[12]),
+                        "darkTone": float(fields[13]),
+                        "coherence": float(fields[14]),
+                        "voiceWeight": float(fields[15]),
+                    },
+                    "paired_differentials": {
+                        "dy_yang_yin": float(fields[16]),
+                        "yao_dy": float(fields[17]),
+                    },
+                    "inject_site": {
+                        "porosity": float(fields[18]),
+                        "porosity_label": ["Low", "Structured", "Moderate", "High", "Maximum"][min(4, int(float(fields[18]) * 4))],
+                    },
+                    "hermes_layer": {"voice_mode": fields[19]},
+                    "schauberger_metrics": {"vortex_tension": float(fields[20])},
+                    "avalokiteshvara_arm": {"arm_id": int(fields[21].replace("ARM", ""))},
+                    "jkd_pedagogy_anchor": {"pedagogy_corpus_anchor": fields[22]},
+                    "quantum_superposition": {"state_fidelity": float(fields[23])},
                 }
-            }
-            if len(fields) >= 18:
-                pellet["avalokiteshvara_arm"] = {"arm_id": int(fields[15].replace("ARM", ""))}
-                pellet["jkd_pedagogy_anchor"] = {"pedagogy_corpus_anchor": fields[16]}
-                pellet["quantum_superposition"] = {"state_fidelity": float(fields[17])}
+            else:
+                # Legacy V2.0 fallback compatibility
+                pellet = {
+                    "hexagram_id": int(fields[0].replace("HEX", "")),
+                    "binary": fields[1],
+                    "category": fields[2],
+                    "action": fields[3],
+                    "coder_specialty": fields[4],
+                    "rs3_actionable": fields[5],
+                    "expanded_vector": {
+                        "chaos": float(fields[6]),
+                        "whimsy": float(fields[7]),
+                        "darkTone": float(fields[8]),
+                        "coherence": float(fields[9]),
+                        "voiceWeight": float(fields[10]),
+                    },
+                    "inject_site": {
+                        "porosity": float(fields[11]),
+                        "porosity_label": fields[12],
+                    },
+                    "hermes_layer": {
+                        "voice_mode": fields[13],
+                    },
+                    "schauberger_metrics": {
+                        "vortex_tension": float(fields[14]),
+                    }
+                }
+                if len(fields) >= 18:
+                    pellet["avalokiteshvara_arm"] = {"arm_id": int(fields[15].replace("ARM", ""))}
+                    pellet["jkd_pedagogy_anchor"] = {"pedagogy_corpus_anchor": fields[16]}
+                    pellet["quantum_superposition"] = {"state_fidelity": float(fields[17])}
 
             pellets.append(pellet)
         return pellets

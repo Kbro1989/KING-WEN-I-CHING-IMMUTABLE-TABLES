@@ -130,9 +130,9 @@ def learn_batch(
 
         # Construct intent vector
         intent = IntentVector(
-            temporal=(0, 1, 0),  // present-focused
+            temporal=(0, 1, 0),  # present-focused
             emotional=(chaos, whimsy, dark_tone),
-            action=(1, 0, 0),  // move/parse
+            action=(1, 0, 0),  # move/parse
         )
 
         # Consult oracle
