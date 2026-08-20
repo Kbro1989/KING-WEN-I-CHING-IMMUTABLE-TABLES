@@ -132,9 +132,13 @@ export class OracleEngine {
 //   - resolved[] and expanded[] are passed through intact for downstream
 //     training capture and widget consumers.
 // =============================================================================
-function mapExpandResponse(payload, query) {
+function mapExpandResponse(rawPayload, query) {
+    if (typeof rawPayload !== 'object' || rawPayload === null) {
+        throw new Error('Oracle: invalid expand response — payload must be an object');
+    }
+    const payload = rawPayload;
     // --- Structural gate: Python engine must have returned a valid expansion ---
-    if (!payload || !Array.isArray(payload.resolved)) {
+    if (!Array.isArray(payload.resolved)) {
         throw new Error('Oracle: invalid expand response — missing resolved[]');
     }
     if (payload.resolved.length === 0) {

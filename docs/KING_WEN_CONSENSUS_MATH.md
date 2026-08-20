@@ -91,8 +91,33 @@ This preserves $70\%$ of the true 512-state Gaussian interference pattern, provi
 
 ---
 
-## 5. Verification Checksums
+---
+
+## 5. Dynamic Hexagram Winner Selection Algorithm (Hardware & Software)
+
+### 5.1 Per-State Fitness Function
+For each resolved state $S_i$ ($i \in \{1, \dots, 512\}$), the per-state fitness score $\text{Score}(S_i)$ is computed from the Gaussian weight coefficient $g_i = \text{porosity\_norm}_i$ and the vector coherence term $c_i = \text{coherence}_i$:
+\[
+\text{Score}(S_i) = g_i + \frac{c_i}{2.0}
+\]
+
+### 5.2 Dynamic Argmax Selection
+The total score for each Sovereign Hexagram $h \in \{1, \dots, 64\}$ is accumulated across all 8 of its phase coordinates:
+\[
+\text{HexagramScore}(h) = \sum_{i : h_i = h} \text{Score}(S_i)
+\]
+
+The dynamic winning hexagram ID $h_{\text{winner}}$ is determined by the global argmax operator:
+\[
+h_{\text{winner}} = \arg\max_{h \in \{1, \dots, 64\}} \text{HexagramScore}(h)
+\]
+
+In VHDL PL hardware (`ConsensusAccumulator.vhd`), this is executed in the `FIND_WINNER` pipelined clock cycle state across the 64-entry parallel score registers.
+
+---
+
+## 6. Verification Checksums
 
 * **Python Compiler Verification**: `Compiled 108/108 source files cleanly.`
 * **TypeScript Type Safety**: `npx tsc --noEmit` passed with `0` errors.
-* **Unified Pipeline Parity**: `17/17 Stages Passed with 100% Parity`.
+* **Unified Pipeline Parity**: `18/18 Stages Passed with 100% Parity`.
