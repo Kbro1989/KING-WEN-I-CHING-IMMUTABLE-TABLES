@@ -840,6 +840,7 @@ def sample_resolve(
         "phase_polarity": PHASE_INFO[phase_bits]["polarity"],
         "phase_description": PHASE_INFO[phase_bits]["description"],
         "request_text": request_text,
+        "query_tokens": base_expansion["intent"].get("query_tokens", []),
         "hexagram_symbols": base_expansion["hexagram_symbols"],
         "yao_vocabulary": base_expansion["yao_vocabulary"],
         "inject_site": base_expansion["inject_site"],
@@ -1110,87 +1111,87 @@ def _compute_consensus_from_resolved(
             secondary_pool_vecs.append(EMOTIONAL_POOL[secondary_pool])
 
     # Average pool vectors
-        def avg_vec(vecs):
-            if not vecs:
-                return [0.1, 0.2, 0.1, 0.85, 0.85]
-            n = len(vecs)
-            return [sum(v[i] for v in vecs) / n for i in range(5)]
+    def avg_vec(vecs):
+        if not vecs:
+            return [0.1, 0.2, 0.1, 0.85, 0.85]
+        n = len(vecs)
+        return [sum(v[i] for v in vecs) / n for i in range(5)]
 
-        primary_avg = avg_vec(primary_pool_vecs)
-        secondary_avg = avg_vec(secondary_pool_vecs)
+    primary_avg = avg_vec(primary_pool_vecs)
+    secondary_avg = avg_vec(secondary_pool_vecs)
 
-        # Porosity window: filter states within emotional range
-        porosity_window = 0.35  # base window
-        filtered_pool = [
-            r for r in resolved
-            if abs(r.get("inject_site", {}).get("porosity", 0.5) - (emotional_input / 100.0)) < porosity_window
-        ]
+    # Porosity window: filter states within emotional range
+    porosity_window = 0.35  # base window
+    filtered_pool = [
+        r for r in resolved
+        if abs(r.get("inject_site", {}).get("porosity", 0.5) - (emotional_input / 100.0)) < porosity_window
+    ]
 
-        # Yin/yang/yao balance across all states
-        yin_count = sum(1 for r in resolved for ls in r.get("line_states", []) if str(ls.get("yao_key", "") or "").endswith("_yin"))
-        yang_count = sum(1 for r in resolved for ls in r.get("line_states", []) if str(ls.get("yao_key", "") or "").endswith("_yang"))
-        yao_count = sum(1 for r in resolved for ls in r.get("line_states", []) if str(ls.get("yao_key", "") or "").endswith("_yao"))
+    # Yin/yang/yao balance across all states
+    yin_count = sum(1 for r in resolved for ls in r.get("line_states", []) if str(ls.get("yao_key", "") or "").endswith("_yin"))
+    yang_count = sum(1 for r in resolved for ls in r.get("line_states", []) if str(ls.get("yao_key", "") or "").endswith("_yang"))
+    yao_count = sum(1 for r in resolved for ls in r.get("line_states", []) if str(ls.get("yao_key", "") or "").endswith("_yao"))
 
-        # Blend consensus vector with pool vectors (open-pool surface)
-        pool_blend = 0.3
-        for i, k in enumerate(vec_keys):
-            consensus_vector[k] = (
-                consensus_vector[k] * (1 - pool_blend)
-                + primary_avg[i] * pool_blend * 0.6
-                + secondary_avg[i] * pool_blend * 0.4
-            )
+    # Blend consensus vector with pool vectors (open-pool surface)
+    pool_blend = 0.3
+    for i, k in enumerate(vec_keys):
+        consensus_vector[k] = (
+            consensus_vector[k] * (1 - pool_blend)
+            + primary_avg[i] * pool_blend * 0.6
+            + secondary_avg[i] * pool_blend * 0.4
+        )
 
-        hex_scores: Dict[int, float] = {}
-        hex_names: Dict[int, str] = {}
-        hex_categories: Dict[int, str] = {}
-        hex_actions: Dict[int, str] = {}
-        emotional_factor = emotional_input / 100.0  # 0.0 to 1.0
-        for item, w in zip(resolved, weights):
-            h_id = int(item.get("hexagram_id") or 0)
-            if not h_id:
-                continue
-            hex_names[h_id] = str(item.get("hexagram_symbols", {}).get("name", "") or "")
-            hex_categories[h_id] = str(item.get("hexagram_symbols", {}).get("category", "") or "")
-            hex_actions[h_id] = str(item.get("hexagram_symbols", {}).get("action", "") or "")
-            rv = item.get("resolved_vector") or {}
-            line_states = item.get("line_states") or []
-            yin = sum(1 for ls in line_states if str(ls.get("yao_key", "") or "").endswith("_yin"))
-            yang = sum(1 for ls in line_states if str(ls.get("yao_key", "") or "").endswith("_yang"))
-            yao = sum(1 for ls in line_states if str(ls.get("yao_key", "") or "").endswith("_yao"))
-            yao_ratio = yao / 6.0
-            if yao_ratio > 0.4:
-                ctx_weights = {"chaos": 0.3, "whimsy": 0.3, "darkTone": 0.2, "coherence": 0.1, "voiceWeight": 0.1}
-            else:
-                ctx_weights = {"chaos": 0.1, "whimsy": 0.1, "darkTone": 0.2, "coherence": 0.3, "voiceWeight": 0.3}
-            vector_score = sum(ctx_weights[k] * float(rv.get(k, 0.0) or 0.0) for k in vec_keys)
-            inject_site = item.get("inject_site") or {}
-            inject_score = float(inject_site.get("porosity_norm", inject_site.get("porosity", 0.0) or 0.0))
-            phase_temporal = str(item.get("phase_temporal", "") or "")
-            temporal_alignment = 1.0 if phase_temporal == consensus_temporal else 0.5
-            # Add pool alignment score
-            primary_pool = inject_site.get("primary_pool", "")
-            secondary_pool = inject_site.get("secondary_pool", "")
-            pool_alignment = 0.0
-            if primary_pool and primary_pool in EMOTIONAL_POOL:
-                pool_vec = EMOTIONAL_POOL[primary_pool]
-                pool_alignment += sum(float(rv.get(k, 0.0) or 0.0) * pool_vec[i] for i, k in enumerate(vec_keys))
-            if secondary_pool and secondary_pool in EMOTIONAL_POOL:
-                pool_vec = EMOTIONAL_POOL[secondary_pool]
-                pool_alignment += sum(float(rv.get(k, 0.0) or 0.0) * pool_vec[i] for i, k in enumerate(vec_keys)) * 0.5
-            # Emotional input directly biases temporal preference: low=wait/past, high=assert/future
-            temporal_preference = {
-                "past": 1.0 - emotional_factor * 0.8,
-                "present": 1.0 - abs(emotional_factor - 0.5) * 0.5,
-                "future": emotional_factor * 0.8,
-                "transition": emotional_factor * 0.5,
-                "resolution": (1.0 - emotional_factor) * 0.3,
-                "dissolution": emotional_factor * 0.6,
-                "crystallization": emotional_factor * 0.7,
-                "void": 0.5,
-            }.get(phase_temporal, 0.5)
-            temporal_bias = temporal_preference * 0.2
-            score = (vector_score * 0.4 + inject_score * 0.15 + temporal_alignment * 0.1 + pool_alignment * 0.1 + temporal_bias * 0.25) * w
-            hex_scores[h_id] = hex_scores.get(h_id, 0.0) + score
+    hex_scores: Dict[int, float] = {}
+    hex_names: Dict[int, str] = {}
+    hex_categories: Dict[int, str] = {}
+    hex_actions: Dict[int, str] = {}
+    emotional_factor = emotional_input / 100.0  # 0.0 to 1.0
+    for item, w in zip(resolved, weights):
+        h_id = int(item.get("hexagram_id") or 0)
+        if not h_id:
+            continue
+        hex_names[h_id] = str(item.get("hexagram_symbols", {}).get("name", "") or "")
+        hex_categories[h_id] = str(item.get("hexagram_symbols", {}).get("category", "") or "")
+        hex_actions[h_id] = str(item.get("hexagram_symbols", {}).get("action", "") or "")
+        rv = item.get("resolved_vector") or {}
+        line_states = item.get("line_states") or []
+        yin = sum(1 for ls in line_states if str(ls.get("yao_key", "") or "").endswith("_yin"))
+        yang = sum(1 for ls in line_states if str(ls.get("yao_key", "") or "").endswith("_yang"))
+        yao = sum(1 for ls in line_states if str(ls.get("yao_key", "") or "").endswith("_yao"))
+        yao_ratio = yao / 6.0
+        if yao_ratio > 0.4:
+            ctx_weights = {"chaos": 0.3, "whimsy": 0.3, "darkTone": 0.2, "coherence": 0.1, "voiceWeight": 0.1}
+        else:
+            ctx_weights = {"chaos": 0.1, "whimsy": 0.1, "darkTone": 0.2, "coherence": 0.3, "voiceWeight": 0.3}
+        vector_score = sum(ctx_weights[k] * float(rv.get(k, 0.0) or 0.0) for k in vec_keys)
+        inject_site = item.get("inject_site") or {}
+        inject_score = float(inject_site.get("porosity_norm", inject_site.get("porosity", 0.0) or 0.0))
+        phase_temporal = str(item.get("phase_temporal", "") or "")
+        temporal_alignment = 1.0 if phase_temporal == consensus_temporal else 0.5
+        # Add pool alignment score
+        primary_pool = inject_site.get("primary_pool", "")
+        secondary_pool = inject_site.get("secondary_pool", "")
+        pool_alignment = 0.0
+        if primary_pool and primary_pool in EMOTIONAL_POOL:
+            pool_vec = EMOTIONAL_POOL[primary_pool]
+            pool_alignment += sum(float(rv.get(k, 0.0) or 0.0) * pool_vec[i] for i, k in enumerate(vec_keys))
+        if secondary_pool and secondary_pool in EMOTIONAL_POOL:
+            pool_vec = EMOTIONAL_POOL[secondary_pool]
+            pool_alignment += sum(float(rv.get(k, 0.0) or 0.0) * pool_vec[i] for i, k in enumerate(vec_keys)) * 0.5
+        # Emotional input directly biases temporal preference: low=wait/past, high=assert/future
+        temporal_preference = {
+            "past": 1.0 - emotional_factor * 0.8,
+            "present": 1.0 - abs(emotional_factor - 0.5) * 0.5,
+            "future": emotional_factor * 0.8,
+            "transition": emotional_factor * 0.5,
+            "resolution": (1.0 - emotional_factor) * 0.3,
+            "dissolution": emotional_factor * 0.6,
+            "crystallization": emotional_factor * 0.7,
+            "void": 0.5,
+        }.get(phase_temporal, 0.5)
+        temporal_bias = temporal_preference * 0.2
+        score = (vector_score * 0.4 + inject_score * 0.15 + temporal_alignment * 0.1 + pool_alignment * 0.1 + temporal_bias * 0.25) * w
+        hex_scores[h_id] = hex_scores.get(h_id, 0.0) + score
 
     if not hex_scores:
         consensus_hexagram_id = None
