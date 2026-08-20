@@ -36,7 +36,7 @@ def extract_math_wiki_page(title: str, wikitext: str) -> dict:
 def main() -> int:
     page = "Quadratic formula"
     ROOT = Path(__file__).resolve().parent.parent.parent
-wikitext = (ROOT / "learn" / "exports" / "wiki_math_sample.wikitext.txt").read_text(encoding="utf-8")
+    wikitext = (ROOT / "learn" / "exports" / "wiki_math_sample.wikitext.txt").read_text(encoding="utf-8")
     result = extract_math_wiki_page(page, wikitext)
     print(result)
     return 0
