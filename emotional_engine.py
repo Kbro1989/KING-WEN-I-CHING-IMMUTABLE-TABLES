@@ -131,51 +131,71 @@ def extract_intent(request_text: str) -> Dict[str, Any]:
     
     return {
         "request_text": request_text,
+        "query_tokens": list(word_set),
         "matched_intents": matched,
         "dominant_intent": dominant,
         "intensity": intensity,
         "word_count": len(words),
-        "intent_vector": _intent_to_vector(normalized),
+        "intent_vector": _intent_to_vector(normalized, word_set),
     }
 
 
-def _intent_to_vector(intent_scores: Dict[str, float]) -> List[float]:
-    """Map intent distribution to 5-axis vector seed."""
+def _intent_to_vector(intent_scores: Dict[str, float], word_set: set = None) -> List[float]:
+    """Map intent distribution and semantic tokens to dynamic 5-axis vector seed."""
     base = [0.1, 0.1, 0.1, 0.8, 0.85]
     
     chaos_boost = (
         intent_scores.get("conflict", 0.0) * 0.4 +
         intent_scores.get("destroy", 0.0) * 0.3 +
-        intent_scores.get("transform", 0.0) * 0.2
+        intent_scores.get("transform", 0.0) * 0.2 +
+        intent_scores.get("create", 0.0) * 0.15
     )
     base[0] = _clamp(base[0] + chaos_boost)
     
     whimsy_boost = (
         intent_scores.get("explore", 0.0) * 0.3 +
         intent_scores.get("feel", 0.0) * 0.3 +
-        intent_scores.get("heal", 0.0) * 0.2
+        intent_scores.get("heal", 0.0) * 0.2 +
+        intent_scores.get("release", 0.0) * 0.2
     )
     base[1] = _clamp(base[1] + whimsy_boost)
     
     dark_boost = (
         intent_scores.get("destroy", 0.0) * 0.3 +
-        intent_scores.get("conflict", 0.0) * 0.25
+        intent_scores.get("conflict", 0.0) * 0.25 +
+        intent_scores.get("transform", 0.0) * 0.15
     )
     base[2] = _clamp(base[2] + dark_boost)
     
     coh_boost = (
         intent_scores.get("understand", 0.0) * 0.15 +
         intent_scores.get("focus", 0.0) * 0.15 +
-        intent_scores.get("speak", 0.0) * 0.1
+        intent_scores.get("speak", 0.0) * 0.1 +
+        intent_scores.get("protect", 0.0) * 0.1
     )
     base[3] = _clamp(base[3] + coh_boost)
     
     vw_boost = (
         intent_scores.get("speak", 0.0) * 0.15 +
         intent_scores.get("protect", 0.0) * 0.1 +
-        intent_scores.get("connect", 0.0) * 0.1
+        intent_scores.get("connect", 0.0) * 0.1 +
+        intent_scores.get("grow", 0.0) * 0.15
     )
     base[4] = _clamp(base[4] + vw_boost)
+
+    # Deterministic semantic token hash perturbation for continuous input variation
+    if word_set:
+        hash_val = sum(sum(ord(c) for c in w) for w in word_set)
+        p_chaos = ((hash_val % 97) / 97.0) * 0.12
+        p_whimsy = (((hash_val // 7) % 89) / 89.0) * 0.12
+        p_dark = (((hash_val // 13) % 83) / 83.0) * 0.12
+        p_coh = (((hash_val // 19) % 79) / 79.0) * 0.12
+        p_vw = (((hash_val // 23) % 73) / 73.0) * 0.12
+        base[0] = _clamp(base[0] + p_chaos)
+        base[1] = _clamp(base[1] + p_whimsy)
+        base[2] = _clamp(base[2] + p_dark)
+        base[3] = _clamp(base[3] + p_coh)
+        base[4] = _clamp(base[4] + p_vw)
     
     return base
 
@@ -470,10 +490,10 @@ def _pool_weights_for_hex(
     balance = _line_state_balance(binary, phase_bits)
     line_vec = _line_state_vector(balance)
     
-    # === SECONDARY: trigram context blends in ===
+    # === SECONDARY: trigram structural context (upper=outer 60%, lower=inner 40%) ===
     upper_vec = _trigram_vector(upper)
     lower_vec = _trigram_vector(lower)
-    trigram_vec = _lerp(upper_vec, lower_vec, 0.5)
+    trigram_vec = _lerp(lower_vec, upper_vec, 0.6)
     
     # Blend: line states dominate (0.7), trigrams context (0.3)
     expanded = _lerp(line_vec, trigram_vec, 0.3)
@@ -504,10 +524,13 @@ def _pool_weights_for_hex(
     bleed = _clamp(porosity_norm * 0.7)
     expanded = _lerp(expanded, neighbor_mix, bleed)
     
-    # === INTENT match modulation ===
+    # === INTENT match & vector modulation ===
+    intent_vector = intent_dict.get("intent_vector", [0.1, 0.1, 0.1, 0.8, 0.85])
     intent_match = _compute_intent_match(hexagram_id, category, action, intent_dict)
     intent_mod = [intent_match * 0.15, intent_match * 0.15, intent_match * 0.08,
                   intent_match * 0.08, intent_match * 0.12]
+    # Blend intent vector seed (15% weight scaled by intensity) and intent match
+    expanded = _lerp(expanded, intent_vector, 0.15 * (1.0 + intent_intensity))
     expanded = _lerp(expanded, _lerp(expanded, intent_mod, 0.35), 0.25)
     
     # Final clamp
@@ -557,25 +580,24 @@ def _line_state_vector(balance: Dict[str, Any]) -> List[float]:
     yin_r = balance["yin_ratio"]
     yang_r = balance["yang_ratio"]
     yao_r = balance["yao_ratio"]
-    changing_r = balance["changing_ratio"]
+    
     old_yin = balance["old_yin_count"]
     old_yang = balance["old_yang_count"]
     old_yao = balance["old_yao_count"]
+    stable_yin = balance["stable_yin_count"]
+    stable_yao = balance["stable_yao_count"]
     
-    # Yin-heavy: softer, more whimsical, less voice weight
-    # Yang-heavy: stronger, more coherent, more voice weight
-    # Yao-heavy: chaotic, adaptive, changing
-    # Old lines: add tension/darkness based on count
-    
-    old_count = old_yin + old_yang + old_yao
-    old_ratio = old_count / 6.0
+    dy = yang_r - yin_r                          # signed ternary differential
+    yao_dy = yao_r - 0.5                         # yao vs neutral midpoint
+    old_dy = (old_yang / 6.0) - (old_yin / 6.0)  # old_yang vs old_yin differential
+    stable_dy = (stable_yao / 6.0) - (stable_yin / 6.0)  # stable ternary opposition
     
     return [
-        _clamp(yao_r * 0.5 + old_ratio * 0.3 + abs(yang_r - yin_r) * 0.2),  # chaos
-        _clamp(yin_r * 0.4 + yao_r * 0.3 + old_ratio * 0.1),                # whimsy
-        _clamp(old_yang * 0.15 + old_yao * 0.2 + yang_r * 0.1),             # darkTone
-        _clamp(yang_r * 0.3 + (1.0 - yao_r) * 0.3 - old_ratio * 0.1),      # coherence
-        _clamp(yang_r * 0.3 + (1.0 - yao_r) * 0.2 + old_yang * 0.1),       # voiceWeight
+        _clamp(yao_dy * 0.5 + old_dy * 0.3 + abs(dy) * 0.2),    # chaos
+        _clamp(yin_r * 0.4 + yao_dy * 0.3 + old_dy * 0.1),      # whimsy
+        _clamp((old_yang / 6.0) * 0.15 + (old_yao / 6.0) * 0.2 + dy * 0.1), # darkTone
+        _clamp(yang_r * 0.3 - yao_dy * 0.3 - abs(old_dy) * 0.1),  # coherence
+        _clamp(yang_r * 0.3 - yao_dy * 0.2 + (old_yang / 6.0) * 0.1),   # voiceWeight
     ]
 
 

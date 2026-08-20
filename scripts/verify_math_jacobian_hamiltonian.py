@@ -43,7 +43,7 @@ def verify_jacobian_hamiltonian_gaussian():
 
     energy = _hamiltonian_energy(sample_vec, target_vec, line_balance)
     print(f"\n[1. HAMILTONIAN ENERGY EQUATION]")
-    print(f"  - Formula: H = p·q̇ - ℒ")
+    print(f"  - Formula: H = p*q_dot - L")
     print(f"  - Sample Energy Score: {energy:.6f}")
 
     # 2. GAUSSIAN CONSENSUS KERNEL VERIFICATION

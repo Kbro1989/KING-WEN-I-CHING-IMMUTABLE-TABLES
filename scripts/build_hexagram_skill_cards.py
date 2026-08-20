@@ -278,66 +278,64 @@ def phase_expand(hex_entry, weights_entry, reflections_entry, inject_entry):
     return phases
 
 
-expansion = []
-for h_id_str, entry in registry.items():
-    h_id = int(h_id_str)
-    binary = entry.get("binary", "")
-    personality = PERSONALITIES.get(h_id, f"ENTITY-{h_id}")
-    invert_binary = "".join("0" if b == "1" else "1" for b in binary)
-    inverted_id = None
-    for k, v in registry.items():
-        if v.get("binary") == invert_binary:
-            inverted_id = int(k)
-            break
+if __name__ == "__main__":
+    expansion = []
+    for h_id_str, entry in registry.items():
+        h_id = int(h_id_str)
+        binary = entry.get("binary", "")
+        personality = PERSONALITIES.get(h_id, f"ENTITY-{h_id}")
+        invert_binary = "".join("0" if b == "1" else "1" for b in binary)
+        inverted_id = None
+        for k, v in registry.items():
+            if v.get("binary") == invert_binary:
+                inverted_id = int(k)
+                break
 
-    hex_entry = {
-        "hexagram_id": h_id,
-        "name": entry.get("name", ""),
-        "chinese": entry.get("chinese", ""),
-        "pinyin": entry.get("pinyin", ""),
-        "unicode": entry.get("unicode", ""),
-        "binary": binary,
-        "upper_trigram": entry.get("upper_trigram", ""),
-        "lower_trigram": entry.get("lower_trigram", ""),
-        "category": entry.get("category", ""),
-        "action": entry.get("action", ""),
-        "personality": personality,
-        "inverted_id": inverted_id,
-        "inversion_pair": sorted([h_id, inverted_id]) if inverted_id else None,
-        "skill_cards": skill_cards_for_binary(binary, entry.get("category", "")),
-        "domain_vectors": {
-            "sovereign": 0.9 if entry.get("category") == "sovereign" else 0.4,
-            "transformer": 0.9 if entry.get("category") == "transformer" else 0.4,
-            "dissipator": 0.9 if entry.get("category") == "dissipator" else 0.4,
-            "boundary": 0.9 if entry.get("category") == "boundary" else 0.4,
-        },
-        "phases": phase_expand(
-            entry,
-            weights.get(h_id_str, {}),
-            reflections.get(h_id_str, {}),
-            inject.get(h_id_str, {}),
-        ),
-        "reflections_past": (reflections.get(h_id_str, {}) or {}).get("past", ""),
-        "reflections_present": (reflections.get(h_id_str, {}) or {}).get("present", ""),
-        "reflections_future": (reflections.get(h_id_str, {}) or {}).get("future", ""),
-        "trainingNotes": weights.get(h_id_str, {}).get("trainingNotes", ""),
-        "inject_site": inject.get(h_id_str, {}),
+        hex_entry = {
+            "hexagram_id": h_id,
+            "name": entry.get("name", ""),
+            "chinese": entry.get("chinese", ""),
+            "pinyin": entry.get("pinyin", ""),
+            "unicode": entry.get("unicode", ""),
+            "binary": binary,
+            "upper_trigram": entry.get("upper_trigram", ""),
+            "lower_trigram": entry.get("lower_trigram", ""),
+            "category": entry.get("category", ""),
+            "action": entry.get("action", ""),
+            "personality": personality,
+            "inverted_id": inverted_id,
+            "inversion_pair": sorted([h_id, inverted_id]) if inverted_id else None,
+            "skill_cards": skill_cards_for_binary(binary, entry.get("category", "")),
+            "domain_vectors": {
+                "sovereign": 0.9 if entry.get("category") == "sovereign" else 0.4,
+                "transformer": 0.9 if entry.get("category") == "transformer" else 0.4,
+                "dissipator": 0.9 if entry.get("category") == "dissipator" else 0.4,
+                "boundary": 0.9 if entry.get("category") == "boundary" else 0.4,
+            },
+            "phases": phase_expand(
+                entry,
+                weights.get(h_id_str, {}),
+                reflections.get(h_id_str, {}),
+                inject.get(h_id_str, {}),
+            ),
+            "reflections_past": (reflections.get(h_id_str, {}) or {}).get("past", ""),
+            "reflections_present": (reflections.get(h_id_str, {}) or {}).get("present", ""),
+            "reflections_future": (reflections.get(h_id_str, {}) or {}).get("future", ""),
+            "trainingNotes": weights.get(h_id_str, {}).get("trainingNotes", ""),
+            "inject_site": inject.get(h_id_str, {}),
+        }
+        expansion.append(hex_entry)
+
+    out = {
+        "schema_version": "2026-07-18",
+        "total_expanded": len(expansion),
+        "total_resolved": len(expansion) * 8,
+        "source": "hexagram_full_expansion",
+        "expansion": expansion,
     }
-    expansion.append(hex_entry)
 
-out = {
-    "schema_version": "2026-07-18",
-    "total_expanded": len(expansion),
-    "total_resolved": len(expansion) * 8,
-    "source": "hexagram_full_expansion",
-    "expansion": expansion,
-}
+    OUTPUT_PATH.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"Wrote {OUTPUT_PATH}")
+    print(f"Expanded hexagrams: {len(expansion)}")
+    print(f"Resolved states: {len(expansion)*8}")
 
-OUTPUT_PATH.write_text(json.dumps(out, ensure_ascii=False, indent=2))
-print(f"Wrote {OUTPUT_PATH}")
-print(f"Expanded hexagrams: {len(expansion)}")
-print(f"Resolved states: {len(expansion)*8}")
-print(f"Sample hex 1:")
-print(json.dumps(out['expansion'][0], ensure_ascii=False, indent=2))
-print("Sample hex 44:")
-print(json.dumps(out['expansion'][43], ensure_ascii=False, indent=2))

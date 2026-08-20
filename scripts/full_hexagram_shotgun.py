@@ -10,6 +10,7 @@ Architecture:
 """
 from __future__ import annotations
 
+import csv
 import json
 import math
 import sys
@@ -38,6 +39,7 @@ from emotional_engine import (  # noqa: E402
     _line_yao_key,
 )
 from scripts.schauberger_parsing_layers import schauberger_parsing_layers  # noqa: E402
+from hexagram_personality import HEXAGRAM_PERSONALITY_MAP, resolve_personality_by_consensus, build_hexagram_personality_map  # noqa: E402
 
 EMOTIONAL_POOL = VOICEBOX_VOICE_POOL
 
@@ -275,6 +277,11 @@ def _build_jspace_projections(h_id: int, vector: Dict[str, float], inject: Dict[
 
 def shotgun_expand(request_text: str = "", emotional_input: int = 50) -> Dict[str, Any]:
     """Single-pass shotgun blast: all 64 hexagrams, full ternary, no early collapse."""
+    # Build personality map here — after all table imports are fully resolved
+    # Module-level HEXAGRAM_PERSONALITY_MAP may be empty due to import-order;
+    # calling build_hexagram_personality_map() at runtime guarantees HEXAGRAM_BASE is loaded.
+    pers_map = build_hexagram_personality_map()
+
     expanded = []
     for h_id in range(1, 65):
         base = expand_hexagram(h_id, request_text, phase_bits=0, emotional_input=0)
@@ -312,6 +319,9 @@ def shotgun_expand(request_text: str = "", emotional_input: int = 50) -> Dict[st
                 "voiceWeight": float(vector.get("voiceWeight", 0.0) or 0.0),
             },
             "training_notes": training_notes,
+            # Full individual ternary identity — sourced from pers_map (runtime-built from immutable tables)
+            # Includes: agent_type, domain, element_subset, category, action, binary, slot_tags (6 ternary positions)
+            "table_personality": pers_map.get(h_id, {}),
             "hexagram_symbols": base.get("hexagram_symbols", {}),
             "intent": base.get("intent", {}),
             "phase_bits": base.get("phase_bits", 0),
@@ -345,39 +355,56 @@ def shotgun_expand(request_text: str = "", emotional_input: int = 50) -> Dict[st
             })
 
 
-    resolved = [
-        {
-            "hexagram_id": h_id,
-            "category": HEXAGRAM_BASE[h_id].get("category", ""),
-            "action": HEXAGRAM_BASE[h_id].get("action", ""),
-            "coder_specialty": CODER_SPECIALTIES[(h_id - 1) % len(CODER_SPECIALTIES)],
-            "rs3_actionable": RS3_ACTIONABLES[(h_id - 1) % len(RS3_ACTIONABLES)],
-            "training_notes": EMOTIONAL_WEIGHTS.get(str(h_id), {}).get("trainingNotes", ""),
-            "hexagram_symbols": HEXAGRAM_BASE[h_id],
-            "intent": {"dominant_intent": "", "intensity": 0.0},
-            "domain_vector": {
-                "chaos": 0.0,
-                "whimsy": 0.0,
-                "darkTone": 0.0,
-                "coherence": 0.0,
-                "voiceWeight": 0.0,
-            },
-            "phase_bits": p,
-            "phase_temporal": PHASE_INFO[p]["temporal"],
-            "inject_site": expand_hexagram(h_id, request_text, phase_bits=p, emotional_input=0).get("inject_site", {}),
-            "resolved_vector": expand_hexagram(h_id, request_text, phase_bits=p, emotional_input=emotional_input).get("resolved_vector", {}),
-            "line_states": expand_hexagram(h_id, request_text, phase_bits=p, emotional_input=emotional_input).get("line_states", []),
-        }
-        for h_id in range(1, 65)
-        for p in range(8)
-    ]
+
+    resolved = []
+    for h_id in range(1, 65):
+        for p in range(8):
+            r_base = expand_hexagram(h_id, request_text, phase_bits=p, emotional_input=emotional_input)
+            ptags = pers_map.get(h_id, {})
+            resolved.append({
+                "hexagram_id": h_id,
+                "category": HEXAGRAM_BASE[h_id].get("category", ""),
+                "action": HEXAGRAM_BASE[h_id].get("action", ""),
+                "coder_specialty": CODER_SPECIALTIES[(h_id - 1) % len(CODER_SPECIALTIES)],
+                "rs3_actionable": RS3_ACTIONABLES[(h_id - 1) % len(RS3_ACTIONABLES)],
+                "training_notes": EMOTIONAL_WEIGHTS.get(str(h_id), {}).get("trainingNotes", ""),
+                "hexagram_symbols": HEXAGRAM_BASE[h_id],
+                "intent": r_base.get("intent", {}),
+                # Full individual identity from immutable table — NOT averaged or blended
+                "table_personality": ptags,
+                "domain_vector": {k: float(r_base.get("resolved_vector", {}).get(k, 0.0) or 0.0) for k in VEC_KEYS},
+                "phase_bits": p,
+                "phase_temporal": PHASE_INFO[p]["temporal"],
+                "inject_site": r_base.get("inject_site", {}),
+                "expanded_vector": r_base.get("expanded_vector", {}),
+                "resolved_vector": r_base.get("resolved_vector", {}),
+                "line_states": r_base.get("line_states", []),
+                "line_balance": r_base.get("line_balance", {}),
+            })
 
     energies = []
     for item in expanded:
-        vec = [float(item.get("expanded_vector", {}).get(k, 0.0) or 0.0) for k in ["chaos", "whimsy", "darkTone", "coherence", "voiceWeight"]]
+        vec = [float(item.get("expanded_vector", {}).get(k, 0.0) or 0.0) for k in VEC_KEYS]
         energies.append(
             _hamiltonian_energy(vec, vec, item.get("line_balance", {}))
         )
+
+    # Compute real consensus vector as mean across all 64 expanded hexagram vectors
+    n = max(1, len(expanded))
+    consensus_vector = {
+        k: round(sum(float(item.get("expanded_vector", {}).get(k, 0.0) or 0.0) for item in expanded) / n, 5)
+        for k in VEC_KEYS
+    }
+    # Dominant intent: majority vote across all 64
+    intent_counts: Dict[str, int] = {}
+    for item in expanded:
+        di = item.get("intent", {}).get("dominant_intent", "understand")
+        intent_counts[di] = intent_counts.get(di, 0) + 1
+    dominant_intent = max(intent_counts, key=intent_counts.get) if intent_counts else "understand"
+
+    personality_consensus = resolve_personality_by_consensus(resolved, consensus_vector)
+    personality_consensus["consensus_vector"] = consensus_vector
+    personality_consensus["dominant_intent"] = dominant_intent
 
     return {
         "source": "kingwen-shotgun-expand",
@@ -391,6 +418,8 @@ def shotgun_expand(request_text: str = "", emotional_input: int = 50) -> Dict[st
         "capture_point": "first-parse",
         "expanded": expanded,
         "resolved": resolved,
+        "personality_map": pers_map,           # runtime-built individual ternary identity map
+        "personality_consensus": personality_consensus,
         "personality_subsets_total": sum(len(item.get("personality_subsets", [])) for item in expanded),
         "avg_hamiltonian_energy": sum(energies) / max(1, len(energies)),
         "min_hamiltonian_energy": min(energies) if energies else 0.0,
@@ -402,44 +431,242 @@ def shotgun_expand(request_text: str = "", emotional_input: int = 50) -> Dict[st
             "inject_site": "HEXAGRAM_INJECTION_SITE",
             "emotional_weights": "EMOTIONAL_WEIGHTS",
             "pool": "VOICEBOX_VOICE_POOL",
+            "personality": "HEXAGRAM_PERSONALITY_MAP",
         },
     }
 
 
 
+def _write_csv(path: Path, rows: List[Dict[str, Any]], fields: List[str]) -> None:
+    """Write a list of flat dicts to CSV, creating parent dirs if needed."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def main() -> int:
     payload = shotgun_expand(request_text="shotgun blast", emotional_input=50)
+    expanded = payload["expanded"]
+    resolved = payload["resolved"]
+    personality_consensus = payload.get("personality_consensus", {})
+    datasets = ROOT / "DATASETS"
+
+    # ------------------------------------------------------------------
+    # CSV 1: expanded_states.csv  — 64 rows, one per hexagram
+    # Individuality: every hexagram carries its own identity columns.
+    # ------------------------------------------------------------------
+    exp_fields = [
+        "hexagram_id", "name", "unicode", "binary_bottom_to_top",
+        "upper_trigram", "lower_trigram",
+        "category", "action",
+        # personality from immutable table
+        "agent_type", "domain", "element_subset",
+        # coder/rs3 tags
+        "coder_specialty", "rs3_actionable",
+        # schauberger
+        "vortex_tension", "suction_coefficient", "motion_type",
+        # vectors
+        "chaos", "whimsy", "darkTone", "coherence", "voiceWeight",
+        # hermes nominal state
+        "hermes_voice_mode",
+        # intent
+        "dominant_intent", "intensity", "query_tokens",
+        "training_notes",
+    ]
+    exp_rows = []
+    for e in expanded:
+        tp = e.get("table_personality", {})
+        dv = e.get("domain_vector", {})
+        sc = e.get("schauberger_metrics", {})
+        intent = e.get("intent", {})
+        hermes = e.get("hermes_layer", {})
+        exp_rows.append({
+            "hexagram_id": e.get("hexagram_id"),
+            "name": e.get("name"),
+            "unicode": e.get("unicode"),
+            "binary_bottom_to_top": e.get("binary_bottom_to_top"),
+            "upper_trigram": e.get("upper_trigram"),
+            "lower_trigram": e.get("lower_trigram"),
+            "category": e.get("category"),
+            "action": e.get("action"),
+            "agent_type": tp.get("agent_type", ""),
+            "domain": tp.get("domain", ""),
+            "element_subset": tp.get("element_subset", ""),
+            "coder_specialty": e.get("coder_specialty"),
+            "rs3_actionable": e.get("rs3_actionable"),
+            "vortex_tension": sc.get("vortex_tension"),
+            "suction_coefficient": sc.get("suction_coefficient"),
+            "motion_type": sc.get("motion_type"),
+            "chaos": dv.get("chaos"),
+            "whimsy": dv.get("whimsy"),
+            "darkTone": dv.get("darkTone"),
+            "coherence": dv.get("coherence"),
+            "voiceWeight": dv.get("voiceWeight"),
+            "hermes_voice_mode": hermes.get("voice_mode"),
+            "dominant_intent": intent.get("dominant_intent"),
+            "intensity": intent.get("intensity"),
+            "query_tokens": "|".join(intent.get("query_tokens", [])),
+            "training_notes": e.get("training_notes"),
+        })
+    _write_csv(datasets / "expanded_states.csv", exp_rows, exp_fields)
+
+    # ------------------------------------------------------------------
+    # CSV 2: resolved_states.csv  — 512 rows, one per (hexagram × phase)
+    # Every row carries the full individual identity of its hexagram.
+    # ------------------------------------------------------------------
+    res_fields = [
+        "hexagram_id", "name", "phase_bits", "phase_temporal",
+        "category", "action",
+        # individual personality
+        "agent_type", "domain", "element_subset",
+        "coder_specialty", "rs3_actionable",
+        # vectors
+        "chaos", "whimsy", "darkTone", "coherence", "voiceWeight",
+        # expanded (pre-slider)
+        "exp_chaos", "exp_whimsy", "exp_darkTone", "exp_coherence", "exp_voiceWeight",
+        # hamiltonian (q̇ per axis)
+        "qdot_chaos", "qdot_whimsy", "qdot_darkTone", "qdot_coherence", "qdot_voiceWeight",
+        # line balance paired differentials
+        "dy_yang_yin", "yao_dy", "changing_dy",
+        # intent
+        "dominant_intent", "intensity", "query_tokens",
+        "training_notes",
+    ]
+    res_rows = []
+    for r in resolved:
+        tp = r.get("table_personality", {})
+        dv = r.get("resolved_vector", {}) or {}
+        ev = r.get("expanded_vector", {}) or {}
+        lb = r.get("line_balance", {}) or {}
+        intent = r.get("intent", {})
+        hname = r.get("hexagram_symbols", {}).get("name", "")
+        yin_c = float(lb.get("yin_count", 0) or 0)
+        yang_c = float(lb.get("yang_count", 0) or 0)
+        yao_c = float(lb.get("yao_count", 0) or 0)
+        ch_c = float(lb.get("changing_count", 0) or 0)
+        res_rows.append({
+            "hexagram_id": r.get("hexagram_id"),
+            "name": hname,
+            "phase_bits": r.get("phase_bits"),
+            "phase_temporal": r.get("phase_temporal"),
+            "category": r.get("category"),
+            "action": r.get("action"),
+            "agent_type": tp.get("agent_type", ""),
+            "domain": tp.get("domain", ""),
+            "element_subset": tp.get("element_subset", ""),
+            "coder_specialty": r.get("coder_specialty"),
+            "rs3_actionable": r.get("rs3_actionable"),
+            "chaos": round(float(dv.get("chaos", 0) or 0), 5),
+            "whimsy": round(float(dv.get("whimsy", 0) or 0), 5),
+            "darkTone": round(float(dv.get("darkTone", 0) or 0), 5),
+            "coherence": round(float(dv.get("coherence", 0) or 0), 5),
+            "voiceWeight": round(float(dv.get("voiceWeight", 0) or 0), 5),
+            "exp_chaos": round(float(ev.get("chaos", 0) or 0), 5),
+            "exp_whimsy": round(float(ev.get("whimsy", 0) or 0), 5),
+            "exp_darkTone": round(float(ev.get("darkTone", 0) or 0), 5),
+            "exp_coherence": round(float(ev.get("coherence", 0) or 0), 5),
+            "exp_voiceWeight": round(float(ev.get("voiceWeight", 0) or 0), 5),
+            "qdot_chaos": round(float(dv.get("chaos", 0) or 0) - float(ev.get("chaos", 0) or 0), 5),
+            "qdot_whimsy": round(float(dv.get("whimsy", 0) or 0) - float(ev.get("whimsy", 0) or 0), 5),
+            "qdot_darkTone": round(float(dv.get("darkTone", 0) or 0) - float(ev.get("darkTone", 0) or 0), 5),
+            "qdot_coherence": round(float(dv.get("coherence", 0) or 0) - float(ev.get("coherence", 0) or 0), 5),
+            "qdot_voiceWeight": round(float(dv.get("voiceWeight", 0) or 0) - float(ev.get("voiceWeight", 0) or 0), 5),
+            # paired differentials per math spec
+            "dy_yang_yin": round(yang_c - yin_c, 3),
+            "yao_dy": round(yao_c - 3.0, 3),
+            "changing_dy": round(ch_c - (6.0 - ch_c), 3),
+            "dominant_intent": intent.get("dominant_intent"),
+            "intensity": round(float(intent.get("intensity", 0) or 0), 4),
+            "query_tokens": "|".join(intent.get("query_tokens", [])),
+            "training_notes": r.get("training_notes"),
+        })
+    _write_csv(datasets / "resolved_states.csv", res_rows, res_fields)
+
+    # ------------------------------------------------------------------
+    # CSV 3: personality_map.csv  — 64 rows, pure table-tag identity
+    # No synthesis. No blending. Just each hexagram's own character.
+    # ------------------------------------------------------------------
+    pers_fields = [
+        "hexagram_id", "name", "binary",
+        "category", "action", "agent_type", "domain",
+        "upper_trigram", "lower_trigram", "element_subset",
+        "source",
+        # slot-level individuality (6 positions)
+        "s1_bit", "s1_trigram", "s1_element",
+        "s2_bit", "s2_trigram", "s2_element",
+        "s3_bit", "s3_trigram", "s3_element",
+        "s4_bit", "s4_trigram", "s4_element",
+        "s5_bit", "s5_trigram", "s5_element",
+        "s6_bit", "s6_trigram", "s6_element",
+    ]
+    pers_rows = []
+    runtime_pers_map = payload.get("personality_map", {})
+    for h_id in range(1, 65):
+        tp = runtime_pers_map.get(h_id, {})
+        slots = tp.get("slot_tags", [])
+        row = {
+            "hexagram_id": h_id,
+            "name": HEXAGRAM_BASE[h_id].get("name"),
+            "binary": tp.get("binary", ""),
+            "category": tp.get("category", ""),
+            "action": tp.get("action", ""),
+            "agent_type": tp.get("agent_type", ""),
+            "domain": tp.get("domain", ""),
+            "upper_trigram": tp.get("upper_trigram", ""),
+            "lower_trigram": tp.get("lower_trigram", ""),
+            "element_subset": tp.get("element_subset", ""),
+            "source": tp.get("source", ""),
+        }
+        for i, slot in enumerate(slots[:6], 1):
+            row[f"s{i}_bit"] = slot.get("bit_value")
+            row[f"s{i}_trigram"] = slot.get("trigram_name")
+            row[f"s{i}_element"] = slot.get("element_subset")
+        pers_rows.append(row)
+    _write_csv(datasets / "personality_map.csv", pers_rows, pers_fields)
+
+    # ------------------------------------------------------------------
+    # Summary print — show per-hexagram individuality, not aggregate
+    # ------------------------------------------------------------------
     print(json.dumps({
         "source": payload.get("source"),
         "total_expanded": payload.get("total_expanded"),
         "total_resolved": payload.get("total_resolved"),
-        "personality_subsets_total": payload.get("personality_subsets_total"),
-        "ternary_line_permutations_per_hex": payload.get("ternary_line_permutations_per_hex"),
-        "total_ternary_line_permutations": payload.get("total_ternary_line_permutations"),
-        "total_domained_routes": payload.get("total_domained_routes"),
         "avg_hamiltonian_energy": payload.get("avg_hamiltonian_energy"),
         "table_sources": payload.get("table_sources"),
-        "first_hexagram": {
-            "hexagram_id": payload["expanded"][0].get("hexagram_id"),
-            "name": payload["expanded"][0].get("name"),
-            "coder_specialty": payload["expanded"][0].get("coder_specialty"),
-            "rs3_actionable": payload["expanded"][0].get("rs3_actionable"),
-            "ternary_slots": len(payload["expanded"][0].get("ternary_slots", [])),
-            "ternary_729_permutations_count": payload["expanded"][0].get("ternary_729_permutations_count"),
-            "personality_subsets": len(payload["expanded"][0].get("personality_subsets", [])),
+        "personality_consensus": {
+            "dominant_agent_type": personality_consensus.get("dominant_agent_type"),
+            "dominant_domain": personality_consensus.get("dominant_domain"),
+            "agent_distribution": personality_consensus.get("agent_distribution"),
+            "domain_distribution": personality_consensus.get("domain_distribution"),
+            "source": personality_consensus.get("source"),
         },
-        "last_hexagram": {
-            "hexagram_id": payload["expanded"][-1].get("hexagram_id"),
-            "name": payload["expanded"][-1].get("name"),
-            "coder_specialty": payload["expanded"][-1].get("coder_specialty"),
-            "rs3_actionable": payload["expanded"][-1].get("rs3_actionable"),
-            "ternary_slots": len(payload["expanded"][-1].get("ternary_slots", [])),
-            "ternary_729_permutations_count": payload["expanded"][-1].get("ternary_729_permutations_count"),
-            "personality_subsets": len(payload["expanded"][-1].get("personality_subsets", [])),
+        "csv_output": {
+            "expanded_states": str(datasets / "expanded_states.csv"),
+            "resolved_states": str(datasets / "resolved_states.csv"),
+            "personality_map": str(datasets / "personality_map.csv"),
         },
+        # Sample: first 3 hexagrams, full individual identity
+        "hexagram_samples": [
+            {
+                "hexagram_id": e.get("hexagram_id"),
+                "name": e.get("name"),
+                "agent_type": runtime_pers_map.get(e.get("hexagram_id"), {}).get("agent_type"),
+                "domain": runtime_pers_map.get(e.get("hexagram_id"), {}).get("domain"),
+                "element_subset": runtime_pers_map.get(e.get("hexagram_id"), {}).get("element_subset"),
+                "category": e.get("category"),
+                "action": e.get("action"),
+                "coder_specialty": e.get("coder_specialty"),
+                "rs3_actionable": e.get("rs3_actionable"),
+                "motion_type": e.get("schauberger_metrics", {}).get("motion_type"),
+                "hermes_voice_mode": e.get("hermes_layer", {}).get("voice_mode"),
+                "query_tokens": e.get("intent", {}).get("query_tokens", []),
+            }
+            for e in expanded[:3]
+        ],
     }, ensure_ascii=False, indent=2))
     return 0
-
 
 
 if __name__ == "__main__":
