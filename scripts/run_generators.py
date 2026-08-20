@@ -2,7 +2,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-repo = Path(r"C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES").resolve()
+repo = Path(__file__).resolve().parent.parent
 scripts = [
     repo / "save registry",
     repo / "test file",

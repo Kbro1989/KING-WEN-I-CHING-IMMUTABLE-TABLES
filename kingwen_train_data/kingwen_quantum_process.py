@@ -16,7 +16,7 @@ from emotional_engine import (
 )
 from kingwen_train_data.superposition_capture import capture_superposition
 
-_ARTIFACT = Path(r"C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/kingwen_train_data/quantum_process_trials.jsonl")
+_ARTIFACT = Path(__file__).resolve().parent.parent / "kingwen_train_data/quantum_process_trials.jsonl"
 
 
 def _append_jsonl(path: Path, row: Dict[str, Any]) -> None:
@@ -185,7 +185,7 @@ def should_git_push(summary: Dict[str, Any]) -> bool:
 
 def git_push_if_coherent(summary: Dict[str, Any]) -> Dict[str, Any]:
     import subprocess
-    repo = Path(r"C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES")
+    repo = Path(__file__).resolve().parent.parent
     if not should_git_push(summary):
         return {"pushed": False, "reason": "coherent expansion not increased"}
     try:

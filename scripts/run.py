@@ -3,7 +3,7 @@ import sys
 import runpy
 from pathlib import Path
 
-REPO = Path(r"C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES").resolve()
+REPO = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO))
 
 # Provide the primary data source that the in-repo scripts expect.

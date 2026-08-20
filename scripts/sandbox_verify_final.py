@@ -5,7 +5,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
-p = Path(r"C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_ternary_tables_complete.py")
+ROOT = Path(__file__).resolve().parent.parent
+p = ROOT / "kingwen_ternary_tables_complete.py"
 spec = importlib.util.spec_from_file_location("kwt_final3", str(p))
 mod = importlib.util.module_from_spec(spec)
 sys.modules["kwt_final3"] = mod

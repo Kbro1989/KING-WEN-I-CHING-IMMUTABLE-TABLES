@@ -10,10 +10,11 @@ from collections import defaultdict, Counter
 
 # Paths
 CORPUS_PROFILES = Path('C:/Users/krist/Desktop/zotero/learning-corpus/paper_frequency_profiles.jsonl')
-ARCHETYPES = Path('C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/output/hexagram_coder_archetypes.csv')
-PHASE_INDIVIDUALS = Path('C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/output/hexagram_phase_individuals.csv')
-TRANSLATIONS = Path('C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/output/hexagram_translations.json')
-OUT = Path('C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/output/hexagram_domain_keywords.json')
+ROOT = Path(__file__).resolve().parent.parent
+ARCHETYPES = ROOT / "output" / "hexagram_coder_archetypes.csv"
+PHASE_INDIVIDUALS = ROOT / "output" / "hexagram_phase_individuals.csv"
+TRANSLATIONS = ROOT / "output" / "hexagram_translations.json"
+OUT = ROOT / "output" / "hexagram_domain_keywords.json"
 
 # Load corpus profiles
 corpus = []

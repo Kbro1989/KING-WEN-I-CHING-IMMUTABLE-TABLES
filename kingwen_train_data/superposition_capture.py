@@ -17,7 +17,7 @@ except Exception as exc:  # pragma: no cover - runtime dependency guard
     raise RuntimeError(f"emotional_engine is required: {exc}")
 
 
-_SUPERPOSITION_ROOT = Path(r"C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES")
+_SUPERPOSITION_ROOT = Path(__file__).resolve().parent.parent
 _SUPERPOSITION_PATH = _SUPERPOSITION_ROOT / "kingwen_train_data/superposition_capture.jsonl"
 _PARSER_BATCH_PATH = _SUPERPOSITION_ROOT / "kingwen_train_data/wiki_math_research_batch_2026-07-11.json"
 

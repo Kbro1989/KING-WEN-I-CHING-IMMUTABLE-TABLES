@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
-ROOT_KINGWEN = Path(r"C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES")
+ROOT_KINGWEN = Path(__file__).resolve().parent.parent
 ROOT_VOICEBOX = Path(r"C:/Users/krist/Desktop/voicebox")
 VOICEBOX_DB = ROOT_VOICEBOX / "data" / "voicebox.db"
 KIT_DIR = ROOT_KINGWEN / "DATASETS" / "kingwen_model_sets"

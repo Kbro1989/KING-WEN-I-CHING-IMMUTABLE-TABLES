@@ -2,7 +2,7 @@ from pathlib import Path
 import json, re
 from collections import defaultdict
 
-root = Path('C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES')
+root = Path(__file__).resolve().parent.parent
 chunks_path = Path('C:/Users/krist/Desktop/zotero/learning-corpus/paper_chunks_solutions_issues.jsonl')
 expansion_path = root / 'kingwen_train_data' / 'full_shotgun_expansion_all.jsonl'
 out_path = root / 'kingwen_train_data' / 'full_shotgun_expansion_corpus_enriched.jsonl'

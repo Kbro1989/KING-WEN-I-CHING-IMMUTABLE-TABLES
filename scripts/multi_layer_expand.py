@@ -17,7 +17,7 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-ROOT = Path(r"C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES")
+ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from kingwen_ternary_tables_complete import (  # noqa: E402

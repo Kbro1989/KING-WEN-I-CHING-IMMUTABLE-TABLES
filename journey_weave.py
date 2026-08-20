@@ -2,7 +2,7 @@ from pathlib import Path
 import re, json, hashlib
 from collections import defaultdict
 
-KINGWEN_ROOT = Path('C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES')
+KINGWEN_ROOT = Path(__file__).resolve().parent
 HERMES_SKILLS = Path('C:/Users/krist/AppData/Local/hermes/skills')
 ALT_SKILLS = Path('C:/Users/krist/.hermes/skills')
 HERMES_MEMORY = Path('C:/Users/krist/AppData/Local/hermes/memories/MEMORY.md')

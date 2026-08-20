@@ -18,7 +18,7 @@ import sys
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
 
-ROOT_KINGWEN = Path(r"C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES")
+ROOT_KINGWEN = Path(__file__).resolve().parent.parent
 ROOT_VOICEBOX = Path(r"C:/Users/krist/Desktop/voicebox")
 sys.path.insert(0, str(ROOT_KINGWEN))
 
