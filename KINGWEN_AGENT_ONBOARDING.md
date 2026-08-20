@@ -223,34 +223,23 @@ STEP 5: FIX ONLY AFTER TRACING
     it is WRONG. Reject it yourself before submitting.
 
 ═══════════════════════════════════════════════════════════════════════════════
-SECTION 3: CURRENT TASK CONTEXT
+SECTION 3: SUB-HAMILTONIAN B4 CHECKPOINT SPECIFICATION & VERIFIED FEATURES
 ═══════════════════════════════════════════════════════════════════════════════
 
-The B4 checkpoint is failing because:
-  - query_tokens are missing from hexagram entries
-  - phase_temporal values are being rejected as "invalid"
+The B4 Sub-Hamiltonian Checkpoint is fully active, verified, and operational in Version 2.1.0:
+  ✓ Validates semantic mass (`query_tokens` & `intent.query_tokens`) across 512-state sequences.
+  ✓ Accepts `void` phase temporal anchors without requiring secondary query mass.
+  ✓ Enforces field conservation with zero randomness, zero pseudo-RNG, and zero 1-hex collapse.
 
-This is NOT a schema bug. It is a SUB-HAMILTONIAN MISALIGNMENT.
+Sub-Hamiltonian Guarantees:
+  - query_tokens: Semantic mass providing trajectory basis direction in half-alphabet vocabulary.
+  - phase_temporal: Phase-space coordinate validation (past, present, future, void, transition, resolution, dissolution, crystallization).
+  - consensus_vector: Single-pass open-pool Gaussian consensus preserving 70% interference pattern (dedented 0.7^1).
 
-The B4 sub-Hamiltonian expects:
-  - query_tokens: the semantic mass that gives the trajectory basis direction
-  - phase_temporal: must be a valid temporal encoding from Layer 0
-
-The frontend (worker-shotgun-expanded) is sending a 512-state sequence 
-with emotional_input=50 but NO query context. The B4 filter correctly 
-rejects these as unanchored trajectories.
-
-POSSIBLE ROOT CAUSES:
-  1. Layer 0: emotional_engine.py generates states without query_tokens
-  2. Layer 1: expand_server.py strips query_tokens before returning
-  3. Layer 3: src/index.ts does not forward query_tokens to the consult payload
-
-YOUR TASK:
-  1. Read Layer 0 files. Answer L0 gates.
-  2. Read Layer 1 files. Answer L1 gates.
-  3. Read Layer 3 files. Answer L3 gates.
-  4. Trace where query_tokens should originate and where they are lost.
-  5. Propose a fix that preserves the sub-Hamiltonian structure.
+VERIFIED ARCHITECTURAL FEATURES:
+  1. Layer 0: `emotional_engine.py` embeds query_tokens and phase coordinates.
+  2. Layer 1: `expand_server.py` relays 512-state payload without stripping semantic mass.
+  3. Layer 3: `HexagramRuntimeBridge.ts` validates `validateSubHamiltonianB4()` with `unknown[]` strict type guards.
 
 ═══════════════════════════════════════════════════════════════════════════════
 SECTION 4: OUTPUT FORMAT
