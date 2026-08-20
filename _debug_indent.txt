@@ -1,0 +1,140 @@
+1027| 0| def _compute_consensus_from_resolved(
+1028| 4|     resolved: List[Dict[str, Any]],
+1029| 4|     emotional_input: int,
+1030| 0| ) -> Dict[str, Any]:
+1031| 4|     """Compute true consensus across all 512 resolved states with open-pool surface."""
+1032| 4|     if not resolved:
+1033| 8|         return {
+1034|12|             "emotional_input": emotional_input,
+1035|12|             "total_resolved": 0,
+1036|12|             "consensus_hexagram_id": None,
+1037|12|             "consensus_hexagram_name": "",
+1038|12|             "consensus_temporal": "present",
+1039|12|             "consensus_yao": "stable_yao",
+1040|12|             "consensus_line_states": [],
+1041|12|             "consensus_porosity_mean": 0.0,
+1042|12|             "consensus_porosity_mode": 0.0,
+1043|12|             "consensus_vector": {"chaos": 0.0, "whimsy": 0.0, "darkTone": 0.0, "coherence": 0.0, "voiceWeight": 0.0},
+1044|12|             "consensus_intent": "",
+1045|12|             "consensus_explanation": "No resolved states available.",
+1046| 8|         }
+1047| 0| 
+1048| 4|     temporal_counts: Dict[str, int] = {}
+1049| 4|     for item in resolved:
+1050| 8|         temporal = str(item.get("phase_temporal", "") or "")
+1051| 8|         temporal_counts[temporal] = temporal_counts.get(temporal, 0) + 1
+1052| 4|     consensus_temporal = max(temporal_counts, key=temporal_counts.__getitem__) if temporal_counts else "present"
+1053| 0| 
+1054| 4|     porosities = [float(item.get("inject_site", {}).get("porosity", 0.35) or 0.35) for item in resolved]
+1055| 4|     porosity_mean = sum(porosities) / len(porosities)
+1056| 4|     porosity_mode = max(set(porosities), key=porosities.count)
+1057| 4|     porosity_norms = [float(item.get("inject_site", {}).get("porosity_norm", porosity_mean / 4.0) or porosity_mean / 4.0
+1058| 0| 
+1059| 4|     # Compute per-hexagram variance before tau assignment
+1060| 4|     hex_groups: Dict[int, List[Dict[str, Any]]] = {}
+1061| 4|     for item in resolved:
+1062| 8|         h_id = int(item.get("hexagram_id") or 0)
+1063| 8|         if h_id:
+1064|12|             hex_groups.setdefault(h_id, []).append(item)
+1065| 4|     hex_variance_map: Dict[int, float] = {}
+1066| 4|     for h_id, group in hex_groups.items():
+1067| 8|         vec_means = {k: 0.0 for k in VEC_KEYS}
+1068| 8|         for item in group:
+1069|12|             rv = item.get("resolved_vector") or {}
+1070|12|             for k in VEC_KEYS:
+1071|16|                 vec_means[k] += float(rv.get(k, 0.0) or 0.0)
+1072| 8|         if group:
+1073|12|             for k in VEC_KEYS:
+1074|16|                 vec_means[k] /= len(group)
+1075| 8|         variance = sum((vec_means[k] - sum(vec_means.values()) / len(vec_means))**2 for k in VEC_KEYS) / max(len(VEC_KEY
+1076| 8|         hex_variance_map[h_id] = float(variance)
+1077| 0| 
+1078| 4|     tau_values: List[float] = [
+1079| 8|         _tau_for_resolved(item, emotional_input=emotional_input, hex_variance=hex_variance_map.get(int(item.get("hexagra
+1080| 8|         for item in resolved
+1081| 4|     ]
+1082| 4|     mu = _mode_of_tau(tau_values)
+1083| 4|     sigma = max(1e-9, (sum(porosity_norms) / len(porosity_norms)) / 2.0) if porosity_norms else 1e-9
+1084| 0| 
+1085| 4|     raw_weights: List[float] = [_gaussian_weight(t, mu, sigma) for t in tau_values]
+1086| 4|     weight_sum = sum(raw_weights)
+1087| 4|     weights = [w / weight_sum for w in raw_weights] if weight_sum > 1e-12 else raw_weights
+1088| 4|     weight_sum = sum(weights)
+1089| 0| 
+1090| 4|     vec_keys = ["chaos", "whimsy", "darkTone", "coherence", "voiceWeight"]
+1091| 4|     vec_sums = {k: 0.0 for k in vec_keys}
+1092| 4|     for item, w in zip(resolved, weights):
+1093| 8|         rv = item.get("resolved_vector") or {}
+1094| 8|         if isinstance(rv, dict):
+1095|12|             for k in vec_keys:
+1096|16|                 vec_sums[k] += float(rv.get(k, 0.0) or 0.0) * w
+1097| 4|     consensus_vector = {k: (vec_sums[k] / weight_sum if weight_sum else 0.0) for k in vec_keys}
+1098| 0| 
+1099| 4|     # Open-pool surface: primary/secondary pool vectors + porosity window + yin/yang/yao balance
+1100| 4|     # Build pool vectors from inject_site primary/secondary pools
+1101| 4|     primary_pool_vecs = []
+1102| 4|     secondary_pool_vecs = []
+1103| 4|     for item in resolved:
+1104| 8|         inject_site = item.get("inject_site") or {}
+1105| 8|         primary_pool = inject_site.get("primary_pool", "")
+1106| 8|         secondary_pool = inject_site.get("secondary_pool", "")
+1107| 8|         if primary_pool and primary_pool in EMOTIONAL_POOL:
+1108|12|             primary_pool_vecs.append(EMOTIONAL_POOL[primary_pool])
+1109| 8|         if secondary_pool and secondary_pool in EMOTIONAL_POOL:
+1110|12|             secondary_pool_vecs.append(EMOTIONAL_POOL[secondary_pool])
+1111| 0| 
+1112| 4|     # Average pool vectors
+1113| 8|         def avg_vec(vecs):
+1114|12|             if not vecs:
+1115|16|                 return [0.1, 0.2, 0.1, 0.85, 0.85]
+1116|12|             n = len(vecs)
+1117|12|             return [sum(v[i] for v in vecs) / n for i in range(5)]
+1118| 0| 
+1119| 8|         primary_avg = avg_vec(primary_pool_vecs)
+1120| 8|         secondary_avg = avg_vec(secondary_pool_vecs)
+1121| 0| 
+1122| 8|         # Porosity window: filter states within emotional range
+1123| 8|         porosity_window = 0.35  # base window
+1124| 8|         filtered_pool = [
+1125|12|             r for r in resolved
+1126|12|             if abs(r.get("inject_site", {}).get("porosity", 0.5) - (emotional_input / 100.0)) < porosity_window
+1127| 8|         ]
+1128| 0| 
+1129| 8|         # Yin/yang/yao balance across all states
+1130| 8|         yin_count = sum(1 for r in resolved for ls in r.get("line_states", []) if str(ls.get("yao_key", "") or "").endsw
+1131| 8|         yang_count = sum(1 for r in resolved for ls in r.get("line_states", []) if str(ls.get("yao_key", "") or "").ends
+1132| 8|         yao_count = sum(1 for r in resolved for ls in r.get("line_states", []) if str(ls.get("yao_key", "") or "").endsw
+1133| 0| 
+1134| 8|         # Blend consensus vector with pool vectors (open-pool surface)
+1135| 8|         pool_blend = 0.3
+1136| 8|         for i, k in enumerate(vec_keys):
+1137|12|             consensus_vector[k] = (
+1138|16|                 consensus_vector[k] * (1 - pool_blend)
+1139|16|                 + primary_avg[i] * pool_blend * 0.6
+1140|16|                 + secondary_avg[i] * pool_blend * 0.4
+1141|12|             )
+1142| 0| 
+1143| 8|         hex_scores: Dict[int, float] = {}
+1144| 8|         hex_names: Dict[int, str] = {}
+1145| 8|         hex_categories: Dict[int, str] = {}
+1146| 8|         hex_actions: Dict[int, str] = {}
+1147| 8|         emotional_factor = emotional_input / 100.0  # 0.0 to 1.0
+1148| 8|         for item, w in zip(resolved, weights):
+1149|12|             h_id = int(item.get("hexagram_id") or 0)
+1150|12|             if not h_id:
+1151|16|                 continue
+1152|12|             hex_names[h_id] = str(item.get("hexagram_symbols", {}).get("name", "") or "")
+1153|12|             hex_categories[h_id] = str(item.get("hexagram_symbols", {}).get("category", "") or "")
+1154|12|             hex_actions[h_id] = str(item.get("hexagram_symbols", {}).get("action", "") or "")
+1155|12|             rv = item.get("resolved_vector") or {}
+1156|12|             line_states = item.get("line_states") or []
+1157|12|             yin = sum(1 for ls in line_states if str(ls.get("yao_key", "") or "").endswith("_yin"))
+1158|12|             yang = sum(1 for ls in line_states if str(ls.get("yao_key", "") or "").endswith("_yang"))
+1159|12|             yao = sum(1 for ls in line_states if str(ls.get("yao_key", "") or "").endswith("_yao"))
+1160|12|             yao_ratio = yao / 6.0
+1161|12|             if yao_ratio > 0.4:
+1162|16|                 ctx_weights = {"chaos": 0.3, "whimsy": 0.3, "darkTone": 0.2, "coherence": 0.1, "voiceWeight": 0.1}
+1163|12|             else:
+1164|16|                 ctx_weights = {"chaos": 0.1, "whimsy": 0.1, "darkTone": 0.2, "coherence": 0.3, "voiceWeight": 0.3}
+1165|12|             vector_score = sum(ctx_weights[k] * float(rv.get(k, 0.0) or 0.0) for k in vec_keys)
+1166|12|             inject_site = item.get("inject_site") or {}
