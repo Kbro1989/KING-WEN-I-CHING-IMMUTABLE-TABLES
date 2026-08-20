@@ -125,13 +125,19 @@ class ExpandHandler(BaseHTTPRequestHandler):
                 return self._send_json(400, {"error": "Bad JSON"})
 
             # Perform standard collapse_full_128
+            # Perform standard collapse_full_128 with dynamic emotional input
+            req_text = str(body.get("text") or body.get("request_text") or "")
+            raw_emo = body.get("emotional_input")
             try:
-                emotional_input = int(body.get("emotional_input", 50))
+                raw_emo_val = int(raw_emo) if raw_emo is not None else None
             except (TypeError, ValueError):
-                emotional_input = 50
+                raw_emo_val = None
+            
+            from emotional_engine import derive_dynamic_emotional_input
+            emotional_input = derive_dynamic_emotional_input(req_text, raw_emo_val)
             
             try:
-                result = collapse_full_128(emotional_input=emotional_input, request_text=str(body.get("text") or ""))
+                result = collapse_full_128(emotional_input=emotional_input, request_text=req_text)
             except Exception as exc:
                 return self._send_json(500, {"error": str(exc)})
 
@@ -160,8 +166,8 @@ class ExpandHandler(BaseHTTPRequestHandler):
                 "total": len(resolved),
                 "emotional_input": emotional_input,
                 "session_id": str(body.get("session_id") or "local"),
-                "text": str(body.get("text") or ""),
-                "request_text_injected": str(body.get("text") or ""),
+                "text": req_text,
+                "request_text_injected": req_text,
                 "source": "local-python",
                 "expanded_count": len(expanded),
                 "resolved_count": len(resolved),
@@ -184,16 +190,15 @@ class ExpandHandler(BaseHTTPRequestHandler):
         except Exception as exc:
             return self._send_json(400, {"error": f"Bad JSON: {exc}"})
 
-        text = str(body.get("text") or "").strip()
+        text = str(body.get("text") or body.get("request_text") or "").strip()
         session_id = str(body.get("session_id") or "local")
+        raw_emo = body.get("emotional_input")
         try:
-            emotional_input = int(body.get("emotional_input", 50))
+            raw_emo_val = int(raw_emo) if raw_emo is not None else None
         except (TypeError, ValueError):
-            emotional_input = 50
-        if emotional_input < 0:
-            emotional_input = 0
-        if emotional_input > 100:
-            emotional_input = 100
+            raw_emo_val = None
+        from emotional_engine import derive_dynamic_emotional_input
+        emotional_input = derive_dynamic_emotional_input(text, raw_emo_val)
 
         try:
             result = collapse_full_128(emotional_input=emotional_input, request_text=text)
