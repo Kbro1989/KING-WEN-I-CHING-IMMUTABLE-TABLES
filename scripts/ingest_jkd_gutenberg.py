@@ -26,7 +26,7 @@ BINARY_OUT = ROOT / "DATASETS" / "jkd_ingestion_binary.jsonl"
 TERNARY_OUT = ROOT / "DATASETS" / "jkd_ingestion_ternary.jsonl"
 SUMMARY_OUT = ROOT / "DATASETS" / "jkd_ingestion_summary.json"
 
-OPENJARVIS_SRC = Path(r"C:/Users/krist/Desktop/OpenJarvis/src")
+OPENJARVIS_SRC = (Path.home() / "Desktop" / "OpenJarvis/src")
 if OPENJARVIS_SRC.exists():
     sys.path.insert(0, str(OPENJARVIS_SRC))
 

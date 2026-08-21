@@ -19,7 +19,7 @@ from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
 
 ROOT_KINGWEN = Path(__file__).resolve().parent.parent
-ROOT_VOICEBOX = Path(r"C:/Users/krist/Desktop/voicebox")
+ROOT_VOICEBOX = (Path.home() / "Desktop" / "voicebox")
 sys.path.insert(0, str(ROOT_KINGWEN))
 
 from emotional_engine import collapse_full_128, EMOTIONAL_POOL  # noqa: E402

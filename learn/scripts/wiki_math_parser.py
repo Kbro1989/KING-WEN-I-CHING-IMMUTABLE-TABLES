@@ -5,7 +5,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(Path(r"C:\Users\krist\Desktop\mwparserfromhell_local")))
+sys.path.insert(0, str((Path.home() / "Desktop" / "mwparserfromhell_local")))
 
 from mwparserfromhell import parse as mw_parse
 from mwparserfromhell.wikicode import Wikicode

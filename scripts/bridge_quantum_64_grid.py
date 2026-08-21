@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-QL_ROOT = Path(r"C:/Users/krist/Desktop/quantum-simulation-main/quantum-simulation-main")
+QL_ROOT = (Path.home() / "Desktop" / "quantum-simulation-main/quantum-simulation-main")
 sys.path.insert(0, str(QL_ROOT))
 
 GRID_MAP_FILE = ROOT / "DATASETS" / "quantum_64_grid_transitional_mapping.json"

@@ -19,7 +19,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 # Path to QuantumLab framework
-QUANTUMLAB_DIR = Path(r"C:/Users/krist/Desktop/quantum-simulation-main/quantum-simulation-main")
+QUANTUMLAB_DIR = (Path.home() / "Desktop" / "quantum-simulation-main/quantum-simulation-main")
 if QUANTUMLAB_DIR.exists():
     sys.path.insert(0, str(QUANTUMLAB_DIR))
 

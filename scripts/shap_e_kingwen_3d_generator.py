@@ -104,7 +104,7 @@ def generate_shap_e_manifest() -> List[Dict[str, Any]]:
     return manifest
 
 
-SHAP_E_DIR = Path(r"C:\Users\krist\Desktop\shap-e")
+SHAP_E_DIR = (Path.home() / "Desktop" / "shap-e")
 if SHAP_E_DIR.exists() and str(SHAP_E_DIR) not in sys.path:
     sys.path.insert(0, str(SHAP_E_DIR))
 

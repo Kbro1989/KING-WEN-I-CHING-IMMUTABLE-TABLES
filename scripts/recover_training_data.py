@@ -28,7 +28,7 @@ sys.path.insert(0, str(ROOT))
 
 TRAIN_DIR = ROOT / "kingwen_train_data"
 QUARANTINE_DIR = ROOT / "DATASETS" / "quarantine"
-CORPUS_DIR = Path("C:/Users/krist/Desktop/zotero/learning-corpus/.text")
+CORPUS_DIR = (Path.home() / "Desktop" / "zotero/learning-corpus/.text")
 VERIFIED_OUTPUT = TRAIN_DIR / "full_shotgun_expansion_verified.jsonl"
 
 # Files to quarantine

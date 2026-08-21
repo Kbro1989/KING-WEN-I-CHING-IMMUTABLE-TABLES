@@ -9,7 +9,7 @@ import json
 from collections import defaultdict, Counter
 
 # Paths
-CORPUS_PROFILES = Path('C:/Users/krist/Desktop/zotero/learning-corpus/paper_frequency_profiles.jsonl')
+CORPUS_PROFILES = (Path.home() / "Desktop" / "zotero/learning-corpus/paper_frequency_profiles.jsonl")
 ROOT = Path(__file__).resolve().parent.parent
 ARCHETYPES = ROOT / "output" / "hexagram_coder_archetypes.csv"
 PHASE_INDIVIDUALS = ROOT / "output" / "hexagram_phase_individuals.csv"

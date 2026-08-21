@@ -12,7 +12,7 @@ from pathlib import Path
 import json, re, csv
 from collections import defaultdict, Counter
 
-TEXT_DIR = Path('C:/Users/krist/Desktop/zotero/learning-corpus/.text')
+TEXT_DIR = (Path.home() / "Desktop" / "zotero/learning-corpus/.text")
 ROOT = Path(__file__).resolve().parent.parent
 ARCHETYPES = ROOT / "output" / "hexagram_coder_archetypes.csv"
 OUT = ROOT / "output" / "hexagram_full_vocabulary.json"

@@ -16,7 +16,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[2]
 sys_path_additions = [
     str(ROOT),
-    str(Path(r"C:/Users/krist/Desktop/mwparserfromhell_local")),
+    str((Path.home() / "Desktop" / "mwparserfromhell_local")),
 ]
 sys.path[:0] = sys_path_additions
 
