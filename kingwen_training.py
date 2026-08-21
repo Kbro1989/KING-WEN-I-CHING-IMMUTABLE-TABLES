@@ -351,8 +351,8 @@ class MediaWikiBucketIngestor(WikiIngestor):
         return json.loads(raw)
 
 class MwparserfromhellIngestor(WikiIngestor):
-    def __init__(self, mwparser_path: str = r"C:\Users\krist\Desktop\mwparserfromhell_local"):
-        self.mwparser_path = mwparser_path
+    def __init__(self, mwparser_path: Optional[str] = None):
+        self.mwparser_path = mwparser_path or str(Path.home() / "Desktop" / "mwparserfromhell_local")
         self._init_mwparser()
 
     def _init_mwparser(self):
