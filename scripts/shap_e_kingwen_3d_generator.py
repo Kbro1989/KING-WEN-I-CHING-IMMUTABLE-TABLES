@@ -79,7 +79,7 @@ def generate_shap_e_manifest() -> List[Dict[str, Any]]:
                 "num_inference_steps": num_steps,
                 "frame_size": 64,
             },
-            "output_mesh_path": str(mesh_path),
+            "output_mesh_path": mesh_path.relative_to(ROOT).as_posix(),
             "rs3_actionable": npc.get("rs3_actionable"),
             "hermes_voice_mode": npc.get("hermes_voice_mode"),
         }
@@ -89,13 +89,13 @@ def generate_shap_e_manifest() -> List[Dict[str, Any]]:
         kit_data["shap_e"] = {
             "prompt": prompt,
             "guidance_scale": guidance_scale,
-            "mesh_path": str(mesh_path),
+            "mesh_path": mesh_path.relative_to(ROOT).as_posix(),
         }
 
         # Update extra
         extra = kit_data.get("extra", [])
         extra.append({"type": 0, "key": "shap_e_prompt", "intvalue": 0, "stringvalue": prompt})
-        extra.append({"type": 0, "key": "shap_e_mesh_path", "intvalue": 0, "stringvalue": str(mesh_path)})
+        extra.append({"type": 0, "key": "shap_e_mesh_path", "intvalue": 0, "stringvalue": mesh_path.relative_to(ROOT).as_posix()})
         kit_data["extra"] = extra
 
         kit_path.write_text(json.dumps(kit_data, ensure_ascii=False, indent=2), encoding="utf-8")
