@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-RSMV_GEN_DIR = Path(r"C:/Users/krist/Desktop/rsmv/generated")
-SHAP_E_DIR = Path(r"C:/Users/krist/Desktop/shap-e")
+RSMV_GEN_DIR = (Path.home() / "Desktop" / "rsmv/generated")
+SHAP_E_DIR = (Path.home() / "Desktop" / "shap-e")
 
 MANIFESTO_SHAP_E_PATH = SHAP_E_DIR / "RSMV_SHAP_E_MANIFESTO.md"
 MANIFESTO_REPO_PATH = ROOT / "DATASETS" / "rsmv_shap_e_manifesto.json"

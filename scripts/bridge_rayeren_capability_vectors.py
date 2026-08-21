@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-RAYEREN_ROOT = Path(r"C:/Users/krist/Desktop/RayeRen")
+RAYEREN_ROOT = (Path.home() / "Desktop" / "RayeRen")
 MANIFEST_OUT = ROOT / "DATASETS" / "rayeren_capability_vectors_manifest.json"
 
 from kingwen_ternary_tables_complete import HEXAGRAM_BASE

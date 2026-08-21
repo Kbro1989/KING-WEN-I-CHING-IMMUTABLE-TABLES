@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 ROOT_KINGWEN = Path(__file__).resolve().parent.parent
-ROOT_VOICEBOX = Path(r"C:/Users/krist/Desktop/voicebox")
+ROOT_VOICEBOX = (Path.home() / "Desktop" / "voicebox")
 VOICEBOX_DB = ROOT_VOICEBOX / "data" / "voicebox.db"
 KIT_DIR = ROOT_KINGWEN / "DATASETS" / "kingwen_model_sets"
 VOICE_EXPORT_DIR = ROOT_VOICEBOX / "backend" / "exports"

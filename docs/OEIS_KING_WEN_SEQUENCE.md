@@ -32,8 +32,14 @@ For integer $n \ge 0$:
 ### Comments
 * **Zero-roll determinism**: No pseudo-RNG, no sampling, no probability. The sequence is entirely derived from cryptographic hashing and modular reduction.
 * **97 as modulus**: 97 is chosen because it is the 25th prime, larger than the 64 hexagrams and the 8 temporal phases, ensuring the extractor has sufficient headroom to address the full 512-state ($2^9$) phase space without aliasing.
-* **Collision structure**: Duplicate values occur at expected rate $\approx 1/97$ (e.g., $a(13) = a(16) = 876288659$; $a(40) = a(43) = a(44) = a(47) = a(48) = 195876288$). This is not a defect — it is the signature of a uniform extractor. The collision density is identical to the birthday bound for a 97-bin distribution.
-* **Implementation alignment**: In the operational implementation, SHA256 is replaced by a cumulative ASCII sum for performance: $\text{hash\_val} = \sum \text{ord}(c)$ for $c \in \text{word}$, with identical modular structure. The SHA256 variant is the formal specification; the ASCII variant is the runtime-optimized form.
+* **Collision structure**: Duplicate values occur at expected rate $\approx 1/97$ (e.g., $a(13) = a(16) = 876288659$; $a(1) = a(26) = a(34) = 237113402$; $a(10) = a(27) = a(46) = 381443298$; $a(7) = a(40) = 432989690$). This is the signature of a uniform extractor with collision density matching the birthday bound for a 97-bin distribution.
+* **Implementation alignment**: In the operational runtime (`emotional_engine.py::_intent_to_vector`), SHA256 is replaced by a cumulative ASCII sum $\text{hash\_val} = \sum \text{ord}(c)$ for performance, and expanded into a 5-axis coprime prime vector field across 5 distinct prime moduli ($97, 89, 83, 79, 73$) to prevent inter-axis aliasing:
+  - $\text{chaos} \propto (\text{hash\_val} \pmod{97}) / 97.0$
+  - $\text{whimsy} \propto ((\text{hash\_val} // 7) \pmod{89}) / 89.0$
+  - $\text{darkTone} \propto ((\text{hash\_val} // 13) \pmod{83}) / 83.0$
+  - $\text{coherence} \propto ((\text{hash\_val} // 19) \pmod{79}) / 79.0$
+  - $\text{voiceWeight} \propto ((\text{hash\_val} // 23) \pmod{73}) / 73.0$
+  The single mod-97 SHA256 formula $a(n)$ is the 1D mathematical base specification for the sequence.
 * **Application**: This sequence seeds the 5-axis emotional vector perturbation in a 512-state King Wen I Ching oracle engine. Each term perturbs the chaos, whimsy, darkTone, coherence, and voiceWeight axes of a Hamiltonian field consensus computation.
 * **Period**: The sequence is aperiodic by construction (SHA256 preimage resistance). For practical purposes, the period exceeds $2^{256}$.
 

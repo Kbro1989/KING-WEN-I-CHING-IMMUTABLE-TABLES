@@ -20,7 +20,7 @@ ROOT = Path(__file__).resolve().parent.parent
 BINARY_OUT = ROOT / "DATASETS" / "jkd_ingestion_binary.jsonl"
 SUBSTRATE_DIR = ROOT / "DATASETS" / "jkd_scene_substrate"
 
-OPENJARVIS_SRC = Path(r"C:/Users/krist/Desktop/OpenJarvis/src")
+OPENJARVIS_SRC = (Path.home() / "Desktop" / "OpenJarvis/src")
 if OPENJARVIS_SRC.exists():
     sys.path.insert(0, str(OPENJARVIS_SRC))
 

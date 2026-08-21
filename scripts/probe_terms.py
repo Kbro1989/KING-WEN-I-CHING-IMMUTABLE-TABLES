@@ -1,7 +1,7 @@
 import json
 from pathlib import Path
 from collections import Counter
-files=sorted(Path('C:/Users/krist/Desktop/zotero/learning-corpus/.text').glob('*.txt'))
+files=sorted((Path.home() / "Desktop" / "zotero/learning-corpus/.text").glob('*.txt'))
 sample=[]
 for p in files[:30]:
     txt=p.read_text(encoding='utf-8', errors='ignore')

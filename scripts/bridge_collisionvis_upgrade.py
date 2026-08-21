@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-COLLISIONVIS_DIR = Path(r"C:/Users/krist/Desktop/collisionvis")
+COLLISIONVIS_DIR = (Path.home() / "Desktop" / "collisionvis")
 SHADERS_DIR = COLLISIONVIS_DIR / "Shaders"
 USF_FILE = SHADERS_DIR / "KingWenCollisionVis.usf"
 BVH_OUT_FILE = ROOT / "DATASETS" / "collisionvis_physics" / "collisionvis_64_npc_physics.json"

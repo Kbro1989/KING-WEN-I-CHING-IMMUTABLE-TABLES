@@ -25,7 +25,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 ROOT = Path(__file__).resolve().parent.parent
-TEXT_DIR = Path(r"C:/Users/krist/Desktop/zotero/learning-corpus/.text")
+TEXT_DIR = (Path.home() / "Desktop" / "zotero/learning-corpus/.text")
 OUT_DIR = ROOT / "output/per_hex_training"
 SHOTGUN = ROOT / "collapse_full_128_output.json"
 ARCHETYPES = ROOT / "output/hexagram_coder_archetypes.csv"

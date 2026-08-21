@@ -8,7 +8,7 @@ import json
 from collections import Counter, defaultdict
 
 # Paths
-CORPUS_PROFILES = Path('C:/Users/krist/Desktop/zotero/learning-corpus/paper_frequency_profiles.jsonl')
+CORPUS_PROFILES = (Path.home() / "Desktop" / "zotero/learning-corpus/paper_frequency_profiles.jsonl")
 ROOT = Path(__file__).resolve().parent.parent
 EXPANSION = ROOT / "kingwen_train_data" / "full_shotgun_expansion_all.jsonl"
 OUT = ROOT / "kingwen_train_data" / "full_shotgun_expansion_lexical_gate.jsonl"

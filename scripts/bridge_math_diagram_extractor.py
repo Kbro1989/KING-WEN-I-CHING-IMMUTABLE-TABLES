@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-EXTRACTOR_OUT_JSON = Path(r"C:/Users/krist/Desktop/math-diagram-extractor/output/extraction-results.json")
+EXTRACTOR_OUT_JSON = (Path.home() / "Desktop" / "math-diagram-extractor/output/extraction-results.json")
 REPO_EXTRACTOR_MANIFEST = ROOT / "DATASETS" / "math_diagram_extractor_bridge.json"
 
 from emotional_engine import expand_hexagram, extract_intent
