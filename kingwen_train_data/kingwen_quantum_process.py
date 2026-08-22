@@ -171,27 +171,8 @@ def run_quantum_process(query: str, *, emotional_input: int = 50, max_passes: in
     return summary
 
 
-def should_git_push(summary: Dict[str, Any]) -> bool:
-    if summary.get("final_verdict") != "optimal_expansion_reached":
-        return False
-    if summary.get("improving_passes", 0) < 2:
-        return False
-    if summary.get("best_coherence", 0) <= summary.get("baseline_coherence", 0):
-        return False
-    if summary.get("total_expansion_delta", 0) <= 0:
-        return False
-    return True
-
-
-def git_push_if_coherent(summary: Dict[str, Any]) -> Dict[str, Any]:
-    import subprocess
-    repo = Path(__file__).resolve().parent.parent
-    if not should_git_push(summary):
-        return {"pushed": False, "reason": "coherent expansion not increased"}
-    try:
-        subprocess.run(["git", "add", "-A"], cwd=repo, check=True, capture_output=True, text=True)
-        subprocess.run(["git", "commit", "-m", "quantum-process: coherent expansion increased"], cwd=repo, check=True, capture_output=True, text=True)
-        subprocess.run(["git", "push", "origin", "main"], cwd=repo, check=True, capture_output=True, text=True)
-        return {"pushed": True, "repo": str(repo)}
-    except subprocess.CalledProcessError as exc:
-        return {"pushed": False, "error": str(exc), "stdout": exc.stdout, "stderr": exc.stderr}
+# NOTE: No automatic git push. Per project rule, pushes occur only after explicit
+# user acceptance. Coherence improvement is reported in the summary; the user
+# decides when to commit/push.
+def should_git_push(_summary: Dict[str, Any]) -> bool:
+    return False

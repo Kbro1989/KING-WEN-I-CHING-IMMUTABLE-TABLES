@@ -107,6 +107,7 @@ select:focus { outline: none; border-color: #4ECDC4; }
       <div class="kw-stat"><div class="kw-stat-value">512</div><div class="kw-stat-label">States</div></div>
       <div class="kw-stat"><div class="kw-stat-value">8</div><div class="kw-stat-label">Phases</div></div>
       <div class="kw-stat"><div class="kw-stat-value">5</div><div class="kw-stat-label">Vectors</div></div>
+      <div class="kw-stat"><span id="kw-mode-indicator" style="font-size:13px; color:#FF6B6B;">STATIC (embedded data)</span></div>
       <div class="kw-stat"><button class="kw-export-btn" onclick="exportAll()">Export all 512</button></div>
     </div>
   </div>
@@ -206,7 +207,28 @@ select:focus { outline: none; border-color: #4ECDC4; }
   </div>
 
   <div id="tab-jspace" class="kw-panel">
-    <div style="text-align:center; margin-bottom:12px; color:#888; font-size:13px;">J-space Jacobian / Hamiltonian surface — 1D energy, 2D Jacobian, 3D Riemann density</div>
+    <div id="jspace-controls" style="margin-bottom:12px; display:flex; gap:12px; align-items:center; color:#888; font-size:13px;">
+      <div>J-Space Jacobian — 1D energy, 2D Jacobian, 3D Riemann density</div>
+      <select id="jspaceXAxis" onchange="renderJSpace()">
+        <option value="chaos">Chaos</option>
+        <option value="whimsy">Whimsy</option>
+        <option value="darkTone">Dark Tone</option>
+        <option value="coherence" selected>Coherence</option>
+        <option value="voiceWeight">Voice Weight</option>
+      </select>
+      <select id="jspaceYAxis" onchange="renderJSpace()">
+        <option value="chaos" selected>Chaos</option>
+        <option value="whimsy">Whimsy</option>
+        <option value="darkTone">Dark Tone</option>
+        <option value="coherence">Coherence</option>
+        <option value="voiceWeight">Voice Weight</option>
+      </select>
+      <select id="jspaceColorBy" onchange="renderJSpace()">
+        <option value="hamiltonian">Color: ∂H</option>
+        <option value="category">Color: Category</option>
+        <option value="phase">Color: Phase</option>
+      </select>
+    </div>
     <div class="kw-tabs" style="margin-bottom:12px;">
       <div class="kw-tab active" onclick="showJSpaceView('1d', this)">1D Hamiltonian</div>
       <div class="kw-tab" onclick="showJSpaceView('2d', this)">2D Jacobian</div>
@@ -223,7 +245,7 @@ select:focus { outline: none; border-color: #4ECDC4; }
     </div>
     <div id="jspace-2d" class="kw-panel" style="padding:8px; display:none;">
       <canvas id="jspaceCanvas2d" width="800" height="400" style="width:100%; height:400px; background:#0a0a0f; border-radius:8px;"></canvas>
-      <div style="font-size:12px; color:#888; margin-top:8px;">Axes: x=voiceWeight, y=coherence, color=∂H/∂chaos</div>
+      <div id="jspace-2d-label" style="font-size:12px; color:#888; margin-top:8px;">Axes: x=coherence, y=chaos, color=∂H</div>
     </div>
     <div id="jspace-3d" class="kw-panel" style="padding:8px; display:none;">
       <canvas id="jspaceCanvas3d" width="800" height="400" style="width:100%; height:400px; background:#0a0a0f; border-radius:8px;"></canvas>
@@ -317,6 +339,85 @@ const vectorHex = {chaos:'#FF6B6B',whimsy:'#4ECDC4',darkTone:'#8B4513',coherence
 let selectedHexagram = null;
 let selectedPhase = 0;
 
+// Data accessors — prefer live runtime payload, fall back to baked data
+function _hexData() {
+  const p = window.__kingwenRuntimePayload;
+  if (p && Array.isArray(p.expanded) && p.expanded.length) {
+    return p.expanded.map(_normHex);
+  }
+  return hexagrams;
+}
+function _resolvedData() {
+  const p = window.__kingwenRuntimePayload;
+  return (p && Array.isArray(p.resolved) && p.resolved.length) ? p.resolved : resolved;
+}
+function _phaseData() {
+  const p = window.__kingwenRuntimePayload;
+  if (p && Array.isArray(p.phases) && p.phases.length) return p.phases;
+  // Derive phases from resolved entries if live payload has no phases array
+  if (p && Array.isArray(p.resolved) && p.resolved.length) {
+    const seen = new Set();
+    return p.resolved
+      .filter(function(r) {
+        const key = r.phase_bits;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .map(function(r) {
+        return { phase_bits: r.phase_bits, phase_temporal: r.phase_temporal, phase_description: r.phase_description };
+      })
+      .sort(function(a, b) { return a.phase_bits - b.phase_bits; });
+  }
+  return phases;
+}
+function isLive() {
+  return window.__kingwenRuntimeMode === 'live' && window.__kingwenRuntimePayload != null;
+}
+
+// Normalize a hexagram entry so all render functions see consistent fields
+// Live expanded entries have category/action/trigrams under hexagram_symbols;
+// baked entries have them at top level. This unifies both shapes.
+// Also flatten inject_site so porosity/pools are accessible at top level.
+// Also normalize hexagram_id -> id for lookups.
+function _normHex(h) {
+  if (!h) return h;
+  var result = h;
+  // Handle JSONL format: expanded entries may have hexagram_symbols + phases array
+  if (h.hexagram_symbols && !h.category) {
+    result = Object.assign({}, h, h.hexagram_symbols);
+  }
+  // Handle JSONL format: if phases array exists, flatten phase 0 (present) data
+  // Phase 1 is "present" — flatten its fields to top level for consistency
+  if (Array.isArray(h.phases) && h.phases.length > 0 && !result.inject_site) {
+    var presentPhase = h.phases[1] || h.phases[0];  // phase 1 = present
+    result = Object.assign({}, result, {
+      inject_site: presentPhase.inject_site || {},
+      line_states: presentPhase.line_states || {},
+      yao_vocabulary: presentPhase.yao_vocabulary || {},
+      sample_paths: presentPhase.sample_paths || [],
+      porosity: presentPhase.porosity != null ? presentPhase.porosity : (presentPhase.inject_site && presentPhase.inject_site.porosity),
+      phase_temporal: presentPhase.phase_temporal,
+      phase_bits: presentPhase.phase_bits,
+      expanded_vector: presentPhase.vectors || {},
+      training_weight_vectors: presentPhase.training_weight_vectors || {}
+    });
+  }
+  // Normalize hexagram_id -> id (live data uses hexagram_id, baked uses id)
+  if (result.hexagram_id != null && result.id == null) {
+    result = Object.assign({}, result, { id: result.hexagram_id });
+  }
+  if (result.inject_site && result.inject_site.porosity != null && result.porosity == null) {
+    result = Object.assign({}, result, {
+      porosity: result.inject_site.porosity,
+      porosity_label: result.inject_site.porosity_label,
+      porosity_norm: result.inject_site.porosity_norm,
+      primary_pool: result.inject_site.primary_pool,
+      secondary_pool: result.inject_site.secondary_pool
+    });
+  }
+  return result;
+}
 function getMaskState(id) {
   const mask = maskingMap[id];
   if (mask && typeof mask === 'object' && typeof mask.state === 'string') return mask.state;
@@ -347,25 +448,27 @@ function esc(s) {
 function renderGrid() {
   const grid = document.getElementById('hexGrid');
   grid.innerHTML = '';
-  hexagrams.forEach(h => {
+  const hd = _hexData();
+  hd.forEach(h => {
+    const hn = _normHex(h);
     const cell = document.createElement('div');
     cell.className = 'kw-cell';
-    cell.style.borderColor = (catColors[h.category] || '#888') + '40';
-    const mask = getMaskState(h.id);
-    cell.innerHTML = '<div class="kw-cell-cat" style="background:' + (catColors[h.category] || '#888') + '"></div>' +
-      '<div class="kw-cell-id">' + h.id + '</div>' +
-      '<div class="kw-cell-unicode">' + esc(h.unicode) + '</div>' +
-      '<div class="kw-cell-name">' + esc(h.name) + '</div>' +
-      '<div class="kw-cell-action">' + (actionSymbols[h.action] || '') + '</div>' +
+    cell.style.borderColor = (catColors[hn.category] || '#888') + '40';
+    const mask = getMaskState(hn.id);
+    cell.innerHTML = '<div class="kw-cell-cat" style="background:' + (catColors[hn.category] || '#888') + '"></div>' +
+      '<div class="kw-cell-id">' + hn.id + '</div>' +
+      '<div class="kw-cell-unicode">' + esc(hn.unicode) + '</div>' +
+      '<div class="kw-cell-name">' + esc(hn.name) + '</div>' +
+      '<div class="kw-cell-action">' + (actionSymbols[hn.action] || '') + '</div>' +
       '<div class="kw-cell-mask" style="background:' + (maskingColors[mask] || '#888') + '22; color:' + (maskingColors[mask] || '#888') + '; border-top:1px solid ' + (maskingColors[mask] || '#888') + '44;">' + (maskingLabels[mask] || mask) + '</div>';
-    cell.onclick = () => showDetail(h.id);
+    cell.onclick = () => showDetail(hn.id);
     grid.appendChild(cell);
   });
 }
 
 function currentResolvedState() {
   if(selectedHexagram === null) return null;
-  return resolved.find(r => r.hexagram_id === selectedHexagram && r.phase_bits === selectedPhase) || null;
+  return _resolvedData().find(r => r.hexagram_id === selectedHexagram && r.phase_bits === selectedPhase) || null;
 }
 
 function downloadJson(obj, filename) {
@@ -381,7 +484,8 @@ function downloadJson(obj, filename) {
 function exportCurrentState() {
   const state = currentResolvedState();
   if(!state) return;
-  const raw = rawExpanded.find(x => x.hexagram_id === state.hexagram_id) || {};
+  const rd = _resolvedData();
+  const raw = (window.__kingwenRuntimePayload && window.__kingwenRuntimePayload.expanded ? window.__kingwenRuntimePayload.expanded : rawExpanded).find(x => x.hexagram_id === state.hexagram_id) || {};
   const payload = {
     source: 'collapse_full_128_output',
     hexagram_id: state.hexagram_id,
@@ -393,23 +497,27 @@ function exportCurrentState() {
 }
 
 function exportAll() {
+  const hd = _hexData();
+  const rd = _resolvedData();
   const payload = {
-    source: 'collapse_full_128_output',
-    total_expanded: rawExpanded.length,
-    total_resolved: resolved.length,
-    expanded: rawExpanded,
-    resolved: resolved
+    source: isLive() ? 'widget-runtime' : 'collapse_full_128_output',
+    total_expanded: hd.length,
+    total_resolved: rd.length,
+    expanded: hd,
+    resolved: rd
   };
   downloadJson(payload, 'kingwen-512-full.json');
 }
 
 function showDetail(id) {
   selectedHexagram = id;
-  const h = hexagrams.find(x => x.id === id);
+  const h = _normHex(_hexData().find(x => x.id === id));
   const detail = document.getElementById('hexDetail');
   const content = document.getElementById('detailContent');
 
-  const states = resolved.filter(r => r.hexagram_id === id);
+  const states = _resolvedData().filter(r => r.hexagram_id === id);
+  // In live data, pools/porosity are nested under inject_site; _normHex already flattened them
+  const inject = h.inject_site || h;
 
   let phasesHtml = states.map((s, i) =>
     '<div class="kw-phase ' + (i === selectedPhase ? 'active' : '') + '" onclick="selectPhase(' + i + ')">' +
@@ -448,11 +556,11 @@ function showDetail(id) {
     '<div class="kw-detail-unicode">' + esc(h.unicode) + '</div>' +
     '<div><div class="kw-detail-title">' + h.id + '. ' + esc(h.name) + '</div>' +
     '<div class="kw-detail-meta">' +
-    '<span class="kw-detail-tag cat-' + esc(h.category) + '">' + esc(h.category) + '</span>' +
-    '<span class="kw-detail-tag">' + esc(h.action) + '</span>' +
-    '<span class="kw-detail-tag">' + esc(h.upper_trigram) + ' / ' + esc(h.lower_trigram) + '</span>' +
-    '<span class="kw-detail-tag">' + esc(h.binary) + '</span>' +
-    '<span class="kw-detail-tag">' + esc(h.porosity_label) + '</span></div></div></div>' +
+    '<span class="kw-detail-tag cat-' + esc(h.category) + '">' + esc(h.category || '') + '</span>' +
+    '<span class="kw-detail-tag">' + esc(h.action || '') + '</span>' +
+    '<span class="kw-detail-tag">' + esc(h.upper_trigram || '') + ' / ' + esc(h.lower_trigram || '') + '</span>' +
+    '<span class="kw-detail-tag">' + esc(h.binary || '') + '</span>' +
+    '<span class="kw-detail-tag">' + esc(inject.porosity_label || h.porosity_label || '') + '</span></div></div></div>' +
     '<div style="display:grid; grid-template-columns: 1fr 1fr; gap: 16px;">' +
     '<div><div style="font-size:12px; color:#888; margin-bottom:8px; text-transform:uppercase; letter-spacing:1px;">Expanded Vector</div>' +
     '<div class="kw-vectors">' + vecHtml('expanded', h.expanded_vector) + '</div></div>' +
@@ -464,14 +572,23 @@ function showDetail(id) {
     '<div style="margin-top:20px; padding:16px; background:#0a0a0f; border-radius:8px; border:1px solid #2a2a3e;">' +
     '<div style="font-size:12px; color:#FFD700; text-transform:uppercase; letter-spacing:1px; margin-bottom:8px;">🧊 3D Engine & Voice Assets (Shap-E / OpenUSD / Godot / Voicebox)</div>' +
     '<div id="3dAssetDetails_' + id + '" style="font-size:12px; color:#aaa; line-height:1.6;">' +
-    '<div><strong>3D Point-Cloud Mesh:</strong> <code>DATASETS/kingwen_3d_meshes/shap_e_hex_' + String(id).padStart(2,'0') + '.ply</code> (729 Vertices)</div>' +
-    '<div><strong>Pixar OpenUSD Stage:</strong> <code>DATASETS/openusd_stages/npc_hex_' + String(id).padStart(2,'0') + '.usda</code></div>' +
-    '<div><strong>Godot 3D Scene Graph:</strong> <code>DATASETS/godot_scenes/npc_hex_' + String(id).padStart(2,'0') + '.tscn</code></div>' +
+    (function(){
+      var meshInfo = (currentState && currentState.avatar_mesh) ? currentState.avatar_mesh : (h.avatar_mesh || {});
+      var npcModel = (currentState && currentState.npc_model) ? currentState.npc_model : (h.npc_model || {});
+      var voiceProfile = (currentState && currentState.npc_voice_profile) ? currentState.npc_voice_profile : (h.npc_voice_profile || {});
+      var kitIdentity = (currentState && currentState.quantum_avatar_state && currentState.quantum_avatar_state.kit_identity) ? currentState.quantum_avatar_state.kit_identity : (h.kit_identity || {});
+      var rows = [];
+      if(meshInfo && meshInfo.ply_filename) rows.push('<div><strong>3D Point-Cloud Mesh:</strong> <code>' + esc(meshInfo.ply_path || ('DATASETS/kingwen_avatar_meshes/'+meshInfo.ply_filename)) + '</code>' + (meshInfo.vertices ? ' ('+meshInfo.vertices+' Vertices)' : '') + '</div>');
+      if(npcModel && npcModel.usda_path) rows.push('<div><strong>Pixar OpenUSD Stage:</strong> <code>' + esc(npcModel.usda_path) + '</code></div>');
+      if(npcModel && npcModel.tscn_path) rows.push('<div><strong>Godot 3D Scene Graph:</strong> <code>' + esc(npcModel.tscn_path) + '</code></div>');
+      if(kitIdentity && kitIdentity.codename) rows.push('<div><strong>Kit Identity:</strong> <code>' + esc(kitIdentity.codename) + '</code></div>');
+      if(!rows.length) rows.push('<div><strong>3D Point-Cloud Mesh:</strong> <code>DATASETS/kingwen_3d_meshes/shap_e_hex_' + String(id).padStart(2,'0') + '.ply</code> (729 Vertices)</div>');
+      return rows.join('');
+    })() +
     '</div></div>' +
     '<div style="margin-top:16px; font-size:12px; color:#666;">' +
-    '<strong>Pools:</strong> ' + esc(h.primary_pool) + ' → ' + esc(h.secondary_pool) + ' | ' +
-    '<strong>Porosity:</strong> ' + (h.porosity || 0).toFixed(3) + ' (' + esc(h.porosity_label) + ')</div>';
-
+    '<strong>Pools:</strong> ' + esc(inject.primary_pool || h.primary_pool) + ' → ' + esc(inject.secondary_pool || h.secondary_pool) + ' | ' +
+    '<strong>Porosity:</strong> ' + (inject.porosity != null ? inject.porosity.toFixed(3) : (h.porosity || 0).toFixed(3)) + ' (' + esc(inject.porosity_label || h.porosity_label || '') + ')</div>';
   detail.classList.add('active');
   detail.scrollIntoView({behavior: 'smooth'});
 
@@ -498,7 +615,8 @@ function closeDetail() {
 function renderPhaseView() {
   const grid = document.getElementById('phaseGrid');
   grid.innerHTML = '';
-  resolved.forEach((r, idx) => {
+  const rd = _resolvedData();
+  rd.forEach((r, idx) => {
     const cell = document.createElement('div');
     cell.className = 'kw-phase-cell';
     const c = r.expanded_vector && r.expanded_vector.coherence != null ? r.expanded_vector.coherence : 0;
@@ -521,6 +639,10 @@ function renderVectorSpace() {
   const plot = document.getElementById('vectorPlot');
   plot.innerHTML = '';
 
+  const hd = _hexData();
+  const rd = _resolvedData();
+  const phasesList = _phaseData();
+
   const axisLabel = document.createElement('div');
   axisLabel.className = 'kw-vaxis';
   axisLabel.style.cssText = 'left:50%; bottom:8px; transform:translateX(-50%);';
@@ -542,7 +664,7 @@ function renderVectorSpace() {
     plot.appendChild(lineH);
   }
 
-  resolved.forEach((r) => {
+  rd.forEach((r) => {
     const xv = r.expanded_vector && r.expanded_vector[xKey] != null ? r.expanded_vector[xKey] : 0;
     const yv = r.expanded_vector && r.expanded_vector[yKey] != null ? r.expanded_vector[yKey] : 0;
     const x = xv * 100;
@@ -550,14 +672,14 @@ function renderVectorSpace() {
 
     let color;
     if(colorMode === 'category') {
-      const h = hexagrams.find(h => h.id === r.hexagram_id);
+      const h = _normHex(hd.find(h => h.id === r.hexagram_id));
       color = catColors[h && h.category] || '#888';
     } else if(colorMode === 'phase') {
       color = phaseColors[r.phase_temporal] || '#888';
     } else if(colorMode === 'action') {
-      color = (actionColors && actionColors[r.action]) || '#888';
+      const hn = _normHex(hd.find(h => h.id === r.hexagram_id));
+      color = (actionColors && actionColors[hn && hn.action]) || '#888';
     } else {
-      const h = hexagrams.find(h => h.id === r.hexagram_id);
       color = '#888';
     }
 
@@ -573,16 +695,19 @@ function renderVectorSpace() {
 function renderMatrix() {
   const table = document.getElementById('stateMatrix');
   let html = '<tr><th style="padding:4px; border:1px solid #2a2a3e; background:#1a1a2e;">#</th>';
-  phases.forEach((p, i) => {
+  const phasesList = _phaseData();
+  const hd = _hexData();
+  const rd = _resolvedData();
+  phasesList.forEach((p, i) => {
     html += '<th style="padding:4px; border:1px solid #2a2a3e; background:#1a1a2e; color:' + phaseColors[p] + '; font-size:10px;">' + p.substring(0,4) + '<br><span style="color:#666">' + i + '</span></th>';
   });
   html += '</tr>';
 
   for(let hid=1; hid<=64; hid++) {
-    const h = hexagrams.find(x => x.id === hid);
+    const h = hd.find(x => x.id === hid);
     html += '<tr><td style="padding:3px; border:1px solid #2a2a3e; background:#1a1a2e; font-size:10px; color:' + (catColors[h && h.category] || '#888') + '; font-weight:600;">' + hid + '</td>';
     for(let pb=0; pb<8; pb++) {
-      const state = resolved.find(r => r.hexagram_id === hid && r.phase_bits === pb);
+      const state = rd.find(r => r.hexagram_id === hid && r.phase_bits === pb);
       const c = state && state.expanded_vector && state.expanded_vector.coherence != null ? state.expanded_vector.coherence : 0;
       const n = Math.floor(c * 200);
       const r2 = Math.floor(n*0.2);
@@ -599,30 +724,33 @@ function renderMatrix() {
 function renderMasking() {
   const grid = document.getElementById('maskingGrid');
   grid.innerHTML = '';
-  hexagrams.forEach(h => {
+  const hd = _hexData();
+  const rd = _resolvedData();
+  hd.forEach(h => {
+    const hn = _normHex(h);
     const cell = document.createElement('div');
     cell.className = 'kw-cell';
-    const mask = getMaskState(h.id);
+    const mask = getMaskState(hn.id);
     cell.style.borderColor = (maskingColors[mask] || '#888') + '40';
-    cell.innerHTML = '<div class="kw-cell-cat" style="background:' + (catColors[h.category] || '#888') + '\"></div>' +
-      '<div class="kw-cell-id">' + h.id + '</div>' +
-      '<div class="kw-cell-unicode">' + esc(h.unicode) + '</div>' +
-      '<div class="kw-cell-name">' + esc(h.name) + '</div>' +
+    cell.innerHTML = '<div class="kw-cell-cat" style="background:' + (catColors[hn.category] || '#888') + '"></div>' +
+      '<div class="kw-cell-id">' + hn.id + '</div>' +
+      '<div class="kw-cell-unicode">' + esc(hn.unicode) + '</div>' +
+      '<div class="kw-cell-name">' + esc(hn.name) + '</div>' +
       '<div class="kw-cell-mask" style="background:' + (maskingColors[mask] || '#888') + '22; color:' + (maskingColors[mask] || '#888') + '; border-top:1px solid ' + (maskingColors[mask] || '#888') + '44;">' + mask + '</div>';
     cell.onclick = () => {
       const detail = document.getElementById('maskingDetail');
       const content = document.getElementById('maskingDetailContent');
-      const state = resolved.find(r => r.hexagram_id === h.id && r.phase_bits === selectedPhase) || resolved.find(r => r.hexagram_id === h.id);
-      const pairId = h.id % 2 === 0 ? h.id - 1 : h.id + 1;
-      const pair = hexagrams.find(x => x.id === pairId);
+      const state = rd.find(r => r.hexagram_id === hn.id && r.phase_bits === selectedPhase) || rd.find(r => r.hexagram_id === hn.id);
+      const pairId = hn.id % 2 === 0 ? hn.id - 1 : hn.id + 1;
+      const pair = _normHex(hd.find(x => x.id === pairId) || {});
       const pairMask = getMaskState(pairId);
       content.innerHTML =
         '<div style="display:flex; gap:16px; flex-wrap:wrap;">' +
-        '<div><strong>Hexagram:</strong> ' + h.id + '. ' + esc(h.name) + '</div>' +
+        '<div><strong>Hexagram:</strong> ' + hn.id + '. ' + esc(hn.name) + '</div>' +
         '<div><strong>Masking:</strong> <span style="color:' + (maskingColors[mask] || '#888') + '">' + mask + '</span></div>' +
-        '<div><strong>Category/Action:</strong> ' + esc(h.category) + ' / ' + esc(h.action) + '</div>' +
+        '<div><strong>Category/Action:</strong> ' + esc(hn.category) + ' / ' + esc(hn.action) + '</div>' +
         '<div><strong>Inversion Pair:</strong> ' + pairId + '. ' + esc(pair ? pair.name : '') + ' [' + pairMask + ']</div>' +
-        '<div><strong>Porosity:</strong> ' + (h.porosity != null ? h.porosity.toFixed(3) : '') + '</div>' +
+        '<div><strong>Porosity:</strong> ' + (hn.porosity != null ? hn.porosity.toFixed(3) : '') + '</div>' +
         '<div><strong>Phase:</strong> ' + (state ? esc(state.phase_temporal) : '') + '</div>' +
         '</div>' +
         '<div style="margin-top:12px;"><div style="font-size:12px; color:#888; margin-bottom:8px; text-transform:uppercase; letter-spacing:1px;">Vector</div><div class="kw-vectors">' +
@@ -641,7 +769,8 @@ function renderMasking() {
 function renderShotgun() {
   const grid = document.getElementById('shotgunGrid');
   grid.innerHTML = '';
-  resolved.forEach((r, idx) => {
+  const rd = _resolvedData();
+  rd.forEach((r, idx) => {
     const cell = document.createElement('div');
     cell.className = 'kw-phase-cell';
     const c = r.expanded_vector && r.expanded_vector.coherence != null ? r.expanded_vector.coherence : 0;
@@ -694,8 +823,19 @@ function hamiltonianEnergy(state) {
 }
 
 function renderJSpace() {
-  if(!resolved || !resolved.length) return;
-  const energies = resolved.map(hamiltonianEnergy);
+  const rd = _resolvedData();
+  if(!rd || !rd.length) return;
+  const hd = _hexData();  // full 64 expanded — same source as Vector Space
+  const xKey = document.getElementById('jspaceXAxis') ? document.getElementById('jspaceXAxis').value : 'coherence';
+  const yKey = document.getElementById('jspaceYAxis') ? document.getElementById('jspaceYAxis').value : 'chaos';
+  const colorBy = document.getElementById('jspaceColorBy') ? document.getElementById('jspaceColorBy').value : 'hamiltonian';
+  const phasesList = _phaseData();
+
+  // Update 2D axis label to reflect selected variables (same as Vector Space)
+  var label2d = document.getElementById('jspace-2d-label');
+  if(label2d) label2d.textContent = 'Axes: x=' + xKey + ', y=' + yKey + ', color=' + (colorBy === 'hamiltonian' ? '∂H' : colorBy);
+
+  const energies = rd.map(hamiltonianEnergy);
   const mean = energies.reduce((a,b)=>a+b,0)/energies.length;
   const variance = energies.reduce((a,b)=>a+(b-mean)*(b-mean),0)/energies.length;
   const std = Math.sqrt(variance);
@@ -741,14 +881,26 @@ function renderJSpace() {
     const h = canvas2.height;
     ctx.fillStyle = '#0a0a0f';
     ctx.fillRect(0,0,w,h);
-    resolved.forEach(r => {
+    rd.forEach(r => {
       const ev = r.expanded_vector || {};
       const rv = r.resolved_vector || {};
-      const x = (ev.voiceWeight || 0) * w;
-      const y = h - (ev.coherence || 0) * h;
+      const x = (rv[xKey] || ev[xKey] || 0) * w;
+      const y = h - (rv[yKey] || ev[yKey] || 0) * h;
       const dH = hamiltonianEnergy(r);
       const norm = max ? Math.min(1, dH / max) : 0;
-      ctx.fillStyle = norm > 0.7 ? 'rgba(255,107,107,0.9)' : norm > 0.3 ? 'rgba(255,215,0,0.9)' : 'rgba(78,205,196,0.9)';
+      var fillStyle;
+      if(colorBy === 'category') {
+        const hh = hd.find(h => h.id === r.hexagram_id);
+        fillStyle = catColors[hh && hh.category] || '#888';
+        fillStyle += '90';
+      } else if(colorBy === 'phase') {
+        fillStyle = phaseColors[r.phase_temporal] || '#888';
+        fillStyle += '90';
+      } else {
+        // hamiltonian color — same as existing
+        fillStyle = norm > 0.7 ? 'rgba(255,107,107,0.9)' : norm > 0.3 ? 'rgba(255,215,0,0.9)' : 'rgba(78,205,196,0.9)';
+      }
+      ctx.fillStyle = fillStyle;
       ctx.beginPath();
       ctx.arc(x, y, 4, 0, Math.PI*2);
       ctx.fill();
@@ -762,7 +914,7 @@ function renderJSpace() {
     const h = canvas3.height;
     ctx.fillStyle = '#0a0a0f';
     ctx.fillRect(0,0,w,h);
-    resolved.forEach(r => {
+    rd.forEach(r => {
       const ev = r.expanded_vector || {};
       const zReal = ((ev.chaos || 0) - 0.5) * 2;
       const zImag = ((ev.whimsy || 0) - 0.5) * 2;
@@ -795,23 +947,299 @@ async function hydrateFromRuntime() {
     if (Array.isArray(payload.resolved) && payload.resolved.length) {
       window.__kingwenRuntimePayload = payload;
       window.__kingwenRuntimeMode = 'live';
+      const modeEl = document.getElementById('kw-mode-indicator');
+      if(modeEl) { modeEl.textContent = 'LIVE: ' + payload.resolved.length + ' resolved / ' + payload.expanded.length + ' expanded'; modeEl.style.color = '#4ECDC4'; }
       renderGrid();
       if (typeof renderPhaseView === 'function') renderPhaseView();
       if (typeof renderVectorSpace === 'function') renderVectorSpace();
       if (typeof renderMatrix === 'function') renderMatrix();
       if (typeof renderMasking === 'function') renderMasking();
       if (typeof renderShotgun === 'function') renderShotgun();
+      if (typeof renderJSpace === 'function') renderJSpace();
+      // After hydrate, start the save-string temporal stream
+      setTimeout(function() { startSaveStringStream(5000, 0, 100, 20); }, 2000);
       return;
     }
   } catch (error) {
-    console.warn('King Wen runtime unavailable, falling back to embedded widget data:', error);
+    console.warn('King Wen runtime unavailable, falling back to save-string JSONL:', error);
   }
 
+  // Fallback: try consuming from save-string JSONL file
+  hydrateFromSaveStringFile();
+
   window.__kingwenRuntimeMode = 'static';
+  const modeEl = document.getElementById('kw-mode-indicator');
+  if(modeEl) { modeEl.textContent = 'STATIC (embedded data — runtime unavailable)'; modeEl.style.color = '#FF6B6B'; }
   renderGrid();
 }
 
 hydrateFromRuntime();
+
+// ============================================================
+// Save-string temporal consumption — poll /expand over time
+// and record snapshots with parsed save strings
+// ============================================================
+
+window.__kingwenHistory = [];  // rolling buffer: {ts, emotional_input, avg_coherence, avg_porosity, consensus}
+
+// Parse save string formats:
+//   Pipe-delimited (legacy CSV): hex_id|vw|chaos|darkTone|whimsy|coherence|porosity
+//   Colon-delimited (extended):   hex_id:phase:yao:vw:ch:cc:wh:dt:porosity:timestamp:domain;INJECT=base64
+function parseSaveString(ss) {
+  if (!ss) return null;
+  var parts = ss.split('|');
+  if (parts.length >= 7) {
+    return {
+      hexagram_id: parseInt(parts[0]) || 0,
+      voiceWeight: parseFloat(parts[1]) || 0,
+      chaos: parseFloat(parts[2]) || 0,
+      darkTone: parseFloat(parts[3]) || 0,
+      whimsy: parseFloat(parts[4]) || 0,
+      coherence: parseFloat(parts[5]) || 0,
+      porosity: parseFloat(parts[6]) || 0
+    };
+  }
+  var colonParts = ss.split(':');
+  if (colonParts.length >= 10) {
+    return {
+      hexagram_id: parseInt(colonParts[0]) || 0,
+      phase: colonParts[1] || '',
+      yao: colonParts[2] || '',
+      voiceWeight: parseFloat(colonParts[3]) || 0,
+      chaos: parseFloat(colonParts[4]) || 0,
+      coherence: parseFloat(colonParts[5]) || 0,
+      whimsy: parseFloat(colonParts[6]) || 0,
+      darkTone: parseFloat(colonParts[7]) || 0,
+      porosity: parseFloat(colonParts[8]) || 0,
+      timestamp: colonParts[9] || ''
+    };
+  }
+  return null;
+}
+
+// Poll /expand with varying emotional_input to build a temporal save-string stream
+async function startSaveStringStream(intervalMs, sliderMin, sliderMax, samples) {
+  if (!window.__kingwenRuntimePayload) return;
+  var sliderRange = sliderMax - sliderMin;
+  for (var i = 0; i < samples; i++) {
+    var emo = sliderMin + (sliderRange * (i / Math.max(samples - 1, 1)));
+    try {
+      var resp = await fetch('http://127.0.0.1:8765/expand', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: 'temporal-stream-sample-' + i,
+          session_id: 'kingwen-stream',
+          emotional_input: Math.round(emo)
+        })
+      });
+      if (!resp.ok) break;
+      var payload = await resp.json();
+      // Parse all 512 save strings from resolved entries
+      var strs = (payload.resolved || []).map(function(r) {
+        return parseSaveString(r.save_string);
+      }).filter(function(s) { return s !== null; });
+
+      var avgCoh = strs.reduce(function(s, a) { return s + a.coherence; }, 0) / Math.max(strs.length, 1);
+      var avgPor = strs.reduce(function(s, a) { return s + a.porosity; }, 0) / Math.max(strs.length, 1);
+      var avgVW  = strs.reduce(function(s, a) { return s + a.voiceWeight; }, 0) / Math.max(strs.length, 1);
+
+      var snapshot = {
+        ts: Date.now(),
+        sample_index: i,
+        emotional_input: payload.emotional_input,
+        resolved_count: payload.resolved_count || (payload.resolved || []).length,
+        save_string_count: strs.length,
+        avg_coherence: avgCoh,
+        avg_porosity: avgPor,
+        avg_voiceWeight: avgVW,
+        consensus: payload.consensus || {}
+      };
+      window.__kingwenHistory.push(snapshot);
+      if (window.__kingwenHistory.length > 100) window.__kingwenHistory.shift();
+
+      var modeEl = document.getElementById('kw-mode-indicator');
+      if (modeEl) {
+        modeEl.textContent = 'LIVE STREAM: sample ' + (i + 1) + '/' + samples +
+          ' | ' + snapshot.resolved_count + ' resolved | C:' + snapshot.avg_coherence.toFixed(3) +
+          ' | P:' + snapshot.avg_porosity.toFixed(3);
+        modeEl.style.color = '#4ECDC4';
+      }
+    } catch (e) {
+      if (i === 0) console.warn('Save-string stream error:', e);
+      break;
+    }
+    await new Promise(function(r) { setTimeout(r, intervalMs); });
+  }
+  renderTemporalStreamSummary();
+}
+
+// Render a summary of the temporal stream
+function renderTemporalStreamSummary() {
+  if (window.__kingwenHistory.length === 0) return;
+  var latest = window.__kingwenHistory[window.__kingwenHistory.length - 1];
+  var first = window.__kingwenHistory[0];
+  var cohDelta = latest.avg_coherence - first.avg_coherence;
+  var porDelta = latest.avg_porosity - first.avg_porosity;
+
+  var modeEl = document.getElementById('kw-mode-indicator');
+  if (modeEl && window.__kingwenHistory.length > 1) {
+    modeEl.innerHTML = 'LIVE STREAM: ' + window.__kingwenHistory.length + ' samples | ' +
+      'C:' + latest.avg_coherence.toFixed(3) + ' (' + (cohDelta >= 0 ? '+' : '') + cohDelta.toFixed(4) + ') | ' +
+      'P:' + latest.avg_porosity.toFixed(3) + ' (' + (porDelta >= 0 ? '+' : '') + porDelta.toFixed(4) + ') | ' +
+      'emo:' + latest.emotional_input;
+    modeEl.title = 'Save-string temporal stream: ' + window.__kingwenHistory.length + ' historical snapshots captured';
+    modeEl.style.cursor = 'pointer';
+    modeEl.onclick = function() { alert(JSON.stringify(window.__kingwenHistory, null, 2)); };
+  }
+}
+
+// ============================================================
+// Save-string JSONL consumption — stream scenes from
+// DATASETS/jkd_ingestion_binary.jsonl over time
+// ============================================================
+
+// Path to the 1.86 GB save-string JSONL (one record per scene)
+// Each record contains the full 64+512 King Wen expansion with save_strings
+const JKD_BINARY_JSONL_PATH = 'DATASETS/jkd_ingestion_binary.jsonl';
+
+// Track current scene position
+window.__jkdSceneIndex = 0;
+window.__jkdTotalScenes = 0;
+
+// Hydrate from a single scene record in the JSONL
+function hydrateFromSceneRecord(record) {
+  if (!record || typeof record !== 'object') return false;
+
+  const expanded = record.expanded || [];
+  const resolved = record.resolved || [];
+
+  if (!Array.isArray(resolved) || resolved.length === 0) return false;
+
+  // Build the payload in the same shape as /expand response
+  window.__kingwenRuntimePayload = {
+    expanded: expanded,
+    resolved: resolved,
+    expanded_count: record.expanded_count || expanded.length,
+    resolved_count: record.resolved_count_sample || resolved.length,
+    source: record.source || 'jkd_save_string',
+    session_id: 'jkd-scene-' + (record.scene_index || 0),
+    text: record.scene_text || '',
+    scene_index: record.scene_index || 0,
+    consensus: record.consensus || {}
+  };
+  window.__kingwenRuntimeMode = 'save-string';
+
+  // Parse save strings from all 512 resolved entries
+  const strs = resolved.map(function(r) { return parseSaveString(r.save_string); }).filter(function(s) { return s !== null; });
+  const avgCoh = strs.reduce(function(s, a) { return s + a.coherence; }, 0) / Math.max(strs.length, 1);
+  const avgPor = strs.reduce(function(s, a) { return s + a.porosity; }, 0) / Math.max(strs.length, 1);
+
+  // Record this scene as a historical snapshot
+  const snapshot = {
+    ts: Date.now(),
+    scene_index: record.scene_index || 0,
+    source: 'jkd_save_string',
+    resolved_count: strs.length,
+    avg_coherence: avgCoh,
+    avg_porosity: avgPor,
+    consensus: record.consensus || {}
+  };
+  window.__kingwenHistory.push(snapshot);
+  if (window.__kingwenHistory.length > 100) window.__kingwenHistory.shift();
+
+  // Update mode indicator
+  const modeEl = document.getElementById('kw-mode-indicator');
+  if (modeEl) {
+    modeEl.innerHTML = 'SAVE-STRING: scene ' + (record.scene_index || '?') +
+      ' / ' + window.__kingwenTotalScenes + ' | ' + strs.length + ' save strings | ' +
+      'C:' + avgCoh.toFixed(3) + ' | P:' + avgPor.toFixed(3);
+    modeEl.style.color = '#4ECDC4';
+  }
+
+  // Render all tabs with the new payload
+  renderGrid();
+  if (typeof renderPhaseView === 'function') renderPhaseView();
+  if (typeof renderVectorSpace === 'function') renderVectorSpace();
+  if (typeof renderMatrix === 'function') renderMatrix();
+  if (typeof renderMasking === 'function') renderMasking();
+  if (typeof renderShotgun === 'function') renderShotgun();
+  if (typeof renderJSpace === 'function') renderJSpace();
+
+  return true;
+}
+
+// Stream scenes from the JSONL over time via save-string server endpoints
+// Uses /scene/count for total, /scene/<index> for individual records
+// This avoids loading the full 1.86GB JSONL into browser memory
+async function streamSaveStringScenes(intervalMs) {
+  try {
+    // First get total scene count from cached index
+    const countResp = await fetch('http://127.0.0.1:8765/scene/count');
+    if (!countResp.ok) {
+      console.warn('Cannot reach /scene/count, using /expand fallback');
+      return;
+    }
+    const countData = await countResp.json();
+    var totalScenes = countData.total_scenes || 0;
+    window.__jkdTotalScenes = totalScenes;
+
+    for (let i = 0; i < totalScenes; i++) {
+      try {
+        const resp = await fetch('http://127.0.0.1:8765/scene/' + i);
+        if (!resp.ok) {
+          console.warn('Scene ' + i + ' fetch failed: ' + resp.status);
+          continue;
+        }
+        const record = await resp.json();
+        if (hydrateFromSceneRecord(record)) {
+          window.__jkdSceneIndex = i + 1;
+        }
+      } catch (e) {
+        if (i < 3) console.warn('Skipping scene ' + i + ':', e);
+      }
+      // Wait for interval before loading next scene
+      if (i < totalScenes - 1) {
+        await new Promise(function(r) { setTimeout(r, intervalMs); });
+      }
+    }
+
+    // Stream complete — show final summary
+    const modeEl = document.getElementById('kw-mode-indicator');
+    if (modeEl && window.__kingwenHistory.length > 0) {
+      modeEl.innerHTML = 'SAVE-STRING COMPLETE: ' + window.__kingwenHistory.length + ' scenes streamed | ' +
+        'avg C:' + (window.__kingwenHistory.reduce(function(s,a){return s+a.avg_coherence;},0)/window.__kingwenHistory.length).toFixed(3) +
+        ' | avg P:' + (window.__kingwenHistory.reduce(function(s,a){return s+a.avg_porosity;},0)/window.__kingwenHistory.length).toFixed(3);
+      modeEl.style.color = '#45B7D1';
+      modeEl.title = 'Save-string stream complete. Click to view history.';
+      modeEl.style.cursor = 'pointer';
+      modeEl.onclick = function() { alert(JSON.stringify(window.__kingwenHistory, null, 2)); };
+    }
+  } catch (e) {
+    console.warn('Save-string stream error:', e);
+  }
+}
+
+// Fallback hydrate from save-string JSONL when runtime is unavailable
+async function hydrateFromSaveStringFile() {
+  const modeEl = document.getElementById('kw-mode-indicator');
+  if (modeEl) { modeEl.textContent = 'Attempting save-string JSONL stream...'; modeEl.style.color = '#FFA500'; }
+
+  // Try fetching the JSONL file (works when served from KING-WEN root or expand_server)
+  await streamSaveStringScenes(5000);
+
+  // If no scenes were loaded, fall back to embedded data
+  if (window.__kingwenRuntimeMode !== 'save-string' && modeEl) {
+    window.__kingwenRuntimeMode = 'static';
+    modeEl.textContent = 'STATIC (embedded data — runtime unavailable)';
+    modeEl.style.color = '#FF6B6B';
+    renderGrid();
+  }
+}
+
+// Start hydration
+hydrateFromRuntime();
+
 </script>
 </body>
 </html>

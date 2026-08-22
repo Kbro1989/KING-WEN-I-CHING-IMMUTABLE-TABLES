@@ -27,13 +27,34 @@ from kingwen_ternary_tables_complete import HEXAGRAM_BASE
 
 
 def generate_openusd_stage(hex_id: int, name: str) -> Path:
-    """Generate Pixar OpenUSD (.usda) ASCII stage file for a Sovereign Model NPC."""
+    """Generate Pixar OpenUSD (.usda) ASCII stage file for a Sovereign Model NPC.
+
+    NOTE (audit 2026-08-21 B10): the actual avatar geometry is produced by
+    `scripts/generate_avatar_meshes.py` (real 3D TriMesh from quantum_avatar_state)
+    and exported to DATASETS/kingwen_avatar_meshes/*.ply. This bridge previously
+    emitted a 3-vertex placeholder triangle, which violated the no-mock policy.
+    The stage now declares the NPC metadata and references the real PLY by path;
+    if the PLY is absent the mesh block is omitted rather than faked.
+    """
     USD_OUT_DIR.mkdir(parents=True, exist_ok=True)
     out_file = USD_OUT_DIR / f"npc_hex_{hex_id:02d}.usda"
 
     hex_info = HEXAGRAM_BASE[hex_id]
     category = hex_info.get("category", "sovereign")
     action = hex_info.get("action", "ASSERT")
+
+    ply_ref = f"../kingwen_avatar_meshes/hex{hex_id:02d}_phase0.ply"
+    ply_path = (ROOT / "DATASETS" / "kingwen_avatar_meshes" /
+                f"hex{hex_id:02d}_phase0.ply")
+    mesh_block = ""
+    if ply_path.exists():
+        mesh_block = f"""
+    def Mesh "PointVectorCloud"
+    {{
+        uniform token kind = "pointcloud"
+        string kingwen:ply_reference = "{ply_ref}"
+        uniform token orientation = "rightHanded"
+    }}"""
 
     usda_content = f"""#usda 1.0
 (
@@ -42,21 +63,14 @@ def generate_openusd_stage(hex_id: int, name: str) -> Path:
     upAxis = "Y"
 )
 
-def Xform "SovereignNPC_{hex_id:02d}" (
+def Xform "SovereignNPC_{hex_id:02d}"
+(
     kind = "component"
 )
 {{
     custom string kingwen:category = "{category}"
     custom string kingwen:action = "{action}"
-    custom int kingwen:hexagram_id = {hex_id}
-
-    def Mesh "PointVectorCloud"
-    {{
-        int[] faceVertexCounts = [3]
-        int[] faceVertexIndices = [0, 1, 2]
-        point3f[] points = [({math.sin(hex_id):.3f}, {math.cos(hex_id):.3f}, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)]
-        uniform token orientation = "rightHanded"
-    }}
+    custom int kingwen:hexagram_id = {hex_id}{mesh_block}
 }}
 """
     out_file.write_text(usda_content, encoding="utf-8")
