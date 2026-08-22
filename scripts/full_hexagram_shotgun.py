@@ -202,7 +202,7 @@ def _build_jspace_projections(h_id: int, vector: Dict[str, float], inject: Dict[
     dark_tone = float(vector.get("darkTone", 0.1))
     coherence = float(vector.get("coherence", 0.85))
     voice_weight = float(vector.get("voiceWeight", 0.85))
-    porosity = float(inject.get("porosity", 0.1))
+    porosity = float(inject.get("porosity_norm", 0.1))
     porosity_label = str(inject.get("porosity_label", "Crystallized"))
     
     coder_specialty = CODER_SPECIALTIES[(h_id - 1) % len(CODER_SPECIALTIES)]
@@ -371,9 +371,9 @@ def shotgun_expand(request_text: str = "", emotional_input: int | None = None) -
                 "coder_specialty": CODER_SPECIALTIES[(h_id - 1) % len(CODER_SPECIALTIES)],
                 "rs3_actionable": RS3_ACTIONABLES[(h_id - 1) % len(RS3_ACTIONABLES)],
                 "training_notes": EMOTIONAL_WEIGHTS.get(str(h_id), {}).get("trainingNotes", ""),
+                "trainingNotes": EMOTIONAL_WEIGHTS.get(str(h_id), {}).get("trainingNotes", ""),
                 "hexagram_symbols": HEXAGRAM_BASE[h_id],
                 "intent": r_base.get("intent", {}),
-                # Full individual identity from immutable table — NOT averaged or blended
                 "table_personality": ptags,
                 "domain_vector": {k: float(r_base.get("resolved_vector", {}).get(k, 0.0) or 0.0) for k in VEC_KEYS},
                 "phase_bits": p,
@@ -383,6 +383,14 @@ def shotgun_expand(request_text: str = "", emotional_input: int | None = None) -
                 "resolved_vector": r_base.get("resolved_vector", {}),
                 "line_states": r_base.get("line_states", []),
                 "line_balance": r_base.get("line_balance", {}),
+                "quantum_avatar_state": r_base.get("quantum_avatar_state", {}),
+                "sample_paths": r_base.get("sample_paths", []),
+                "yao_vocabulary": r_base.get("yao_vocabulary", {}),
+                "pre_slider": r_base.get("pre_slider", {}),
+                "personality_subsets": None,  # computed only for expanded (phase=0)
+                "ternary_slots": None,  # computed only for expanded (phase=0)
+                "ternary_729_permutations_count": 0,  # computed only for expanded (phase=0)
+                "schauberger_parsing": None,  # computed only for expanded (phase=0)
             })
 
     energies = []
@@ -533,6 +541,11 @@ def main() -> int:
         "qdot_chaos", "qdot_whimsy", "qdot_darkTone", "qdot_coherence", "qdot_voiceWeight",
         # line balance paired differentials
         "dy_yang_yin", "yao_dy", "changing_dy",
+        # quantum avatar state (NPC individualization)
+        "avatar_scale", "avatar_rotation_x", "avatar_rotation_y", "avatar_rotation_z",
+        "avatar_color_r", "avatar_color_g", "avatar_color_b",
+        "avatar_animation_phase", "avatar_codename",
+        "delegate_chaos", "delegate_whimsy", "delegate_darkTone", "delegate_coherence", "delegate_voiceWeight",
         # intent
         "dominant_intent", "intensity", "query_tokens",
         "training_notes",
@@ -580,6 +593,21 @@ def main() -> int:
             "dy_yang_yin": round(yang_c - yin_c, 3),
             "yao_dy": round(yao_c - 3.0, 3),
             "changing_dy": round(ch_c - (6.0 - ch_c), 3),
+            # quantum avatar state
+            "avatar_scale": round(float(qa.get("scale_factor", 1.0) or 1.0), 4) if (qa := r.get("quantum_avatar_state", {})) else 1.0,
+            "avatar_rotation_x": round(float(qa.get("rotation_modulation", {}).get("x", 0.0) or 0.0), 6) if qa else 0.0,
+            "avatar_rotation_y": round(float(qa.get("rotation_modulation", {}).get("y", 0.0) or 0.0), 6) if qa else 0.0,
+            "avatar_rotation_z": round(float(qa.get("rotation_modulation", {}).get("z", 0.0) or 0.0), 6) if qa else 0.0,
+            "avatar_color_r": float(qa.get("color_shift", {}).get("r", 0.0) or 0.0) if qa else 0.0,
+            "avatar_color_g": float(qa.get("color_shift", {}).get("g", 0.0) or 0.0) if qa else 0.0,
+            "avatar_color_b": float(qa.get("color_shift", {}).get("b", 0.0) or 0.0) if qa else 0.0,
+            "avatar_animation_phase": round(float(qa.get("animation_phase", 0.0) or 0.0), 6) if qa else 0.0,
+            "avatar_codename": qa.get("kit_identity", {}).get("codename", "") if qa else "",
+            "delegate_chaos": round(float(qa.get("delegate_vector", {}).get("chaos", 0.0) or 0.0), 6) if qa else 0.0,
+            "delegate_whimsy": round(float(qa.get("delegate_vector", {}).get("whimsy", 0.0) or 0.0), 6) if qa else 0.0,
+            "delegate_darkTone": round(float(qa.get("delegate_vector", {}).get("darkTone", 0.0) or 0.0), 6) if qa else 0.0,
+            "delegate_coherence": round(float(qa.get("delegate_vector", {}).get("coherence", 0.0) or 0.0), 6) if qa else 0.0,
+            "delegate_voiceWeight": round(float(qa.get("delegate_vector", {}).get("voiceWeight", 0.0) or 0.0), 6) if qa else 0.0,
             "dominant_intent": intent.get("dominant_intent"),
             "intensity": round(float(intent.get("intensity", 0) or 0), 4),
             "query_tokens": "|".join(intent.get("query_tokens", [])),

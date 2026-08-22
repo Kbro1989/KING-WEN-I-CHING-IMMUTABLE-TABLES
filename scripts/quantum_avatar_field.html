@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<!--
+  King Wen Quantum Avatar Field — Live 512-NPC Quantum Rendering Surface
+  Self-contained HTML widget that fetches from /expand and renders all 64 hexagrams × 8 phases
+  as individualized NPC avatars with REAL 3D MESH geometry from PLY files.
+
+  Each avatar's mesh is fetched as binary PLY from /3d/<hex>_<phase>.ply,
+  parsed client-side, and projected to 2D canvas with per-vertex coloring
+  driven by the quantum wavefunction (color_shift, scale_factor, rotation_modulation).
+
+  No external dependencies — vanilla HTML/CSS/JS only.
+  Connect to: http://127.0.0.1:8765/expand
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<title>King Wen Quantum Avatar Field</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Courier New', monospace;
+    background: #0a0a1a;
+    color: #e0e0ff;
+    overflow: hidden;
+    overflow-y: auto;
+  }
+  #container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+  }
+  #field {
+    position: absolute;
+    top: 60px; left: 0; right: 0; bottom: 60px;
+    background: radial-gradient(circle at center, #111422 0%, #0a0a1a 100%);
+    border: 1px solid #222;
+    overflow: hidden;
+  }
+  canvas#fieldCanvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+  }
+  .avatar-label {
+    position: absolute;
+    font-size: 8px;
+    color: #888;
+    white-space: nowrap;
+    pointer-events: none;
+    text-shadow: 0 0 4px rgba(0,0,0,0.8);
+  }
+  .controls {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 100;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .controls input, .controls select, .controls button {
+    background: #1a1a33;
+    border: 1px solid #444;
+    color: #e0e0ff;
+    padding: 6px 10px;
+    font-family: inherit;
+    font-size: 12px;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .controls button:hover, .controls input:hover {
+    border-color: #66aaff;
+  }
+  .controls label {
+    font-size: 11px;
+    color: #888;
+  }
+  #status {
+    position: absolute;
+    bottom: 10px;
+    left: 10px;
+    font-size: 11px;
+    color: #66aaff;
+    z-index: 100;
+    background: rgba(10,10,30,0.8);
+    padding: 4px 8px;
+    border-radius: 3px;
+  }
+  #meshStatus {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
+    font-size: 10px;
+    color: #888;
+    z-index: 100;
+    background: rgba(10,10,30,0.8);
+    padding: 4px 8px;
+    border-radius: 3px;
+  }
+</style>
+</head>
+<body>
+<div id="container">
+  <div class="controls">
+    <input type="text" id="queryInput" placeholder="Enter intent (e.g. quantum physics)" value="quantum physics">
+    <input type="range" id="sliderInput" min="0" max="100" value="50">
+    <span id="sliderVal">50</span>
+    <select id="viewMode">
+      <option value="wireframe">Wireframe</option>
+      <option value="shaded">Shaded</option>
+      <option value="points">Point Cloud</option>
+    </select>
+    <select id="domainFilter">
+      <option value="all">All Domains</option>
+      <option value="social">Social</option>
+      <option value="combat">Combat</option>
+      <option value="movement">Movement</option>
+      <option value="crafting">Crafting</option>
+      <option value="magic">Magic</option>
+    </select>
+    <button id="pulseBtn">Pulse Shotgun</button>
+    <button id="autoPulse">Auto-Pulse</button>
+    <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#888;">
+      <input type="checkbox" id="npcModels" />
+      <span>RSC NPC Geometry</span>
+    </label>
+  </div>
+  <div id="status">Ready. Enter query and click Pulse.</div>
+  <div id="meshStatus">Mesh cache: 0/512</div>
+  <div id="field">
+    <canvas id="fieldCanvas"></canvas>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// King Wen Quantum Avatar Field Renderer — Real 3D Mesh Edition
+// ============================================================
+
+const VEC_KEYS = ["chaos", "whimsy", "darkTone", "coherence", "voiceWeight"];
+const TEMPORAL_COLORS = {
+  "past": "#6a5acd",
+  "present": "#00ffff",
+  "future": "#ff69b4",
+  "transition": "#ffd700",
+  "resolution": "#90ee90",
+  "dissolution": "#8a2be2",
+  "crystallization": "#ffa07a",
+  "void": "#ffffff"
+};
+
+const FIELD_W = window.innerWidth;
+const FIELD_H = window.innerHeight - 120;
+
+let canvas = document.getElementById('fieldCanvas');
+let ctx = canvas.getContext('2d');
+
+// Resize canvas to match field
+function resizeCanvas() {
+  canvas.width = FIELD_W;
+  canvas.height = FIELD_H;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// Avatar mesh cache — stores parsed PLY geometry per (hex×phase)
+let meshCache = new Map();  // key: "hexXX_phaseY" → {verts, faces, colors}
+let meshLoading = new Set();
+let meshFailed = new Set();
+let avatars = [];
+let isPulsing = false;
+let autoPulseId = null;
+
+// ============================================================
+// Binary PLY Parser
+// ============================================================
+function parsePLY(buffer) {
+  const view = new DataView(buffer);
+  let offset = 0;
+
+  // Read header
+  let header = '';
+  while (offset < buffer.byteLength) {
+    const char = String.fromCharCode(view.getUint8(offset));
+    header += char;
+    offset += 1;
+    if (header.endsWith('end_header\n')) break;
+    if (header.endsWith('end_header\r\n')) { offset -= 1; break; } // account for \r\n
+  }
+
+  const lines = header.split('\n');
+  let vertexCount = 0;
+  let faceCount = 0;
+  let hasColors = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('element vertex')) {
+      vertexCount = parseInt(trimmed.split(' ')[2]);
+    }
+    if (trimmed.startsWith('element face')) {
+      faceCount = parseInt(trimmed.split(' ')[2]);
+    }
+    if (trimmed.startsWith('property uchar red') || trimmed.startsWith('property uchar green') || trimmed.startsWith('property uchar blue')) {
+      hasColors = true;
+    }
+  }
+
+  // Determine vertex stride: 3 floats (x,y,z) + optionally 3 uchars (r,g,b)
+  const vertexStride = 12 + (hasColors ? 3 : 0);
+
+  // Read vertices
+  const verts = new Float32Array(vertexCount * 3);
+  const colors = hasColors ? new Uint8Array(vertexCount * 3) : null;
+
+  for (let i = 0; i < vertexCount; i++) {
+    const vx = view.getFloat32(offset, true); offset += 4;
+    const vy = view.getFloat32(offset, true); offset += 4;
+    const vz = view.getFloat32(offset, true); offset += 4;
+    verts[i * 3] = vx;
+    verts[i * 3 + 1] = vy;
+    verts[i * 3 + 2] = vz;
+
+    if (hasColors) {
+      colors[i * 3] = view.getUint8(offset); offset += 1;
+      colors[i * 3 + 1] = view.getUint8(offset); offset += 1;
+      colors[i * 3 + 2] = view.getUint8(offset); offset += 1;
+    }
+  }
+
+  // Read faces (triangle list: count=3, then 3 int32 indices)
+  const faces = new Int32Array(faceCount * 3);
+  for (let i = 0; i < faceCount; i++) {
+    const count = view.getUint8(offset); offset += 1; // uchar count (should be 3)
+    for (let j = 0; j < 3; j++) {
+      faces[i * 3 + j] = view.getInt32(offset, true); offset += 4;
+    }
+  }
+
+  return { verts, faces, colors, vertexCount, faceCount };
+}
+
+// ============================================================
+// Fetch PLY mesh for a hexagram × phase OR NPC model
+// ============================================================
+async function fetchMesh(hexId, phaseBits) {
+  const key = `hex${String(hexId).padStart(2, '0')}_phase${phaseBits}`;
+  const npcKey = `npc_hex${String(hexId).padStart(2, '0')}`;
+
+  if (meshCache.has(key)) return meshCache.get(key);
+  if (meshCache.has(npcKey)) return meshCache.get(npcKey);
+  if (meshLoading.has(key) || meshLoading.has(npcKey)) {
+    // Wait for in-flight request
+    const waitKey = meshLoading.has(key) ? key : npcKey;
+    return new Promise((resolve) => {
+      const check = () => {
+        if (meshCache.has(key) || meshCache.has(npcKey)) resolve(meshCache.get(key) || meshCache.get(npcKey));
+        else if (meshFailed.has(key) || meshFailed.has(npcKey)) resolve(null);
+        else setTimeout(check, 50);
+      };
+      check();
+    });
+  }
+
+  meshLoading.add(key);
+  try {
+    // Determine fetch order based on checkbox
+    const useNpcFirst = document.getElementById('npcModels').checked;
+    let resp;
+    if (useNpcFirst) {
+      // Try NPC model first, fall back to procedural mesh
+      resp = await fetch(`http://127.0.0.1:8765/npc/hex${hexId}.ply`);
+      if (!resp.ok) {
+        resp = await fetch(`http://127.0.0.1:8765/3d/${hexId}_${phaseBits}.ply`);
+      }
+    } else {
+      // Try procedural mesh first, fall back to NPC model
+      resp = await fetch(`http://127.0.0.1:8765/3d/${hexId}_${phaseBits}.ply`);
+      if (!resp.ok) {
+        resp = await fetch(`http://127.0.0.1:8765/npc/hex${hexId}.ply`);
+      }
+    }
+    if (!resp.ok) {
+      throw new Error(`HTTP ${resp.status}`);
+    }
+    const buffer = await resp.arrayBuffer();
+    const mesh = parsePLY(buffer);
+    meshCache.set(key, mesh);
+    meshLoading.delete(key);
+    updateMeshStatus();
+    return mesh;
+  } catch (err) {
+    console.warn(`Failed to load mesh for ${key}:`, err.message);
+    meshFailed.add(key);
+    meshLoading.delete(key);
+    updateMeshStatus();
+    return null;
+  }
+}
+
+function updateMeshStatus() {
+  document.getElementById('meshStatus').textContent =
+    `Mesh cache: ${meshCache.size}/${meshCache.size + meshFailed.size} loaded, ${meshFailed.size} failed`;
+}
+
+// ============================================================
+// 3D Projection — Simple orthographic + perspective
+// ============================================================
+function project3d(x, y, z, camX, camY, camZ, fov) {
+  // Simple perspective projection
+  const distance = 500;
+  const scale = distance / (distance + z - camZ);
+  const screenX = FIELD_W / 2 + (x - camX) * scale;
+  const screenY = FIELD_H / 2 + (y - camY) * scale;
+  return { x: screenX, y: screenY, scale: scale };
+}
+
+// ============================================================
+// Render one avatar from quantum_avatar_state + PLY mesh
+// ============================================================
+function hexToPosition3D(hexId, phaseBits, fieldW, fieldH) {
+  // 8x8 grid: hexagram_id maps to row, phase_bits to column
+  const row = (hexId - 1) % 8;
+  const col = Math.floor((hexId - 1) / 8) % 8;
+
+  // Phase creates a radial offset
+  const phaseAngle = (phaseBits / 8.0) * Math.PI * 2;
+  const radius = 40 + (phaseBits * 12);
+
+  // 3D position: x,y on grid, z from phase (depth layering)
+  const x = (col - 3.5) * 80 + Math.cos(phaseAngle) * radius * 0.15;
+  const y = (row - 3.5) * 80 + Math.sin(phaseAngle) * radius * 0.15;
+  const z = phaseBits * 30;  // Phase layering in Z
+
+  return { x, y, z };
+}
+
+function renderAvatar(entry, viewMode) {
+  const qa = entry.quantum_avatar_state || {};
+  const inject = entry.inject_site || {};
+  const kit = qa.kit_identity || {};
+
+  const hexId = entry.hexagram_id;
+  const phaseBits = entry.phase_bits;
+
+  // Get or fetch mesh
+  const meshPromise = fetchMesh(hexId, phaseBits);
+
+  // Position from quantum wavefunction
+  const pos = hexToPosition3D(hexId, phaseBits, FIELD_W, FIELD_H);
+
+  // Scale from wavefunction
+  const scale = qa.scale_factor || 1.0;
+
+  // Color from emotional vector + color_shift
+  const rv = entry.resolved_vector || {};
+  const cs = qa.color_shift || {};
+  const chaos = rv.chaos || 0.2;
+  const whimsy = rv.whiskey || rv.whimsy || 0.2;
+  const darkTone = rv.darkTone || 0.1;
+
+  // Color palette: chaos->R, darkTone->G, whimsy->B
+  const r = Math.min(255, Math.round(chaos * 200 + (cs.r || 0) + 55));
+  const g = Math.min(255, Math.round(darkTone * 180 + (cs.g || 0) + 75));
+  const b = Math.min(255, Math.round(whimsy * 220 + (cs.b || 0) + 30));
+
+  // Rotation from wavefunction
+  const rot = qa.rotation_modulation || { x: 0, y: 0, z: 0 };
+
+  // Create avatar label
+  const label = document.createElement('div');
+  label.className = 'avatar-label';
+  label.textContent = `${hexId}:${kit.codename || ''}`;
+  label.style.left = `${FIELD_W / 2 + pos.x}px`;
+  label.style.top = `${60 + pos.y}px`;
+  label.title = `${kit.codename} | ${inject.primary_pool}→${inject.secondary_pool}`;
+
+  return {
+    hexId,
+    phaseBits,
+    pos,
+    scale,
+    color: { r, g, b },
+    rotation: rot,
+    animationPhase: qa.animation_phase || 0,
+    meshPromise,
+    label,
+    temporal: entry.phase_temporal || 'present',
+    delegateVector: qa.delegate_vector || {},
+  };
+}
+
+// ============================================================
+// Draw avatar mesh on canvas
+// ============================================================
+function drawAvatar(avatar, viewMode) {
+  ctx.save();
+
+  const pos = avatar.pos;
+  const rotZ = avatar.rotation.z || 0;
+  const rotY = avatar.rotation.y || 0;
+  const rotX = avatar.rotation.x || 0;
+
+  // Apply rotation to mesh vertices and project
+  ctx.translate(FIELD_W / 2 + pos.x, 60 + pos.y);
+  ctx.scale(avatar.scale * 0.3, avatar.scale * 0.3);
+  ctx.rotate(rotZ);
+
+  // Draw the mesh
+  const drawMesh = (mesh) => {
+    if (!mesh) {
+      // Fallback: draw a colored circle if mesh failed to load
+      ctx.fillStyle = `rgb(${avatar.color.r}, ${avatar.color.g}, ${avatar.color.b})`;
+      ctx.beginPath();
+      ctx.arc(0, 0, 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
+
+    if (viewMode === 'wireframe') {
+      ctx.strokeStyle = `rgb(${Math.min(255, avatar.color.r + 50)}, ${Math.min(255, avatar.color.g + 50)}, ${Math.min(255, avatar.color.b + 50)})`;
+      ctx.lineWidth = 0.3;
+      ctx.beginPath();
+
+      const verts = mesh.verts;
+      const faces = mesh.faces;
+      const vertexStride = 3;
+
+      // Apply rotation and project
+      for (let i = 0; i < faces.length; i += 3) {
+        const p0 = projectVertex(verts[faces[i] * 3], verts[faces[i] * 3 + 1], verts[faces[i] * 3 + 2], rotX, rotY, rotZ);
+        const p1 = projectVertex(verts[faces[i + 1] * 3], verts[faces[i + 1] * 3 + 1], verts[faces[i + 1] * 3 + 2], rotX, rotY, rotZ);
+        const p2 = projectVertex(verts[faces[i + 2] * 3], verts[faces[i + 2] * 3 + 1], verts[faces[i + 2] * 3 + 2], rotX, rotY, rotZ);
+
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+      }
+      ctx.stroke();
+    } else if (viewMode === 'shaded') {
+      ctx.fillStyle = `rgb(${avatar.color.r}, ${avatar.color.g}, ${avatar.color.b})`;
+      ctx.beginPath();
+
+      const verts = mesh.verts;
+      const faces = mesh.faces;
+
+      // Simple flat-shading: draw each face as a filled triangle
+      // Sort faces by depth (back-to-front for transparency)
+      const faceDepths = [];
+      for (let i = 0; i < faces.length; i += 3) {
+        const z = (verts[faces[i] * 3 + 2] + verts[faces[i + 1] * 3 + 2] + verts[faces[i + 2] * 3 + 2]) / 3;
+        faceDepths.push({ idx: i, depth: z });
+      }
+      faceDepths.sort((a, b) => b.depth - a.depth);
+
+      for (const fd of faceDepths) {
+        const i = fd.idx;
+        const p0 = projectVertex(verts[faces[i] * 3], verts[faces[i] * 3 + 1], verts[faces[i] * 3 + 2], rotX, rotY, rotZ);
+        const p1 = projectVertex(verts[faces[i + 1] * 3], verts[faces[i + 1] * 3 + 1], verts[faces[i + 1] * 3 + 2], rotX, rotY, rotZ);
+        const p2 = projectVertex(verts[faces[i + 2] * 3], verts[faces[i + 2] * 3 + 1], verts[faces[i + 2] * 3 + 2], rotX, rotY, rotZ);
+
+        ctx.moveTo(p0.x, p0.y);
+        ctx.lineTo(p1.x, p1.y);
+        ctx.lineTo(p2.x, p2.y);
+      }
+      ctx.fill();
+    } else if (viewMode === 'points') {
+      ctx.fillStyle = `rgb(${avatar.color.r}, ${avatar.color.g}, ${avatar.color.b})`;
+      const verts = mesh.verts;
+      for (let i = 0; i < verts.length; i += 3) {
+        const p = projectVertex(verts[i], verts[i + 1], verts[i + 2], rotX, rotY, rotZ);
+        ctx.fillRect(p.x - 0.5, p.y - 0.5, 1, 1);
+      }
+    }
+
+    ctx.restore();
+  };
+
+  // Resolve mesh and draw
+  avatar.meshPromise.then(mesh => {
+    drawMesh(mesh);
+  }).catch(() => {
+    // Fallback
+    ctx.fillStyle = `rgb(${avatar.color.r}, ${avatar.color.g}, ${avatar.color.b})`;
+    ctx.beginPath();
+    ctx.arc(0, 0, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+}
+
+function projectVertex(x, y, z, rotX, rotY, rotZ) {
+  // Apply Z rotation
+  let cos = Math.cos(rotZ), sin = Math.sin(rotZ);
+  let rx = x * cos - y * sin;
+  let ry = x * sin + y * cos;
+
+  // Apply Y rotation
+  cos = Math.cos(rotY); sin = Math.sin(rotY);
+  let rx2 = rx * cos + z * sin;
+  let rz2 = -rx * sin + z * cos;
+
+  // Apply X rotation
+  cos = Math.cos(rotX); sin = Math.sin(rotX);
+  let ry2 = ry * cos - rz2 * sin;
+  let rz3 = ry * sin + rz2 * cos;
+
+  // Simple perspective projection
+  const distance = 30;
+  const scale = distance / (distance + rz3);
+  return { x: rx2 * scale, y: ry2 * scale };
+}
+
+// ============================================================
+// Pulse/consult the backend
+// ============================================================
+async function pulseShotgun() {
+  const query = document.getElementById('queryInput').value;
+  const slider = parseInt(document.getElementById('sliderInput').value);
+  const viewMode = document.getElementById('viewMode').value;
+  document.getElementById('sliderVal').textContent = slider;
+  document.getElementById('status').textContent = `Pulsing: "${query}" (emotional_input=${slider})...`;
+  document.getElementById('pulseBtn').disabled = true;
+
+  try {
+    const resp = await fetch('http://127.0.0.1:8765/expand', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        request_text: query,
+        emotional_input: slider
+      })
+    });
+
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+
+    // Clear existing
+    avatars = [];
+
+    // Remove old labels
+    document.querySelectorAll('.avatar-label').forEach(el => el.remove());
+
+    const expanded = data.expanded || [];
+    const resolved = data.resolved || [];
+
+    // Render all 512 resolved as individual avatars
+    resolved.forEach(entry => {
+      const avatar = renderAvatar(entry, viewMode);
+      if (avatar) avatars.push(avatar);
+      // Add label to DOM
+      document.getElementById('field').appendChild(avatar.label);
+    });
+
+    // Draw delegation lines (top delegate vectors)
+    const topDelegates = resolved
+      .filter(r => (r.quantum_avatar_state?.delegate_vector?.voiceWeight || 0) > 0.3)
+      .slice(0, 20);
+
+    // Status update
+    const cons = data.consensus || {};
+    document.getElementById('status').textContent =
+      `✓ ${data.expanded_count || expanded.length} expanded | ` +
+      `${data.resolved_count || resolved.length} resolved | ` +
+      `Consensus: hex ${cons.consensus_hexagram_id} (${cons.consensus_hexagram_name}) ` +
+      `porosity_mean=${cons.consensus_porosity_mean?.toFixed(3)}`;
+
+  } catch (err) {
+    document.getElementById('status').textContent = `Error: ${err.message}`;
+    console.error(err);
+  } finally {
+    document.getElementById('pulseBtn').disabled = false;
+  }
+
+  // Draw frame after meshes are resolved
+  requestAnimationFrame(drawFrame);
+}
+
+// ============================================================
+// Draw loop — renders all avatars with their meshes
+// ============================================================
+function drawFrame() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Draw background grid
+  ctx.strokeStyle = 'rgba(40, 40, 80, 0.3)';
+  ctx.lineWidth = 0.5;
+  ctx.beginPath();
+  for (let x = 0; x < FIELD_W; x += 40) {
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, FIELD_H);
+  }
+  for (let y = 0; y < FIELD_H; y += 40) {
+    ctx.moveTo(0, y);
+    ctx.lineTo(FIELD_W, y);
+  }
+  ctx.stroke();
+
+  const viewMode = document.getElementById('viewMode').value;
+
+  // Sort by depth (z) for proper occlusion
+  const sorted = [...avatars].sort((a, b) => a.pos.z - b.pos.z);
+
+  sorted.forEach(avatar => {
+    drawAvatar(avatar, viewMode);
+  });
+}
+
+// ============================================================
+// Auto-pulse mode (live field breathing)
+// ============================================================
+function startAutoPulse() {
+  if (autoPulseId) {
+    clearInterval(autoPulseId);
+    autoPulseId = null;
+    document.getElementById('autoPulse').textContent = 'Auto-Pulse';
+  } else {
+    autoPulseId = setInterval(pulseShotgun, 8000);
+    document.getElementById('autoPulse').textContent = 'Stop Auto';
+    pulseShotgun();
+  }
+}
+
+// ============================================================
+// Init
+// ============================================================
+document.getElementById('pulseBtn').addEventListener('click', pulseShotgun);
+document.getElementById('autoPulse').addEventListener('click', startAutoPulse);
+document.getElementById('sliderInput').addEventListener('input', (e) => {
+  document.getElementById('sliderVal').textContent = e.target.value;
+});
+document.getElementById('viewMode').addEventListener('change', drawFrame);
+
+// Start animation loop
+setInterval(drawFrame, 50);
+
+// Initial pulse
+pulseShotgun();
+</script>
+</body>
+</html>

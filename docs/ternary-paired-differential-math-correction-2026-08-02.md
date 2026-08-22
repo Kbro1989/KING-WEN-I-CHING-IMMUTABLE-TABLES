@@ -2,7 +2,7 @@
 ## Paired Differentials + Quantitative Ternary States
 
 Date: 2026-08-02
-Status: spec only — no code changes yet
+Status: applied — code patches merged 2026-08-02 (verified in emotional_engine.py:425-433,714-723 and decision_matrix.py paired-differential sections). Header corrected 2026-08-21 audit (B8).
 
 ---
 

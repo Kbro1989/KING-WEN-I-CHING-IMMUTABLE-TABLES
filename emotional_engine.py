@@ -449,6 +449,121 @@ def _gaussian_kernel(value: float, center: float, fwhm: float) -> float:
     return math.exp(exponent)
 
 
+def _quantum_avatar_modulation(
+    hexagram_id: int,
+    phase_bits: int,
+    resolved_vector: List[float],
+    expanded_vector: List[float],
+    request_text: str = "",
+    emotional_input: int = 50,
+) -> Dict[str, Any]:
+    """Compute quantum wavefunction state for NPC avatar individualization.
+
+    Maps each (hexagram_id, phase_bits) pair to a unique 512-state quantum
+    wavefunction that modulates the NPC's 3D kit model: rotation, scale,
+    position, color, and animation phase. The wavefunction is derived from
+    the Hamiltonian energy, Gaussian kernel across temporal phases, and
+    intent-driven perturbation.
+
+    Returns avatar state dict with:
+    - wavefunction: complex amplitude (real, imag) per VEC_KEY
+    - rotation_modulation: 3-axis rotation deltas
+    - scale_factor: overall mesh scale (0.5..2.0)
+    - color_shift: RGB perturbation from canonical palette
+    - animation_phase: temporal phase [0..1) for interpolation
+    - delegate_vector: 5-axis vector indicating NPC's delegation propensity
+    """
+    phase_info = PHASE_INFO[phase_bits]
+    phase_temporal = phase_info["temporal"]
+
+    # Hamiltonian energy drives animation intensity
+    hamiltonian = _hamiltonian_energy(resolved_vector, expanded_vector, {})
+    hamiltonian_normalized = float(hamiltonian)  # 0..1
+
+    # Gaussian perturbation across temporal phases: center on present phase
+    # FWHM=2.5 means phases ~2 away get ~50% modulation
+    phase_center = 1.0  # present phase
+    temporal_gaussian = _gaussian_kernel(float(phase_bits), phase_center, 2.5)
+
+    # Intent-driven perturbation from request_text
+    intent_dict = extract_intent(request_text)
+    intent_intensity = float(intent_dict.get("intensity", 0.0))
+    slider_factor = _clamp(float(emotional_input) / 100.0)
+
+    # Wavefunction: |psi> = a|canonical> + b|phase> + c|intent>
+    # Real/imaginary components for each vector axis
+    wavefunction = {}
+    for i, key in enumerate(VEC_KEYS):
+        rv = float(resolved_vector[i]) if i < len(resolved_vector) else 0.0
+        ev = float(expanded_vector[i]) if i < len(expanded_vector) else 0.0
+
+        # Phase drives the imaginary component (temporal dynamics)
+        phase_complexity = (phase_bits % 3) + 1  # 1..3
+        real_part = rv * temporal_gaussian
+        imag_part = (rv - ev) * (hamiltonian_normalized * phase_complexity * 0.1)
+
+        wavefunction[key] = {
+            "real": round(real_part, 6),
+            "imag": round(imag_part, 6),
+            "amplitude": round(math.sqrt(real_part**2 + imag_part**2), 6),
+        }
+
+    # Rotation modulation: derived from phase_polarity + hamiltonian
+    # Each phase produces unique rotation signature
+    rotation_x = hamiltonian_normalized * 0.35 * math.sin(phase_bits * 0.785)  # pi/4 step
+    rotation_y = hamiltonian_normalized * 0.35 * math.cos(phase_bits * 0.785)
+    rotation_z = (float(phase_bits) / 8.0) * slider_factor * 0.2
+
+    # Scale factor: high-energy phases expand, stable phases contract
+    scale_base = 1.0
+    scale_factor = scale_base + (hamiltonian_normalized - 0.5) * 0.5
+
+    # Color shift: map vector axes to RGB perturbation
+    # chaos -> R, darkTone -> G, whimsy -> B (color space of emotional payload)
+    chaos = float(resolved_vector[0]) if len(resolved_vector) > 0 else 0.0
+    dark_tone = float(resolved_vector[2]) if len(resolved_vector) > 2 else 0.0
+    whimsy = float(resolved_vector[1]) if len(resolved_vector) > 1 else 0.0
+
+    color_shift = {
+        "r": round(chaos * 255.0 * slider_factor * 0.3, 1),
+        "g": round(dark_tone * 255.0 * slider_factor * 0.3, 1),
+        "b": round(whimsy * 255.0 * slider_factor * 0.3, 1),
+    }
+
+    # Animation phase: cycles through [0..1) based on phase_bits + hamiltonian
+    animation_phase = (float(phase_bits) / 8.0 + hamiltonian_normalized * 0.125) % 1.0
+
+    # Delegate vector: which of the 5 axes this NPC is most "agentic" in
+    # (high amplitude = strong delegation signal for that domain)
+    delegate_vector = {
+        k: round(v["amplitude"], 6) for k, v in wavefunction.items()
+    }
+
+    # NPC kit identity for 3D mesh selection
+    kit_identity = {
+        "hexagram_id": hexagram_id,
+        "phase_bits": phase_bits,
+        "phase_temporal": phase_temporal,
+        "phase_polarity": phase_info["polarity"],
+        "codename": f"HEX-{hexagram_id:02d}-PHASE-{phase_bits}",
+        "animation_speed": round(1.0 + (intent_intensity * 0.5), 3),
+    }
+
+    return {
+        "wavefunction": wavefunction,
+        "rotation_modulation": {
+            "x": round(rotation_x, 6),
+            "y": round(rotation_y, 6),
+            "z": round(rotation_z, 6),
+        },
+        "scale_factor": round(scale_factor, 4),
+        "color_shift": color_shift,
+        "animation_phase": round(animation_phase, 6),
+        "delegate_vector": delegate_vector,
+        "kit_identity": kit_identity,
+    }
+
+
 def _trigram_frequency_weight(upper: str, lower: str) -> float:
     """Domain-agnostic trigram weight derived from frequency/structural context.
 
@@ -471,6 +586,7 @@ def _pool_weights_for_hex(
     hexagram_id: int,
     intent_dict: Dict[str, Any],
     phase_bits: int = 0,
+    emotional_input: int = 50,
 ) -> Tuple[List[float], float, Dict[str, Any]]:
     """Derive pool, porosity, and inject metadata from structure + intent.
     
@@ -509,12 +625,19 @@ def _pool_weights_for_hex(
     yao_ratio = balance["yao_ratio"]
     changing_ratio = balance["changing_ratio"]
     
-    # Porosity: driven by yao count, changing lines, intent intensity
-    porosity_score = _clamp(
-        yao_ratio * 0.6 +          # more yao = more porous
-        changing_ratio * 0.3 +     # more changing = more porous
-        intent_intensity * 0.3     # stronger intent = more porous
-    )
+    # Porosity: canonical base from HEXAGRAM_INJECTION_SITE (hexagram topology)
+    # plus phase-derived overdrive (changing/yao lines add bleed).
+    # The immutable table defines each hexagram's structural porosity; phases
+    # modulate within that topological envelope.
+    base_porosity = float(HEXAGRAM_INJECTION_SITE[int(hexagram_id)]["porosity"])
+    
+    # emotional_input (0..100) modulates phase bleed: higher input amplifies
+    # phase-driven porosity changes beyond the canonical base
+    slider_factor = _clamp(float(emotional_input) / 100.0)
+    phase_overdrive = _clamp(float(phase_bits) / 8.0) * (0.5 + slider_factor * 0.5)  # 0.0 to 0.875
+    
+    # Final porosity: canonical base + phase overdrive (clamped 0..4)
+    porosity_score = _clamp(base_porosity / 4.0 + phase_overdrive * 0.5)
     porosity_index = int(porosity_score * 4.0)
     porosity_index = min(porosity_index, 4)
     porosity_meta = POROSITY_LEVELS[porosity_index]
@@ -659,7 +782,7 @@ def expand_hexagram(
     intent_dict = extract_intent(request_text)
     resolved_emotional_input = derive_dynamic_emotional_input(request_text, emotional_input, intent_dict)
     expanded_vec, porosity_norm, inject = _pool_weights_for_hex(
-        hexagram_id, intent_dict, phase_bits
+        hexagram_id, intent_dict, phase_bits, resolved_emotional_input
     )
     
     phase_meta = PHASE_INFO[phase_bits]
@@ -788,6 +911,10 @@ def expand_hexagram(
         ],
         "expanded_vector": dict(zip(VEC_KEYS, expanded_vec)),
         "resolved_vector": dict(zip(VEC_KEYS, sampled)),
+        # Quantum wavefunction modulation for NPC avatar individualization
+        "quantum_avatar_state": _quantum_avatar_modulation(
+            hexagram_id, phase_bits, sampled, expanded_vec, request_text, resolved_emotional_input
+        ),
         # Pre-slider capture fields
         "pre_slider": {
             "structural_vector": dict(zip(VEC_KEYS, expanded_vec)),
@@ -850,6 +977,7 @@ def sample_resolve(
         "resolved_vector": resolved,
         "intent": base_expansion["intent"],
         "pre_slider": base_expansion["pre_slider"],
+        "quantum_avatar_state": base_expansion["quantum_avatar_state"],
         "emotional_input": emotional_input,
     }
 

@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """RSMV Cache Schema & Shap-E 3D Latent Synthesis Manifesto Generator.
 
-Maps all 50 RSMV generated TypeScript schema definitions (`C:/Users/krist/Desktop/rsmv/generated/*.d.ts`)
-to Shap-E 3D text-to-mesh latent representations, 64 Sovereign Model NPCs, and 512-State Phase Space Superposition.
+DECLARATIVE MAPPING ONLY. This script emits a hardcoded catalog (`RSMV_SCHEMA_MAP`)
+of 50 RSMV TypeScript schema definitions to Shap-E latent categories. It does NOT
+read `C:/Users/krist/Desktop/rsmv/generated/*.d.ts` and therefore asserts NO computed
+parity. Any "verified parity" language is removed by audit 2026-08-21 (B5). The map
+is a planning artifact, not a proof of equivalence.
 """
 
 import json
@@ -110,7 +113,8 @@ def generate_rsmv_shap_e_manifesto_md() -> str:
         "4. **Universal Telemetry**: Serializes to SHA256-checksummed `KW64_SAVE_STRING_V2.1` payloads.",
         "",
         "---",
-        "**Status**: 100% Verified Parity across all 50 Schema Definitions.",
+        "**Status**: DECLARATIVE CATALOG — 50 schema entries mapped by name only; "
+        "no structural parity computed (rsmv/generated/*.d.ts not read).",
     ])
 
     return "\n".join(lines)
@@ -140,7 +144,7 @@ def main() -> int:
     print(f"[SUCCESS] Saved Repository Manifest to: {MANIFESTO_REPO_PATH}")
 
     print("=" * 80)
-    print("RSMV & SHAP-E MANIFESTO GENERATION: 100% SUCCESS")
+    print("RSMV & SHAP-E MANIFESTO GENERATION: catalog written (no parity asserted)")
     print("=" * 80)
 
     return 0
