@@ -92,7 +92,7 @@
 | ID | Item | Verification Command | Proof | Status |
 |---|---|---|---|---|
 | F1 | Format: `hex_id:phase:vw:ch:cc:wh:dt:porosity:timestamp:domain` | Read `AvatarSaveString.to_compact()` | 10 colon-separated segments | [ ] |
-| F2 | Phase encoding: `a`=past, `p`=present, `f`=future | `python -c "from save_string_v21 import encode_phase; print(encode_phase(0), encode_phase(1), encode_phase(2))"` | `a`, `p`, `f` | [ ] |
+| F2 | Phase encoding: 8 phases T0..T7 (`past`=0, `present`=1, `future`=2, `transition`=3, `resolution`=4, `dissolution`=5, `crystallization`=6, `void`=7) `[Updated 2026-08-29: expanded from legacy 3-phase a/p/f]` | `python -c "from save_string_v21 import encode_phase; print([encode_phase(i) for i in range(8)])"` | 8 distinct phase codes | [ ] |
 | F3 | Batch format: 64 comma-separated, `;` separates payload from metadata | `python -c "from save_string_v21 import BatchSaveString; b=BatchSaveString([...]); print(len(b.entries), ';' in b.to_compact())"` | 64 entries, `;` present | [ ] |
 | F4 | Inject-site base64 for `:`/`|` delimiters | `python -c "from save_string_v21 import _encode_inject_extra, _decode_inject_extra; raw={'yao_vocabulary':{'a':'test'}}; enc=_encode_inject_extra(raw); dec=_decode_inject_extra(enc); print(dec==raw)"` | Round-trip true | [ ] |
 | F5 | Structural validation, not mega-regex | `python -c "from save_string_v21 import validate_batch; print(validate_batch(b.to_compact()))"` | True for valid batch | [ ] |

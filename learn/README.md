@@ -3,9 +3,17 @@
 These are the progressive-intent and consensus-verification scripts for the
 porosity-driven state machine. They are real executable passes, not stubs.
 
-## Scripts
+## Primary Master Pipeline Runner `[Updated 2026-08-29]`
 
-- `learn/scripts/test_collapse_full_128.py`
+To run the complete 18-stage pipeline covering state expansion, 3D meshes, voice profiles, JKD audio pellets, quantum space-time plots, and parity audits:
+
+```bash
+python scripts/run_all_unified_pipeline.py
+```
+
+## Legacy / Individual Scripts
+
+- `learn/scripts/test_collapse_full_128.py` (legacy 512-state runner)
 - `learn/scripts/test_progressive_intents.py`
 - `learn/scripts/test_porosity_sweep.py`
 - `learn/scripts/test_deterministic_replay.py`
@@ -13,14 +21,12 @@ porosity-driven state machine. They are real executable passes, not stubs.
 ## Run from tables root
 
 ```bash
-cd C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES
-PYTHONPATH=. python3 learn\scripts\test_collapse_full_128.py --emotional-input 50
-PYTHONPATH=. python3 learn\scripts\test_progressive_intents.py
-PYTHONPATH=. python3 learn\scripts\test_porosity_sweep.py
-PYTHONPATH=. python3 learn\scripts\test_deterministic_replay.py
+python learn/scripts/test_progressive_intents.py
+python learn/scripts/test_porosity_sweep.py
+python learn/scripts/test_deterministic_replay.py
 ```
 
 ## Status
 
-These pass on live immutable-table state. If any fails, it indicates a drift
-between `emotional_engine.py` and the canonical tables.
+All passes verify deterministic consistency against `kingwen_ternary_tables_complete.py` and `HEXAGRAM_BASE`.
+

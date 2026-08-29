@@ -43,8 +43,19 @@ Verified by: `scripts/sandbox_verify_final.py` (ALL PASS)
 
 ## Decoded math summary
 
-The file is a complete, self-contained 9-bit finite state machine:
-- **tensor product:** trigram_space ⊗ trigram_space ⊗ phase_space
-- **lossless round-trip:** any 9-bit value decomposes uniquely to (hexagram, phase)
-- **phase gating:** phase bits control which line positions become yao (changing)
-- **structural capacity:** 3^6 = 729 possible ternary states, only 512 reachable via phase-gated expansion; 217 states are structurally unreachable without violating `PHASE_LINE_MAP`
+The system operates across two orthogonal, non-competing coordinate systems:
+
+1. **Phase-Gated 9-Bit Binary Finite State Machine (512 States):**
+   - **Tensor product:** `trigram_space(8) ⊗ trigram_space(8) ⊗ phase_space(8) = 512`
+   - **Lossless round-trip:** Any 9-bit integer $\in [0, 511]$ decomposes uniquely to $(\text{hexagram}, \text{phase})$
+   - **Phase gating:** Phase bits control which line positions become yao (changing) via `PHASE_LINE_MAP`
+
+2. **Unconstrained Ternary Manifold (729 States & 5,832 Phase States):**
+   - **Ternary trigram space:** $3^3 = 27$ unconstrained trigram states
+   - **Ternary hexagram space:** $27 \times 27 = 3^6 = 729$ unconstrained line configurations
+   - **Full phase-resolved expansion:** $729 \times 8 = 5,832$ total resolved phase states (`scripts/ternary_full_expansion.json`)
+   - **729-Vertex Spatial Geometry:** Deterministic rose curve embedding $t_k = \frac{2\pi k}{729}, x_k = (1 + 0.2\sin 6t_k)\cos t_k, y_k = (1 + 0.2\sin 6t_k)\sin t_k, z_k = 0.5\cos(t_k \cdot [(h \bmod 8) + 1])$
+
+3. **5-Axis Coprime Prime Field Perturbation:**
+   - Evaluates ASCII token entropy $H = \sum \text{ord}(c)$ over coprime prime moduli $(97, 89, 83, 79, 73)$
+   - Modulates the 64-pellet manifold without randomness or 1-hex early collapse.

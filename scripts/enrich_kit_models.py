@@ -160,6 +160,9 @@ def enrich_kit_file(hex_id: int) -> Dict[str, Any]:
     set_extra("coherence", int_val=int(coherence * 10000))
     set_extra("voiceWeight", int_val=int(voice_weight * 10000))
 
+    # Deduplicate extra array to unique keys only
+    kit_data["extra"] = list(extra_map.values())
+
     kit_path.write_text(json.dumps(kit_data, ensure_ascii=False, indent=2), encoding="utf-8")
     return grounded_npc
 

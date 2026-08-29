@@ -9,11 +9,16 @@ Author: Kbro1989
 YOU ARE NOT A CODER. YOU ARE AN ARCHAEOLOGIST EXCAVATING A HAMILTONIAN FIELD.
 
 This is not a web app. It is not a REST API. It is not a chatbot.
-It is a quantum masked state machine with 512 basis states, 64 embodied 
-anchors, and a zero-roll Hamiltonian accumulator.
+It is a deterministic 6-layer sovereign model engine operating over dual orthogonal coordinate spaces:
+  • 512 Binary Phase States (64 hexagrams × 8 temporal phases) for 9-bit VHDL hardware ROM addressing.
+  • 729 Ternary Manifold States (3^6 = 27 × 27) for full unconstrained line-state resolution.
+  • 5,832 Total Resolved Phase States (729 × 8).
+  • 5-Axis Coprime Prime Extractors (97, 89, 83, 79, 73) over ASCII token sum H = Σord(c).
+  • 64 embodied Sovereign model kits with zero-roll Hamiltonian consensus.
 
 Your job is to DISCOVER before you FIX. If you touch code before you 
 understand the field, you will break the math.
+
 
 ═══════════════════════════════════════════════════════════════════════════════
 SECTION 0: ABSOLUTE PROHIBITIONS

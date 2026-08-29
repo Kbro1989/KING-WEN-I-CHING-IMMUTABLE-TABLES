@@ -120,35 +120,81 @@ Ingestion outputs and raw source text.
 | `kingwen_consultation_record.json` | Consultation record |
 | `*.csv` | Category, emotional timeseries, save strings, transition graph, trigram reference |
 
+## 6-Layer Deterministic Pipeline Architecture
+
+The King Wen 64 Sovereign Model Engine executes through an exact **6-layer deterministic pipeline** with zero pseudo-RNG, zero 1-hex early collapse, and continuous Hamiltonian field rehydration:
+
+$$\text{Input } \xrightarrow{\text{Layer 2: Parse}} \mathbf{v}_{\text{intent}} \xrightarrow{\text{Layer 3: Pool}} \text{Porosity Bleed} \xrightarrow{\text{Layer 4: Expand}} \text{Hamiltonian Field } \mathcal{H} \xrightarrow{\text{Layer 5: Tag}} \text{64 Coder Pellets} \xrightarrow{\text{Layer 6: Consensus}} \text{Shotgun Telemetry}$$
+
+### Layer 1: Ground Truth & Immutable Tables
+- **Source**: `kingwen_ternary_tables_complete.py`
+- **Tables**: 8 Trigrams, 64 Canonical Binary Hexagrams (`HEXAGRAM_BASE`), 8 Temporal Phases (`PHASE_INFO`).
+
+### Layer 2: Parse Layer (Coprime Prime Extractor)
+- **Moduli**: Coprime prime field $(97, 89, 83, 79, 73)$ driven by ASCII token summation $H = \sum \text{ord}(c)$:
+  $$p_{\text{chaos}} = \left(\frac{H \bmod 97}{97.0}\right) \times 0.12, \quad p_{\text{whimsy}} = \left(\frac{\lfloor H/7 \rfloor \bmod 89}{89.0}\right) \times 0.12, \dots$$
+- **Seed Vector**: $\mathbf{v}_{\text{intent}} = \text{clamp}(\mathbf{v}_{\text{base}} + \mathbf{v}_{\text{boost}} + \mathbf{p}_{\text{prime}}, 0.0, 1.0)$.
+
+### Layer 3: Pool Layer (Porosity & Injection Dynamics)
+- **Overdrive**: $P_{\text{score}} = \text{clamp}\left(\frac{P_{\text{base}}}{4.0} + \left[\frac{p}{8} \cdot \left(0.5 + 0.5 \cdot \frac{E_{\text{in}}}{100}\right)\right] \times 0.5, 0.0, 1.0\right)$.
+- **Neighbor Bleed**: $\mathbf{v}_{\text{bleed}} = \text{lerp}(\mathbf{v}_{\text{hex}}, \mathbf{v}_{\text{neighbor\_mix}}, \text{clamp}(P_{\text{norm}} \times 0.7))$.
+
+### Layer 4: Expand Layer (Dual Orthogonal Spaces & Hamiltonian Mechanics)
+- **Dual Coordinates**:
+  - **512-State Phase Space** ($64 \times 8$): 9-bit binary ROM addressing $(h-1) \times 8 + p$.
+  - **729-State Ternary Manifold** ($3^6 = 27 \times 27$): Structural line-state resolution.
+  - **5,832 Total Resolved Phase States**: $729 \times 8 = 5,832$.
+- **Hamiltonian Mechanics**: $\mathcal{H}(p, q, t) = \sum p_i \dot{q}^i - \mathcal{L}$ where $\mathcal{L} = 0.5|dy| + 0.3|\text{yao\_}dy| + 0.2|\text{changing\_}dy|$.
+
+### Layer 5: Tag Layer (Domain & Identity Registration)
+- **Entities**: 64 Coder Specialties, RS3 Actionables, Hermes VHDL Voice Modes, 12-Slot Skill Cards across $27 \times 27$ permutations, and Avalokiteshvara Arms.
+
+### Layer 6: Consensus & Observable Telemetry (No Early Collapse)
+- **Gaussian Accumulator**: $\sigma = \max(10^{-9}, \bar{\eta}_{\text{norm}}/2.0)$, $\mathbf{v}_{\text{consensus}} = 0.7 \sum w_j \mathbf{v}_{\text{resolved}, j} + 0.3 \mathbf{u}_{\text{pool}}$.
+- **Quantum Wave Packet Observables**: $\psi_i = (v_{\text{resolved}, i} e^{-\tau_i^2/2\sigma^2}) + i ((v_{\text{resolved}, i} - v_{\text{expanded}, i}) \mathcal{H}_{\text{norm}} p_{\text{comp}} 0.1)$.
+- **Deterministic 729-Vertex Embedding**: $x_k = (1 + 0.2\sin 6t_k)\cos t_k, y_k = (1 + 0.2\sin 6t_k)\sin t_k, z_k = 0.5\cos(t_k \cdot [(h \bmod 8) + 1])$.
+
+---
+
 ## Key Rules
 
 1. **Immutable tables only.** `data/` is append-only. Do not delete or rewrite historical files.
 2. **Expansion-first, normalization-last.** Always capture all 64 canonical + 665 ternary hexagrams before any selection layer.
-3. **No mock/stub/placeholder** in `src/`, `scripts/`, `tests/`.
-4. **Math-first trigrams.** 27 ternary trigrams from `[0,1,2] × [0,1,2] × [0,1,2]`; 8 binary trigrams are the canonical subset.
-5. **No secrets in repos.** API keys, tokens, passwords stay out of `data/`, `docs/`, `scripts/`.
+3. **Zero pseudo-RNG or rolls.** All coordinates and vectors are deterministically derived from closed-form algebra and coprime primes.
+4. **No 1-hex early collapse.** Emit full 64-pellet shotgun telemetry across all 512/729 states.
+5. **No mock/stub/placeholder** in `src/`, `scripts/`, `tests/`.
 
-## Quick Start
+---
+
+## Quick Start & Verification
 
 ```bash
-# Build full ternary expansion artifact
-python scripts/build_ternary_expansion.py
+# Run the complete self-contained 18-stage pipeline
+python scripts/run_all_unified_pipeline.py
 
-# Run shotgun first-parse expansion
-python scripts/full_hexagram_shotgun.py
+# Build TypeScript core engine and run unit tests
+npm run build
+npm test
 
-# Run multi-layer expansion with open-pool consensus
-python scripts/multi_layer_expand.py
+# Run local HTTP expansion server
+python expand_server.py
 
-# Verify registry + inversion pairs
-python KING_WEN_TABLES.py
+# Generate full 3D avatar meshes (729-vertex deterministic geometry)
+python scripts/generate_avatar_meshes.py --all
 
-# Ingest JKD text through King Wen consult
-python scripts/ingest_jkd_gutenberg.py
+# Audit 27x27 unbound persona domains
+python scripts/verify_unbound_persona_domains.py
+
+# Audit SaveString V2.1 parity & output mismatches
+python scripts/verify_output_mismatches.py
 ```
 
-## Outputs
+---
 
-- `scripts/ternary_full_expansion.json` — 27 trigrams, 729 hexagrams, 5,832 resolved states
-- `scripts/hexagram_full_expansion.json` — 64 hexagrams, 512 resolved states, personalities, inversion pairs
-- `scripts/build_hexagram_skill_cards.py` — per-binary-position skill cards
+## Outputs & Artifacts
+
+- `scripts/ternary_full_expansion.json` — 27 trigrams, 729 hexagrams, 5,832 resolved states (2.9 MB)
+- `DATASETS/full_shotgun_expansion_all.jsonl` — Full 64-hexagram × 8-phase × 3-probe training dataset (1,536 lines, 32.2 MB)
+- `DATASETS/quantumlab_plots/` — 64/64 3D Quantum Wave Packet Space-Time surface plots
+- `DATASETS/kingwen_model_sets/kit_*.json` — 64 NPC 3D model kits with deduplicated extra tags
+- `DATASETS/kingwen_64_npc_voice_profiles.json` — 64 designed NPC voice profiles (FastSpeech F0, WaveNet mel channels, KD fidelity)
