@@ -58,6 +58,14 @@ For integer $n \ge 0$:
 | **Quantum Visuals Manifest** | [`DATASETS/quantumlab_visuals_manifest.json`](https://raw.githubusercontent.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES/main/DATASETS/quantumlab_visuals_manifest.json) |
 | **Collective Field Heatmap (PNG)** | [`DATASETS/quantumlab_plots/quantum_64_npc_wavefield_over_time.png`](https://raw.githubusercontent.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES/main/DATASETS/quantumlab_plots/quantum_64_npc_wavefield_over_time.png) |
 | **8-Phase Pellet Dispersion (PNG)** | [`DATASETS/quantumlab_plots/quantum_8phase_pellet_dispersion.png`](https://raw.githubusercontent.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES/main/DATASETS/quantumlab_plots/quantum_8phase_pellet_dispersion.png) |
+| **DA-V2 Depth Maps (16-Bit PNG)** | [`DATASETS/depth_maps_16bit/depth_hex_01_16bit.png`](https://raw.githubusercontent.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES/main/DATASETS/depth_maps_16bit/depth_hex_01_16bit.png) |
+| **DA-V2 Point Clouds (PLY)** | [`DATASETS/depth_pointclouds/depth_cloud_hex_01.ply`](https://raw.githubusercontent.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES/main/DATASETS/depth_pointclouds/depth_cloud_hex_01.ply) |
+| **Depth Anything V2 Manifest** | [`DATASETS/depth_anything_v2_manifest.json`](https://raw.githubusercontent.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES/main/DATASETS/depth_anything_v2_manifest.json) |
+| **Quantum Pre-Warm Cache (NPZ)** | [`DATASETS/quantum_prewarm_cache.npz`](https://raw.githubusercontent.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES/main/DATASETS/quantum_prewarm_cache.npz) |
+| **Quantum Pre-Warm Manifest** | [`DATASETS/quantum_prewarm_manifest.json`](https://raw.githubusercontent.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES/main/DATASETS/quantum_prewarm_manifest.json) |
+| **512 Avatar Meshes (PLY)** | [`DATASETS/kingwen_avatar_meshes/hex01_phase0.ply`](https://raw.githubusercontent.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES/main/DATASETS/kingwen_avatar_meshes/hex01_phase0.ply) |
+| **Macro-World 3D HTML Viewfinder** | [`DATASETS/kingwen_sovereign_world_viewer.html`](https://raw.githubusercontent.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES/main/DATASETS/kingwen_sovereign_world_viewer.html) |
+| **Avatar Field Quantum Shotgun HTML** | [`scripts/quantum_avatar_field.html`](https://raw.githubusercontent.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES/main/scripts/quantum_avatar_field.html) |
 
 ### Code Implementations
 

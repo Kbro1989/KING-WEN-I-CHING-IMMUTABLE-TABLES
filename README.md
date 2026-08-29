@@ -42,6 +42,13 @@ The active formalization surface. **5,832-state runtime path** is built here.
 | `sandbox_verify_final.py` | Sandbox verification |
 | `demo.js` | JS demo |
 | `verify_registry.py` | Registry verification |
+| `bridge_depth_anything_v2.py` | Bridges 64 QuantumLab plots into Depth Anything V2 16-bit displacement maps and 3D point clouds |
+| `prewarm_quantum_wavepackets.py` | Deterministic 1D→2D→3D split-step Fourier operator pre-warming ($U_V, U_T$, 5,832 phase states) |
+| `generate_sovereign_world.py` | Generates 64-sovereign macro world with 8 biomes, Schauberger vortices, 6-yao orbiting pellets, and DA-V2 depth metrics |
+| `generate_avatar_meshes.py` | Generates 512 binary PLY avatar meshes with Depth Anything V2 depth relief displacement |
+| `verify_cross_engine_cli_validation.py` | 8-suite cross-engine validation (OpenUSD, Godot 4, RSMV, Red9, MUGEN, CollisionVis, DA-V2, Wave Packet Pre-Warm) |
+| `verify_vhdl_resolver_parity.py` | 512-address functional simulation verifying hardware VHDL resolver parity |
+| `verify_output_mismatches.py` | Exhaustive zero-mismatch output audit across 7 subsystem component sets |
 
 ### `docs/`
 Research and math first, not hand-wavy definitions.
@@ -118,6 +125,16 @@ Ingestion outputs and raw source text.
 | `jkd_ingestion_ternary.jsonl` | 18 sampled ternary-mode consult records |
 | `jkd_ingestion_summary.json` | Aggregate counts |
 | `kingwen_consultation_record.json` | Consultation record |
+| `depth_maps_16bit/` | 64 × 16-bit PNG depth displacement maps computed via Depth Anything V2 |
+| `depth_pointclouds/` | 64 × Open3D PLY point clouds (122,000–131,000 vertices each) |
+| `depth_anything_v2_manifest.json` | Master DA-V2 depth telemetry and point cloud manifest linking all 64 hexagrams |
+| `quantum_prewarm_cache.npz` | Pre-warmed 1D/2D/3D split-step Fourier operator cache ($U_V, U_T$, $\psi_{\text{warm}}$) |
+| `quantum_prewarm_manifest.json` | Pre-warm timing and dimension manifest (64 basis, 512 binary, 729 ternary, 5,832 phase states) |
+| `kingwen_avatar_meshes/` | 512 binary PLY avatar meshes ($64 \times 8$ phases) with DA-V2 depth relief sculpting |
+| `openusd_stages/` | 64 individual + 1 master OpenUSD stage (`kingwen_sovereign_master_stage.usda`) |
+| `godot_scenes/` | 64 individual + 1 master Godot 4 scene (`kingwen_sovereign_world_scene.tscn`) |
+| `kingwen_sovereign_world_topology.json` | Master 64-sector macro-world topology with 8 biomes, Schauberger vortices, porosity, and DA-V2 stats |
+| `kingwen_sovereign_world_viewer.html` | Interactive 3D macro-world visualizer with live orbital mechanics, telemetry HUD, and DA-V2 inspector |
 | `*.csv` | Category, emotional timeseries, save strings, transition graph, trigram reference |
 
 ## 6-Layer Deterministic Pipeline Architecture
@@ -179,7 +196,19 @@ npm test
 # Run local HTTP expansion server
 python expand_server.py
 
-# Generate full 3D avatar meshes (729-vertex deterministic geometry)
+# Run 1D→2D→3D Wave Packet Pre-Warming Engine (Scipy FFT JIT warmup)
+python scripts/prewarm_quantum_wavepackets.py
+
+# Bridge QuantumLab plots through Depth Anything V2 (16-bit depth + point clouds)
+python scripts/bridge_depth_anything_v2.py --encoder vits
+
+# Generate 64-Sovereign Macro-World (OpenUSD, Godot, Topology, HTML Viewfinder)
+python scripts/generate_sovereign_world.py
+
+# Run exhaustive 8-suite cross-engine validation
+python scripts/verify_cross_engine_cli_validation.py
+
+# Generate full 3D avatar meshes (729-vertex deterministic geometry + DA-V2 depth relief)
 python scripts/generate_avatar_meshes.py --all
 
 # Audit 27x27 unbound persona domains
@@ -187,6 +216,9 @@ python scripts/verify_unbound_persona_domains.py
 
 # Audit SaveString V2.1 parity & output mismatches
 python scripts/verify_output_mismatches.py
+
+# Verify hardware VHDL 9-bit resolver parity
+python scripts/verify_vhdl_resolver_parity.py
 ```
 
 ---
@@ -196,5 +228,14 @@ python scripts/verify_output_mismatches.py
 - `scripts/ternary_full_expansion.json` — 27 trigrams, 729 hexagrams, 5,832 resolved states (2.9 MB)
 - `DATASETS/full_shotgun_expansion_all.jsonl` — Full 64-hexagram × 8-phase × 3-probe training dataset (1,536 lines, 32.2 MB)
 - `DATASETS/quantumlab_plots/` — 64/64 3D Quantum Wave Packet Space-Time surface plots
+- `DATASETS/depth_maps_16bit/` — 64/64 16-bit PNG depth displacement maps computed via Depth Anything V2
+- `DATASETS/depth_pointclouds/` — 64/64 Open3D PLY point clouds (122k–131k vertices each)
+- `DATASETS/kingwen_avatar_meshes/` — 512/512 binary PLY avatar meshes with DA-V2 wave-packet depth relief
+- `DATASETS/quantum_prewarm_cache.npz` — Pre-warmed $U_V, U_T$ split-step Fourier operator cache (1D/2D/3D)
+- `DATASETS/quantum_prewarm_manifest.json` — Pre-warm telemetry and verification manifest
+- `DATASETS/openusd_stages/` — 64 individual + 1 master OpenUSD macro-world stage
+- `DATASETS/godot_scenes/` — 64 individual + 1 master Godot 4 3D world scene
+- `DATASETS/kingwen_sovereign_world_viewer.html` — Interactive 3D macro-world visualizer with live orbital mechanics, telemetry HUD, and DA-V2 inspector
+- `scripts/quantum_avatar_field.html` — Interactive 512-avatar quantum shotgun visualizer with DA-V2 depth relief and pre-warmed wave packet cache
 - `DATASETS/kingwen_model_sets/kit_*.json` — 64 NPC 3D model kits with deduplicated extra tags
 - `DATASETS/kingwen_64_npc_voice_profiles.json` — 64 designed NPC voice profiles (FastSpeech F0, WaveNet mel channels, KD fidelity)

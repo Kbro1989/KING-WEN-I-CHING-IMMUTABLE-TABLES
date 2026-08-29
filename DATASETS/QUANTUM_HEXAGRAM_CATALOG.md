@@ -15,6 +15,11 @@
 | **8-Phase Pellet Collective Dispersion Plot** | `DATASETS/quantumlab_plots/quantum_8phase_pellet_dispersion.png` | [Fetch 8-Phase Pellet Dispersion](https://raw.githubusercontent.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES/main/DATASETS/quantumlab_plots/quantum_8phase_pellet_dispersion.png) |
 | **Quantum Field Timeseries Readout JSON** | `DATASETS/quantum_field_timeseries_readout.json` | [Fetch Timeseries Readout JSON](https://raw.githubusercontent.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES/main/DATASETS/quantum_field_timeseries_readout.json) |
 | **Quantum Visuals Manifest JSON** | `DATASETS/quantumlab_visuals_manifest.json` | [Fetch Visuals Manifest JSON](https://raw.githubusercontent.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES/main/DATASETS/quantumlab_visuals_manifest.json) |
+| **Depth Anything V2 Manifest JSON** | `DATASETS/depth_anything_v2_manifest.json` | [Fetch DA-V2 Manifest JSON](https://raw.githubusercontent.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES/main/DATASETS/depth_anything_v2_manifest.json) |
+| **Quantum Pre-Warm Operator Cache NPZ** | `DATASETS/quantum_prewarm_cache.npz` | [Fetch Pre-Warm Cache NPZ](https://raw.githubusercontent.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES/main/DATASETS/quantum_prewarm_cache.npz) |
+| **Quantum Pre-Warm Manifest JSON** | `DATASETS/quantum_prewarm_manifest.json` | [Fetch Pre-Warm Manifest JSON](https://raw.githubusercontent.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES/main/DATASETS/quantum_prewarm_manifest.json) |
+| **Macro-World 3D HTML Viewfinder** | `DATASETS/kingwen_sovereign_world_viewer.html` | [Fetch Sovereign World Viewer HTML](https://raw.githubusercontent.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES/main/DATASETS/kingwen_sovereign_world_viewer.html) |
+| **Avatar Field Quantum Shotgun HTML** | `scripts/quantum_avatar_field.html` | [Fetch Quantum Avatar Field HTML](https://raw.githubusercontent.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES/main/scripts/quantum_avatar_field.html) |
 
 ---
 
