@@ -20,7 +20,7 @@ def run_cross_engine_validations():
     # -------------------------------------------------------------------------
     # 1. OpenUSD USDA CLI & Syntax Validation (usdchecker parity)
     # -------------------------------------------------------------------------
-    print("\n[1/6] Auditing OpenUSD (.usda) Stage Files (usdchecker rules)...")
+    print("\n[1/8] Auditing OpenUSD (.usda) Stage Files (usdchecker rules)...")
     usd_dir = ROOT / "DATASETS/openusd_stages"
     master_usd = usd_dir / "kingwen_sovereign_master_stage.usda"
     
@@ -177,6 +177,109 @@ def run_cross_engine_validations():
             if sphere.get("radius", 0) < round(half_diag, 3) - 0.01:
                 errors.append(f"CollisionVis Hex {hid}: Bounding sphere radius does not contain AABB")
     print(f"  -> Checked 64 CollisionVis BVH records: 100% mathematical containment verified.")
+
+    # -------------------------------------------------------------------------
+    # 7. Depth Anything V2 Depth Maps & Point Clouds (optional — validates when present)
+    # -------------------------------------------------------------------------
+    da2_manifest = ROOT / "DATASETS/depth_anything_v2_manifest.json"
+    depth_16bit_dir = ROOT / "DATASETS/depth_maps_16bit"
+    depth_pc_dir = ROOT / "DATASETS/depth_pointclouds"
+    if da2_manifest.exists():
+        print("\n[7/7] Auditing Depth Anything V2 Depth Maps & Point Clouds...")
+        da2 = json.loads(da2_manifest.read_text(encoding="utf-8"))
+        da2_records = da2.get("records", [])
+        if len(da2_records) != 64:
+            errors.append(f"DA-V2 manifest has {len(da2_records)} records, expected 64")
+        for rec in da2_records:
+            hid = rec.get("hexagram_id")
+            # Validate 16-bit depth map exists
+            dm_path = ROOT / rec.get("depth_map_16bit", "")
+            if not dm_path.exists():
+                errors.append(f"DA-V2 Hex {hid}: Missing 16-bit depth map")
+            # Validate point cloud exists and has valid PLY header
+            pc_path = ROOT / rec.get("depth_pointcloud", "")
+            if not pc_path.exists():
+                errors.append(f"DA-V2 Hex {hid}: Missing depth point cloud PLY")
+            else:
+                with open(pc_path, 'r') as pf:
+                    header = pf.readline().strip()
+                    if header != "ply":
+                        errors.append(f"DA-V2 Hex {hid}: Point cloud missing 'ply' magic header")
+            # Validate depth statistics are physically sane
+            stats = rec.get("depth_statistics", {})
+            if stats.get("max_depth", 0) <= stats.get("min_depth", 0):
+                errors.append(f"DA-V2 Hex {hid}: Inverted depth range (max <= min)")
+            if rec.get("pointcloud_vertex_count", 0) < 100:
+                errors.append(f"DA-V2 Hex {hid}: Point cloud has < 100 vertices")
+        print(f"  -> Checked {len(da2_records)} DA-V2 depth records: validated.")
+    else:
+        print("\n[7/7] Depth Anything V2: Not yet generated (skipping — run bridge_depth_anything_v2.py first).")
+
+    # -------------------------------------------------------------------------
+    # 8. Wave Packet Pre-Warm Validation (1D/2D/3D operator caches)
+    # -------------------------------------------------------------------------
+    print("\n[8/8] Validating Wave Packet Pre-Warm Cache (1D/2D/3D)...")
+    prewarm_manifest = ROOT / "DATASETS/quantum_prewarm_manifest.json"
+    prewarm_cache    = ROOT / "DATASETS/quantum_prewarm_cache.npz"
+
+    if not prewarm_manifest.exists():
+        errors.append("Pre-warm manifest missing: DATASETS/quantum_prewarm_manifest.json (run prewarm_quantum_wavepackets.py)")
+    else:
+        import numpy as np
+        pm = json.loads(prewarm_manifest.read_text(encoding="utf-8"))
+        stages = pm.get("stages", {})
+
+        # 1D validation
+        s1 = stages.get("1d", {})
+        if s1.get("N") != 64:
+            errors.append(f"Pre-warm 1D stage N={s1.get('N')} (expected 64)")
+        if s1.get("basis_states") != 64:
+            errors.append(f"Pre-warm 1D basis_states={s1.get('basis_states')} (expected 64)")
+
+        # 2D validation
+        s2 = stages.get("2d", {})
+        if s2.get("binary_phase_states") != 512:
+            errors.append(f"Pre-warm 2D binary_phase_states={s2.get('binary_phase_states')} (expected 512)")
+
+        # 3D validation
+        s3 = stages.get("3d", {})
+        if s3.get("vertex_count") != 729:
+            errors.append(f"Pre-warm 3D vertex_count={s3.get('vertex_count')} (expected 729)")
+        if s3.get("ternary_phase_states") != 5832:
+            errors.append(f"Pre-warm 3D ternary_phase_states={s3.get('ternary_phase_states')} (expected 5832)")
+
+        # Shape checks
+        vd = pm.get("verification", {})
+        if vd.get("3d_vertex_count") != 729:
+            errors.append(f"Pre-warm verification 3d_vertex_count={vd.get('3d_vertex_count')} (expected 729)")
+        if vd.get("2d_binary_states") != 512:
+            errors.append(f"Pre-warm verification 2d_binary_states={vd.get('2d_binary_states')} (expected 512)")
+        if vd.get("3d_ternary_states") != 5832:
+            errors.append(f"Pre-warm verification 3d_ternary_states={vd.get('3d_ternary_states')} (expected 5832)")
+
+        print(f"  -> 1D: basis_states={s1.get('basis_states')}  2D: binary={s2.get('binary_phase_states')}"
+              f"  3D: vertices={s3.get('vertex_count')} ternary={s3.get('ternary_phase_states')}")
+
+    if not prewarm_cache.exists():
+        errors.append("Pre-warm cache missing: DATASETS/quantum_prewarm_cache.npz (run prewarm_quantum_wavepackets.py)")
+    else:
+        import numpy as np
+        cache = np.load(str(prewarm_cache))
+        required_keys = [
+            "1d_U_V_real","1d_U_V_imag","1d_U_T_real","1d_U_T_imag",
+            "2d_U_V_real","2d_U_V_imag","2d_U_T_real","2d_U_T_imag",
+            "3d_U_V_real","3d_U_V_imag","3d_U_T_real","3d_U_T_imag",
+            "3d_prob_density_flat","1d_grid_x",
+        ]
+        for k in required_keys:
+            if k not in cache:
+                errors.append(f"Pre-warm cache missing key: {k}")
+        # Verify 3D prob density flat has exactly 729 entries
+        if "3d_prob_density_flat" in cache:
+            n_flat = cache["3d_prob_density_flat"].shape[0]
+            if n_flat != 729:
+                errors.append(f"Pre-warm 3D prob_density_flat length={n_flat} (expected 729)")
+        print(f"  -> Cache keys validated ({len(required_keys)} required). npz size: {prewarm_cache.stat().st_size//1024}KB")
 
     print("\n" + "=" * 85)
     if errors:

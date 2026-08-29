@@ -133,6 +133,65 @@ def _canonical_729_point_cloud(
 
 
 
+def _apply_depth_anything_relief(
+    points: np.ndarray,
+    hexagram_id: int,
+    phase_bits: int,
+    vortex_tension: float = 0.5,
+) -> np.ndarray:
+    """
+    Apply volumetric 3D surface relief from Depth Anything V2 16-bit depth maps.
+    Each of the 729 points is mapped via spherical coordinates (theta, phi) to
+    (u, v) on the hexagram's depth map, modulating point radius by the wave packet depth.
+    """
+    if not HAS_NUMPY:
+        return points
+
+    depth_map_path = DATASETS / "depth_maps_16bit" / f"depth_hex_{hexagram_id:02d}_16bit.png"
+    if not depth_map_path.exists():
+        return points
+
+    try:
+        from PIL import Image
+        img = Image.open(str(depth_map_path))
+        depth_data = np.array(img, dtype=np.float32)
+        if depth_data.ndim == 3:
+            depth_data = depth_data[:, :, 0]
+        h, w = depth_data.shape[:2]
+
+        norms = np.linalg.norm(points, axis=1)
+        norms = np.where(norms < 1e-10, 1e-10, norms)
+        theta = np.arctan2(points[:, 1], points[:, 0])  # [-pi, pi]
+        phi = np.arccos(np.clip(points[:, 2] / norms, -1.0, 1.0))  # [0, pi]
+
+        # Map to (u, v) in depth texture
+        u_coords = np.clip(((theta + np.pi) / (2.0 * np.pi) * (w - 1)).astype(int), 0, w - 1)
+        v_coords = np.clip((phi / np.pi * (h - 1)).astype(int), 0, h - 1)
+
+        # Sample normalized depth [0..1]
+        depth_samples = depth_data[v_coords, u_coords]
+        d_min = depth_samples.min()
+        d_max = depth_samples.max()
+        if d_max > d_min:
+            d_norm = (depth_samples - d_min) / (d_max - d_min)
+        else:
+            d_norm = np.zeros_like(depth_samples)
+
+        # Phase modulation: each of 8 temporal phases has distinct relief resonance
+        phase_mod = 1.0 + 0.15 * math.cos((2.0 * math.pi * phase_bits) / 8.0)
+        delta_r = (d_norm - 0.5) * 0.40 * (1.0 + vortex_tension) * phase_mod
+
+        # Displace vertices radially
+        displaced = points.copy()
+        for d in range(3):
+            displaced[:, d] *= (1.0 + delta_r)
+
+        return displaced
+    except Exception as e:
+        # Graceful fallback to unperturbed points if depth map cannot be read
+        return points
+
+
 def _apply_wavefunction_deformation(
     points: np.ndarray,
     wavefunction: Dict[str, Dict[str, float]],
@@ -290,6 +349,18 @@ def generate_avatar_mesh(
         points,
         quantum_avatar_state["wavefunction"],
         quantum_avatar_state["scale_factor"],
+    )
+
+    # Apply Depth Anything V2 3D volumetric surface relief
+    base = HEXAGRAM_BASE.get(hexagram_id, {})
+    u_idx = base.get("upper_idx", 1)
+    l_idx = base.get("lower_idx", 1)
+    vortex_tension = (u_idx * l_idx) / 49.0
+    points = _apply_depth_anything_relief(
+        points,
+        hexagram_id,
+        phase_bits,
+        vortex_tension=vortex_tension,
     )
 
     # Apply rotation modulation
@@ -481,7 +552,7 @@ def load_kit(hexagram_id: int) -> dict:
     """Load kit data for a hexagram from kit_*.json."""
     kit_path = KITS_DIR / f"kit_{hexagram_id}.json"
     if kit_path.exists():
-        with open(kit_path, "r") as f:
+        with open(kit_path, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
 
@@ -618,10 +689,10 @@ def main():
                 save_dict[f"{key_prefix}_verts"] = np.array(geom.verts, dtype=np.float32)
                 save_dict[f"{key_prefix}_faces"] = np.array(geom.faces, dtype=np.int32)
                 save_dict[f"{key_prefix}_colors"] = np.array(geom.vertex_colors, dtype=np.float32)
-            np.savez(npz_path, **save_dict)
+            np.savez_compressed(npz_path, **save_dict)
             print(f"Combined NPZ saved: {npz_path}")
 
-        print(f"\n✓ Generated {len(geometries)} avatar meshes")
+        print(f"\n[OK] Generated {len(geometries)} avatar meshes")
 
     elif args.hex is not None and args.phase is not None:
         print(f"Generating single avatar: hex {args.hex}, phase {args.phase}...")
