@@ -334,10 +334,11 @@ PYTHONPATH=. python3 learn/scripts/learn_sequential_hexagrams.py
 
 ## 10. Sovereign Principle
 
-> "The 6 yao lines represent machinery restrictions and diagnostics layer only. Full system implements complex I Ching with temporal dimensions (past/present/future) and polarity states (yin/yang/yao)."
+> "The 6 yao lines represent machinery restrictions and diagnostics layer only. Full system implements complex I Ching with 8 temporal dimensions (past/present/future/transition/resolution/dissolution/crystallization/void — T0..T7) across dual orthogonal coordinate spaces (512 binary phase states, 729 ternary manifold states, 5,832 full resolved states) and polarity states (yin/yang/yao)." `[Updated 2026-08-29]`
 
-This module is the **machinery**. The oracle lives in the hash. The hash lives in the tables. The tables are immutable. The immutability is the sovereignty.
+This module is the **machinery**. The deterministic state selection lives in the coprime prime hash ring (97, 89, 83, 79, 73). The tables are immutable. The immutability is the sovereignty.
 
 ---
 
-*POG2 Sovereign Systems Engineering | STATIC KING WEN REGISTRY | Verified Immutable | 2026-07-10*
+*King Wen Sovereign Model Engine | STATIC REGISTRY & 9-BIT RESOLVER | Verified Immutable | 2026-08-29*
+

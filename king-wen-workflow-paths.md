@@ -188,7 +188,7 @@ No guessing. Paths are exact. Consumers are exact.
 3. Returns payload with:
    - `hexagram_id`, `hexagram_name`, `hexagram_unicode`, `binary`, `upper_trigram`, `lower_trigram`, `category`, `action`
    - `emotional_deltas.chaos/whimsy/darkTone/coherence/voiceWeight`
-   - `reflections.past/present/future`
+   - `reflections` across 8 temporal phases (past, present, future, transition, resolution, dissolution, crystallization, void) `[Updated 2026-08-29]`
    - `trainingNotes`
 4. Active consumers append payload to:
    - prompt sections via `OpenJarvis/src/openjarvis/prompt/builder.py`
@@ -204,12 +204,13 @@ No guessing. Paths are exact. Consumers are exact.
 4. Stores `voice_id` and `speed` on agent instance
 5. `OpenJarvis/src/openjarvis/system/orchestrator.py` and `OpenJarvis/src/openjarvis/sdk.py` wire provider when `digest.emotion_enabled` is true
 
-### Active workflow 3: Deterministic selection in TS runtime
+### Active workflow 3: Deterministic selection in TS runtime `[Updated 2026-08-29]`
 1. `src/core/OracleEngine.ts` loads tables into maps
-2. `consult(query)` calls `EmotionalParser.parse(query)`
-3. `computeTemporalPhase(tick, emotional_input)`
-4. `deterministicHexagramSelect(tick, session_id, previousHex, selector)`
-5. Returns `OracleResponse` with reflections and emotional deltas
+2. `consult(query)` calls `EmotionalParser.parse(query)` using 15-intent keyword dictionary and 5-axis coprime prime extractor $(97, 89, 83, 79, 73)$ over ASCII token sum $H = \sum \text{ord}(c)$
+3. `computeTemporalPhase(tick, emotional_input)` resolves 8 King Wen temporal phases (T0..T7)
+4. Emits enriched query with `deterministic_inject_hash` (SHA-256) to multi-layer expansion server without 1-hex early collapse
+5. Returns `OracleResponse` with 8-phase reflections, emotional deltas, and expanded/resolved state telemetry
+
 
 ### Reactive workflow 1: Verification
 1. `scripts/verify_registry.py` reads `KING_WEN_TABLES.py`

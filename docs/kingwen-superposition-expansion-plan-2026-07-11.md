@@ -9,14 +9,15 @@ Source of truth: `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\`
 - Constraint: no hard-coded paths. All domains, cards, pools, models, and tooling branches must be derived from live query semantics, inject-site tables, and parsed external math/AI sources.
 
 ## Verified Live Foundation
-- `emotional_engine.py` already produces:
+- `emotional_engine.py` *(legacy engine module, now integrated into `king-wen-64-sovereign-model-engine` v2.1.0)* already produces:
   - 64 expanded hexagrams
-  - 512 resolved states
+  - 512 binary phase states (64 × 8)
+  - 729 ternary manifold states (3^6 = 27 × 27) and 5,832 resolved phase states (729 × 8) in dual orthogonal coordinate spaces `[Updated 2026-08-29]`
   - inject-site pools with primary/secondary pool names
-  - 8 temporal phases
+  - 8 temporal phases (past, present, future, transition, resolution, dissolution, crystallization, void) `[Updated 2026-08-29]`
   - yin/yang/yao line states per position
   - 5-axis resolved vectors
-- `collapse_full_128_output.json` confirms:
+- `collapse_full_128_output.json` *(legacy reference run; `collapse_full_128()` deprecated in favor of full multi-layer expansion)* confirms:
   - 65 distinct pools
   - 512 unique resolved vectors
   - all 64 hexagram ids represented
@@ -48,13 +49,13 @@ Source of truth: `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\`
   - immutable base vector
 - Result: 64 simultaneous candidate paths.
 
-### Screen 2 — Trigrams Into Past/Present/Future
-- For each hexagram, derive a 3-branch temporal slice from trigram relationship.
-- Deterministic mapping from line-state structure to:
-  - past
-  - present
-  - future
+### Screen 2 — 8-Phase King Wen Temporal Expansion `[Updated 2026-08-29]`
+- For each hexagram, derive an 8-branch temporal expansion from phase bits (0b000..0b111):
+  - `past` (T0), `present` (T1), `future` (T2), `transition` (T3),
+    `resolution` (T4), `dissolution` (T5), `crystallization` (T6), `void` (T7)
 - Each branch is independent and carries forward all BB state.
+- Total expansion: 64 hexagrams × 8 phases = 512 binary states; extended to 729 ternary manifold (3⁶) = 5,832 resolved phase states.
+
 
 ### Screen 3 — Yin/Yang/Yao Line-State Slicing
 - Each hexagram line is a cut condition.

@@ -77,7 +77,7 @@ OpenJarvis/
 2. Rank all 512 resolved states by: keyword overlap + vector quality + normalized porosity + phase tiebreak
 3. Add `normalizePorosity()`: source integer 0-4 → 0.0-1.0
 4. Return `all_hexagrams[]` with per-entry: `relevance_score`, `query_tokens`, `phase_temporal`, `phase_polarity`, `phase_description`, `line_states`, `yao_vocabulary`, `checklist`, `sample_paths`, `resolved_vector`, `expanded_vector`
-5. Top result generates `buildReasonedOutput()`: `unified_weave`, `sovereign_assertion`, `boundary_condition`, `dissipator_warning`, `past_reflection`, `present_reflection`, `future_reflection`
+5. Top result generates `buildReasonedOutput()`: `unified_weave`, `sovereign_assertion`, `boundary_condition`, `dissipator_warning`, and per-phase reflections across all 8 temporal phases (past/present/future/transition/resolution/dissolution/crystallization/void) `[Updated 2026-08-29: expanded from 3-phase past/present/future]`
 6. Add `query_tokens`, `resolved_count`, `expanded_count`, `runtime_consensus`, `runtime_source`
 7. matchesFilter reads `hex.hexagram_symbols.category/action` when top-level fields absent
 8. `if_is` / `if_is_not` filtering must operate on full 64, not filtered subset
@@ -151,7 +151,7 @@ OpenJarvis/
 
 **Steps:**
 1. Save-string format: `hex_id:phase:vw:ch:cc:wh:dt:porosity:timestamp:domain`
-2. Phase encoding: `a`=past, `p`=present, `f`=future
+2. Phase encoding: 8 phases T0..T7 (past=0, present=1, future=2, transition=3, resolution=4, dissolution=5, crystallization=6, void=7) `[Updated 2026-08-29: expanded from legacy 3-phase a/p/f]`
 3. Batch format: 64 comma-separated compact strings, `;` separates payload from metadata
 4. Inject-site fields with `:` or `|` delimiters must be base64-encoded: `yao_vocabulary`, `sample_paths`, `line_states`, `porosity_window`
 5. Validate structurally, not by single mega-regex

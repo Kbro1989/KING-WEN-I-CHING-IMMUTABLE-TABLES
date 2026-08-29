@@ -108,18 +108,25 @@ Canonical tables: `data/hexagram-registry.json`, `data/emotional-weights.json`, 
 - Deprecated generated files.
 - Do not use in active paths; only for reference if regeneration is needed.
 
+### `src/hardware/`
+- `KingWen9BitResolver.vhd`: 9-bit deterministic hardware resolver synthesizing ROM tables directly from `HEXAGRAM_BASE`.
+- `KingWenExpected_pkg.vhd`: Full 512-state simulation expected vectors package.
+- `tb_KingWen9BitResolver.vhd`: 512-address hardware testbench.
+- `ConsensusAccumulator.vhd` & `DynamicEmotionalInputDerivator.vhd`: Hardware consensus & entropy derivators.
+
 ### `README.md`
-- Documents 9-bit state shell: 6-bit identity + 3-bit temporal.
-- Documents pipeline: `1(state/question) -> 3(temporal) -> 64(hexagram|emotion) -> 3(temporal) -> 2(subsets) -> 1(resolve)`.
-- Documents invariants and source-of-truth rule.
+- Documents the 6-Layer Deterministic Pipeline: Parse $\to$ Pool $\to$ Expand $\to$ Tag $\to$ Consensus $\to$ Telemetry.
+- Documents 5 coprime prime extractor $(97, 89, 83, 79, 73)$ and 8-phase King Wen temporal math.
+- Documents Dual Orthogonal Coordinates: 512 Binary Phase Space vs 729 Ternary Manifold vs 5,832 Full Resolved States.
 
 ### `package.json`
-- Name: `oracle-emotional-state-machine`
+- Name: `king-wen-64-sovereign-model-engine` (v2.1.0)
 - Scripts:
   - `build`: `tsc`
   - `test`: `node --test dist/tests/*.js`
-  - `demo`: `node scripts/demo.js`
-  - `verify`: `python scripts/verify_registry.py && python scripts/run_all.py && npm test`
+  - `pipeline`: `python scripts/run_all_unified_pipeline.py`
+  - `server`: `python expand_server.py`
+  - `verify`: `npm run pipeline`
 - Active dependents: build/test tooling.
 
 ### `tsconfig.json`
@@ -127,29 +134,21 @@ Canonical tables: `data/hexagram-registry.json`, `data/emotional-weights.json`, 
 - Includes `src/**/*` and `data/**/*`.
 - Active dependents: TypeScript compilation pipeline.
 
-### `src/__init__.py`, `data/__init__.py`
-- Empty package markers.
-- Active dependents: Python package resolution paths.
-
 ---
 
 ## Active vs Reactive Toolchain Dependents
 
 Active:
-- `src/core/OracleEngine.ts`
-- `src/parser/NarrativeEngine.ts`
-- `src/parser/EmotionalParser.ts`
-- `src/utils/TemporalMath.ts`
-- `src/utils/DeterministicHash.ts`
-- `src/types/oracle.ts`
-- OpenJarvis `emotion/kingwen.py`
-- OpenJarvis `agents/_stubs.py`
-- OpenJarvis `prompt/builder.py`
-- OpenJarvis CLI response paths (`ask.py`, `chat_cmd.py`, `channel_agent.py`)
-- `ollama_launch_cmd.py` task fit (`kingwen`)
+- `src/core/OracleEngine.ts` (Active input transformation + transparent relay)
+- `src/parser/EmotionalParser.ts` (15-intent keyword dictionary + coprime prime hash)
+- `src/utils/TemporalMath.ts` (8-phase King Wen temporal math)
+- `src/utils/DeterministicHash.ts` (5 coprime prime extractors + SHA-256 inject hashing)
+- `src/hardware/KingWen9BitResolver.vhd` (9-bit deterministic hardware resolver)
+- `scripts/run_all_unified_pipeline.py` (Unified 18-stage pipeline)
+- `expand_server.py` (Local HTTP expansion server)
 
 Reactive:
-- `scripts/verify_registry.py`
-- `scripts/generate_*.py`
-- `tests/oracle.test.ts`
-- deprecated generator outputs
+- `scripts/verify_vhdl_resolver_parity.py`
+- `scripts/verify_unbound_persona_domains.py`
+- `scripts/verify_output_mismatches.py`
+- `tests/oracle-runtime-audit.test.js`

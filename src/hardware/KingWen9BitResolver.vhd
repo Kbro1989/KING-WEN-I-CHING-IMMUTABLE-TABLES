@@ -1,7 +1,7 @@
 -- King Wen 9-Bit State Resolver (POG3 Sovereign Stack)
 -- Target: Zynq UltraScale+ ZU7EV PL Fabric
 --
--- GENERATED FILE â€” DO NOT HAND-EDIT.
+-- GENERATED FILE — DO NOT HAND-EDIT.
 -- Source of truth: kingwen_ternary_tables_complete.py :: HEXAGRAM_BASE
 -- Generator: scripts/generate_vhdl_roms.py
 --

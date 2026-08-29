@@ -107,11 +107,13 @@ Legend:
 | `emotional_engine.py: _compute_consensus_from_resolved()` | Replace `voiceWeight*0.6 + coherence*0.4` with open-pool surface: primary/secondary pool vectors + porosity window + yin/yang/yao balance | Distinct consensus per emotional_input step | P1 |
 | `expand_server.py` | Serialize full `consensus` block into HTTP `/expand` JSON | HTTP callers see open consensus output | P1 |
 
-### 16-phase expansion target
+### Full Manifold Expansion Target `[Updated 2026-08-29]`
+> **Architecture Note:** State space expansion is canonically structured across dual orthogonal coordinate spaces: 512 binary phase states (64 × 8 King Wen temporal phases T0..T7) and 729 unconstrained ternary manifold states ($3^6 = 27 \times 27$), yielding 5,832 total resolved phase states ($729 \times 8$) in `scripts/ternary_full_expansion.json`.
+
 | Target file | Exact change | Enables | Priority |
 |---|---|---|---|
-| `emotional_engine.py: collapse_full_128()` | Extend from 8 phases per hex to 16 phases when 2× expansion requested | Double state coverage for training | P2 |
-| `learn/scripts/test_collapse_full_1024.py` | Update assertion from `total_resolved == 1024` to match actual phase count | Test passes after engine upgrade | P2 |
+| `scripts/multi_layer_expand.py` | Full 64 expanded + 512 resolved + 729 ternary manifold generation | Dual orthogonal state coverage | P1 |
+| `scripts/build_ternary_expansion.py` | Generates 5,832 resolved phase states across $27 \times 27 \times 8$ | Full training tensor coverage | P1 |
 
 ---
 
