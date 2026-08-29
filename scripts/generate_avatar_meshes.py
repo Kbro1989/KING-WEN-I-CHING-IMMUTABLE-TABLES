@@ -97,34 +97,40 @@ class AvatarGeometry:
     delegate_vector: Dict[str, float]          # 5-axis delegation propensity
 
 
-def _gaussian_blob_points(
-    center: Tuple[float, float, float],
+def _canonical_729_point_cloud(
+    hexagram_id: int,
     radius: float,
-    num_points: int,
-    seed: int,
-) -> np.ndarray:
+) -> "np.ndarray":
     """
-    Generate a spherical Gaussian-distributed point cloud using shap-e's
-    deterministic seed pattern. This is the base geometry for each NPC avatar.
+    Generate the canonical 729-vertex deterministic parametric point cloud.
 
-    The point distribution itself is deterministic per (hexagram_id, phase_bits)
-    — no randomness across runs. The shape is a perturbed sphere where the
-    perturbation direction and magnitude come from the quantum_avatar_state's
-    wavefunction real/imaginary components.
+    This is the ONLY valid source of avatar mesh geometry.
+
+    Single source of truth formula (matches shap_e_kingwen_3d_generator.py):
+        t    = 2*pi*i / 729       for i in 0..728  (3^6 ternary state index)
+        r(t) = 1.0 + 0.2*sin(6t)  (spiraling radius modulation)
+        x_i  = r(t)*cos(t)
+        y_i  = r(t)*sin(t)
+        z_i  = 0.5*cos(t * ((hexagram_id % 8) + 1))
+
+    No numpy random. No seeded RNG. No gaussian blob. No randomness of any kind.
+    The 729 points are the complete 3^6 ternary line-state permutation manifold
+    embedded in 3D space — every point encodes a distinct ternary state coordinate.
     """
-    rng = np.random.RandomState(seed)
+    import math as _math
     points = []
+    for i in range(729):
+        t = (2.0 * _math.pi * i) / 729.0
+        r = 1.0 + 0.2 * _math.sin(6.0 * t)
+        x = r * _math.cos(t) * radius
+        y = r * _math.sin(t) * radius
+        z = 0.5 * _math.cos(t * ((hexagram_id % 8) + 1)) * radius
+        points.append([x, y, z])
 
-    for _ in range(num_points):
-        # Uniform point on sphere (Gaussian method)
-        vec = rng.normal(size=3)
-        vec /= np.linalg.norm(vec)
+    if HAS_NUMPY:
+        return np.array(points, dtype=np.float64)
+    return points  # type: ignore
 
-        # Radial perturbation modulated by wavefunction amplitude
-        r = radius * (1.0 + 0.3 * rng.uniform(-1, 1))
-        points.append(vec * r)
-
-    return np.array(points)
 
 
 def _apply_wavefunction_deformation(
@@ -271,19 +277,15 @@ def generate_avatar_mesh(
     phase_info = PHASE_INFO[phase_bits]
     codename = quantum_avatar_state["kit_identity"]["codename"]
 
-    # Seed: deterministic per (hexagram, phase) — no randomness across runs
-    seed = hexagram_id * 100 + phase_bits * 10 + int(
-        quantum_avatar_state["animation_phase"] * 1000
-    )
+    # Scale radius from quantum scale_factor — no randomness
+    radius = quantum_avatar_state["scale_factor"] * 0.5
 
-    # Point cloud parameters derived from kit geometry
-    num_points = 1024  # Base resolution
-    radius = quantum_avatar_state["scale_factor"] * 0.5  # Scale to avatar size
+    # Generate canonical 729-vertex deterministic parametric point cloud.
+    # 729 = 3^6 — all ternary line-state permutations encoded as XYZ positions.
+    # No RNG. No seed. No Gaussian blob. Identical output every run.
+    points = _canonical_729_point_cloud(hexagram_id, radius)
 
-    # Generate base sphere
-    points = _gaussian_blob_points((0, 0, 0), radius, num_points, seed)
-
-    # Apply wavefunction deformation
+    # Apply wavefunction deformation from quantum_avatar_state
     points = _apply_wavefunction_deformation(
         points,
         quantum_avatar_state["wavefunction"],

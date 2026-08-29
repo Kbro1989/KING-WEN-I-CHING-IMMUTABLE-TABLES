@@ -2,7 +2,7 @@ export { OracleEngine } from './core/OracleEngine.js';
 export { EmotionalParser } from './parser/EmotionalParser.js';
 export { NarrativeEngine } from './parser/NarrativeEngine.js';
 export { computeTemporalPhase, phaseToString } from './utils/TemporalMath.js';
-export { deterministicHash, deterministicIndex, deterministicHexagramSelect } from './utils/DeterministicHash.js';
+export { deterministicHash, deterministicHashHex, computeTokenSum, extractCoprimePrimeVector, generateDeterministicInjectHash, } from './utils/DeterministicHash.js';
 export { HexagramRuntimeBridge } from './core/HexagramRuntimeBridge.js';
 export * from './types/IntentVector.js';
 export * from './types/StateCapture.js';

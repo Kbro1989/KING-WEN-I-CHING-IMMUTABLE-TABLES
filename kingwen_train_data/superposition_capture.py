@@ -180,7 +180,7 @@ def capture_superposition(query: str, *, emotional_input: int = 50, record_math:
             "total_expanded": len(expanded),
             "total_resolved": len(resolved),
             "expanded": expanded,
-            "resolved": resolved[:64],
+            "resolved": resolved,
         },
         "resolve_cards": resolve_cards,
         "domain_coverage": {

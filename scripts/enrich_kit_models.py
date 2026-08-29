@@ -165,6 +165,8 @@ def enrich_kit_file(hex_id: int) -> Dict[str, Any]:
 
 
 def main() -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     print("=" * 80)
     print("ENRICHING 64 KING WEN KIT MODELS WITH GROUNDED MODEL NPC IN/OUT TAGS")
     print("=" * 80)
@@ -184,7 +186,7 @@ def main() -> int:
         "grounded_npc": sample_json.get("grounded_npc"),
         "extra_sample": sample_json.get("extra")[:8],
     }, indent=2)
-    sys.stdout.buffer.write(sample_str.encode("utf-8") + b"\n")
+    print(sample_str)
 
     return 0
 

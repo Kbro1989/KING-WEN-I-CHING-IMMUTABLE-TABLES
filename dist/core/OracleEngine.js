@@ -1,6 +1,9 @@
 import { readFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
+import { EmotionalParser } from '../parser/EmotionalParser.js';
+import { computeTemporalPhase } from '../utils/TemporalMath.js';
+import { generateDeterministicInjectHash } from '../utils/DeterministicHash.js';
 const DEFAULT_LOCAL_URL = 'http://127.0.0.1:8765/expand';
 const REQUEST_TIMEOUT_MS = 60_000;
 let _reflectionsCache = null;
@@ -42,6 +45,13 @@ export class LocalOracleClient {
             emotional_input: query.emotional_input ?? 50,
             session_id: query.session_id || 'anon',
             text: query.text || '',
+            request_text: query.text || '',
+            tick: query.tick ?? 0,
+            inject_hash: query.injectHash || '',
+            temporal_phase: query.temporalState?.phaseName || 'present',
+            dominant_phase: query.temporalState?.dominantPhase ?? 1,
+            user_context: query.user_context,
+            parsed_vector: query.parsedVector,
         };
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -97,11 +107,14 @@ export class LocalOracleClient {
 }
 export class OracleEngine {
     client;
+    parser;
     deterministic;
+    tick = 0;
     constructor(config = {}) {
         this.client = new LocalOracleClient({
             url: config.localUrl || DEFAULT_LOCAL_URL,
         });
+        this.parser = new EmotionalParser();
         this.deterministic = config.deterministic ?? true;
     }
     loadRegistry() {
@@ -110,8 +123,33 @@ export class OracleEngine {
     loadReflections() {
         this.client.loadReflections();
     }
+    /**
+     * Deterministic consult pipeline:
+     *   1. Parse intent & semantic token hash across 5 coprime primes (97, 89, 83, 79, 73)
+     *   2. Compute 8-phase King Wen temporal state (deterministic from tick % 8)
+     *   3. Compute SHA-256 deterministic inject hash
+     *   4. Dispatch enriched payload to full 512-state / 729-state expansion pass
+     *   5. Map consensus and resolved field without early collapse
+     */
     async consult(query = { text: '', session_id: 'anon' }) {
-        return this.client.consult(query);
+        const currentTick = this.tick++;
+        const emotionalInput = query.emotional_input ?? 50;
+        // 1. Deterministic Input Transformation (coprime primes + keyword scoring)
+        const parsedVector = this.parser.parse(query);
+        const intentExtraction = this.parser.extractIntent(query.text || '');
+        // 2. 8-Phase Temporal Math (tick modulo 8, no RNG)
+        const temporalState = computeTemporalPhase(currentTick, emotionalInput);
+        // 3. SHA-256 Deterministic Inject Hash
+        const injectHash = await generateDeterministicInjectHash(query.session_id || 'anon', currentTick, query.text || '');
+        const enrichedQuery = {
+            ...query,
+            tick: currentTick,
+            parsedVector,
+            intentExtraction,
+            temporalState,
+            injectHash,
+        };
+        return this.client.consult(enrichedQuery);
     }
 }
 // =============================================================================

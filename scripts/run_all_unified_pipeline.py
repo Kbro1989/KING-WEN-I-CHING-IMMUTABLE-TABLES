@@ -13,6 +13,7 @@ Executes the entire end-to-end pipeline using ONLY files internal to this reposi
 No external programs, paths, or sidecars required.
 """
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -46,10 +47,11 @@ def main() -> int:
     print("KING WEN 64 SOVEREIGN MODEL ENGINE — UNIFIED SELF-CONTAINED PIPELINE")
     print("=" * 80)
 
+    sub_env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
     stage_passed = 0
     for name, cmd in PIPELINE_STAGES:
         print(f"\n[RUNNING STAGE] {name}...")
-        res = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8", errors="replace")
+        res = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True, encoding="utf-8", errors="replace", env=sub_env)
         if res.returncode == 0:
             print(f"  [SUCCESS] {name} completed with 0 errors.")
             stage_passed += 1

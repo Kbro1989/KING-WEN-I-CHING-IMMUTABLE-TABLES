@@ -169,7 +169,7 @@ def main() -> None:
         "resolved": resolved,
     }
 
-    OUTPUT_PATH.write_text(json.dumps(out, ensure_ascii=False, indent=2))
+    OUTPUT_PATH.write_text(json.dumps(out, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Wrote {OUTPUT_PATH}")
     print(f"Trigrams: {len(trigrams)}")
     print(f"Hexagrams: {len(hexagrams)} ({canonical_count} canonical, {ternary_count} ternary)")
