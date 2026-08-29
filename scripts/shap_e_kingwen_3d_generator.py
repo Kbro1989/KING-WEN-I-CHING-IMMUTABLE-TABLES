@@ -244,8 +244,10 @@ def try_run_shap_e_live(manifest: List[Dict[str, Any]], limit: int = 1) -> None:
 
 
 def main() -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     print("=" * 80)
-    print("KING WEN 64 SOVEREIGN MODEL NPCs — SHAP-E 3D AVATAR GENERATOR")
+    print("KING WEN 64 SOVEREIGN MODEL NPCs -- SHAP-E 3D AVATAR GENERATOR")
     print("=" * 80)
 
     manifest = generate_shap_e_manifest()
@@ -254,12 +256,9 @@ def main() -> int:
 
     print("\nSample Shap-E Prompts:")
     for item in manifest[:3]:
-        sample_line = (
-            f"  Hex #{item['hexagram_id']:02d} [{item['agent_type'].upper()}] '{item['name']}':\n"
-            f"    Prompt   : {item['shap_e_prompt']}\n"
-            f"    Guidance : {item['diffusion_params']['guidance_scale']} | Mesh: {item['output_mesh_path']}\n\n"
-        )
-        sys.stdout.buffer.write(sample_line.encode("utf-8"))
+        print(f"  Hex #{item['hexagram_id']:02d} [{item['agent_type'].upper()}] '{item['name']}':")
+        print(f"    Prompt   : {item['shap_e_prompt']}")
+        print(f"    Guidance : {item['diffusion_params']['guidance_scale']} | Mesh: {item['output_mesh_path']}\n")
 
     if "--run" in sys.argv:
         try_run_shap_e_live(manifest)
