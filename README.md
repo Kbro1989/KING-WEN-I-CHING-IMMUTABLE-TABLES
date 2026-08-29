@@ -49,6 +49,7 @@ The active formalization surface. **5,832-state runtime path** is built here.
 | `verify_cross_engine_cli_validation.py` | 8-suite cross-engine validation (OpenUSD, Godot 4, RSMV, Red9, MUGEN, CollisionVis, DA-V2, Wave Packet Pre-Warm) |
 | `verify_vhdl_resolver_parity.py` | 512-address functional simulation verifying hardware VHDL resolver parity |
 | `verify_output_mismatches.py` | Exhaustive zero-mismatch output audit across 7 subsystem component sets |
+| `ingest_jkd_megatron_wavepackets.py` | Gap-aware full-book batch ingestion producing continuous emotion vectors, Hamiltonian scalar trajectories, and acoustic frequencies for Megatron training |
 
 ### `docs/`
 Research and math first, not hand-wavy definitions.
@@ -134,7 +135,9 @@ Ingestion outputs and raw source text.
 | `openusd_stages/` | 64 individual + 1 master OpenUSD stage (`kingwen_sovereign_master_stage.usda`) |
 | `godot_scenes/` | 64 individual + 1 master Godot 4 scene (`kingwen_sovereign_world_scene.tscn`) |
 | `kingwen_sovereign_world_topology.json` | Master 64-sector macro-world topology with 8 biomes, Schauberger vortices, porosity, and DA-V2 stats |
-| `kingwen_sovereign_world_viewer.html` | Interactive 3D macro-world visualizer with live orbital mechanics, telemetry HUD, and DA-V2 inspector |
+| `kingwen_sovereign_world_viewer.html` | Interactive 3D macro-world visualizer with live Web Audio spatial harmonics synthesizer and WAV sample recorder |
+| `jkd_megatron_wavepacket_emotions.jsonl` | Full-book 2,471-chunk Megatron training dataset with emotion vectors, Hamiltonian scalar trajectories, and acoustic harmonics |
+| `jkd_megatron_manifest.json` | Summary manifest for JKD Megatron wavepacket emotion dataset |
 | `*.csv` | Category, emotional timeseries, save strings, transition graph, trigram reference |
 
 ## 6-Layer Deterministic Pipeline Architecture

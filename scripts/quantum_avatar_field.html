@@ -120,6 +120,7 @@
     </select>
     <button id="pulseBtn">Pulse Shotgun</button>
     <button id="autoPulse">Auto-Pulse</button>
+    <button id="audioToggle" style="background:#1e293b;color:#38bdf8;border:1px solid #38bdf8;">🔊 Harmonics: OFF</button>
     <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:#888;">
       <input type="checkbox" id="depthRelief" checked />
       <span>DA-V2 Depth Relief</span>
@@ -564,6 +565,7 @@ async function pulseShotgun() {
 
     // Status update
     const cons = data.consensus || {};
+    synthesizePulseHarmonics(data);
     document.getElementById('status').textContent =
       `✓ ${data.expanded_count || expanded.length} expanded | ` +
       `${data.resolved_count || resolved.length} resolved | ` +
@@ -627,10 +629,84 @@ function startAutoPulse() {
 }
 
 // ============================================================
+// Web Audio API Wave Packet Harmonic Synthesizer
+// ============================================================
+let audioCtx = null;
+let audioActive = false;
+let pulseOscillators = [];
+let fieldFilter = null;
+let fieldGain = null;
+
+function initFieldAudio() {
+  if (audioCtx) return;
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  audioCtx = new AudioContext();
+  fieldGain = audioCtx.createGain();
+  fieldGain.gain.setValueAtTime(0.0, audioCtx.currentTime);
+
+  fieldFilter = audioCtx.createBiquadFilter();
+  fieldFilter.type = 'lowpass';
+  fieldFilter.frequency.setValueAtTime(1400, audioCtx.currentTime);
+  fieldFilter.Q.setValueAtTime(3.0, audioCtx.currentTime);
+
+  fieldGain.connect(fieldFilter);
+  fieldFilter.connect(audioCtx.destination);
+
+  const baseFreqs = [146.0, 158.0, 166.0, 178.0, 194.0, 206.0];
+  for (let i = 0; i < 6; i++) {
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = i % 2 === 0 ? 'triangle' : 'sine';
+    osc.frequency.setValueAtTime(baseFreqs[i], audioCtx.currentTime);
+    g.gain.setValueAtTime(0.08, audioCtx.currentTime);
+    osc.connect(g);
+    g.connect(fieldGain);
+    osc.start();
+    pulseOscillators.push({ osc, gain: g, baseFreq: baseFreqs[i] });
+  }
+}
+
+function toggleFieldAudio() {
+  initFieldAudio();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  audioActive = !audioActive;
+  const btn = document.getElementById('audioToggle');
+  if (audioActive) {
+    btn.textContent = '🔊 Harmonics: ON';
+    btn.style.background = '#38bdf8';
+    btn.style.color = '#0f172a';
+    fieldGain.gain.setTargetAtTime(0.20, audioCtx.currentTime, 0.05);
+  } else {
+    btn.textContent = '🔊 Harmonics: OFF';
+    btn.style.background = '#1e293b';
+    btn.style.color = '#38bdf8';
+    fieldGain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.05);
+  }
+}
+
+function synthesizePulseHarmonics(data) {
+  if (!audioActive || !audioCtx) return;
+  const now = audioCtx.currentTime;
+  const cons = data.consensus || {};
+  const hid = cons.consensus_hexagram_id || 1;
+  const porosity = cons.consensus_porosity_mean || 0.5;
+
+  fieldFilter.frequency.setTargetAtTime(400 + porosity * 2800, now, 0.08);
+  fieldGain.gain.setValueAtTime(0.25, now);
+  fieldGain.gain.exponentialRampToValueAtTime(0.08, now + 1.2);
+
+  pulseOscillators.forEach((po, i) => {
+    const shift = 1.0 + (hid % 8) * 0.05 + (i * 0.12);
+    po.osc.frequency.setTargetAtTime(po.baseFreq * shift, now, 0.05);
+  });
+}
+
+// ============================================================
 // Init
 // ============================================================
 document.getElementById('pulseBtn').addEventListener('click', pulseShotgun);
 document.getElementById('autoPulse').addEventListener('click', startAutoPulse);
+document.getElementById('audioToggle').addEventListener('click', toggleFieldAudio);
 document.getElementById('sliderInput').addEventListener('input', (e) => {
   document.getElementById('sliderVal').textContent = e.target.value;
 });

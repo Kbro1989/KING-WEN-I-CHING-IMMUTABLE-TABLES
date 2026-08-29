@@ -84,19 +84,45 @@ def generate_sovereign_world():
             biome_id = row
             biome = temporal_biomes[biome_id]
 
-            # 6-Yao Line Quantum Pellets (L1 to L6)
+            # 6-Yao Line Quantum Pellets (L1 to L6) — Full Ternary Resolution (0=Yin, 1=Yang, 2=Yao/Changing)
+            COPRIME_BASE_FREQS = [146.0, 158.0, 166.0, 178.0, 194.0, 206.0]
             yao_pellets = []
             for line_idx in range(6):
                 bit = int(binary_str[line_idx]) if line_idx < len(binary_str) else 1
+                # Check for temporal phase changing line modulation (ternary state 2 = yao)
+                is_changing = (biome_id in [3, 4]) and ((line_idx % 3) == (biome_id % 3))
+                ternary_state = 2 if is_changing else (1 if bit == 1 else 0)
+
                 orbit_radius = round(6.0 + line_idx * 2.2, 2)
-                orbital_speed = round(0.5 + (line_idx + 1) * 0.25 * (1.0 + vortex_tension), 3)
+                orbital_speed = round(0.5 + (line_idx + 1) * 0.25 * (1.0 + vortex_tension) * (1.2 if ternary_state == 2 else 1.0), 3)
+
+                if ternary_state == 1:
+                    line_type = "yang"
+                    color_hex = "#FFD700"
+                    energy = 1.0
+                    freq_hz = round(COPRIME_BASE_FREQS[line_idx] * (1.0 + vortex_tension * 0.25), 2)
+                elif ternary_state == 0:
+                    line_type = "yin"
+                    color_hex = "#38BDF8"
+                    energy = 0.6
+                    freq_hz = round(COPRIME_BASE_FREQS[line_idx] * 0.82 * (1.0 + vortex_tension * 0.25), 2)
+                else:
+                    line_type = "yao"
+                    color_hex = "#A855F7"
+                    energy = 1.4
+                    freq_hz = round(COPRIME_BASE_FREQS[line_idx] * 1.18 * (1.0 + vortex_tension * 0.25), 2)
+
                 yao_pellets.append({
                     "line_position": line_idx + 1,
-                    "line_type": "yang" if bit == 1 else "yin",
+                    "sub_trigram": "lower" if line_idx < 3 else "upper",
+                    "sub_position": (line_idx % 3) + 1,
+                    "ternary_state": ternary_state,
+                    "line_type": line_type,
                     "orbit_radius": orbit_radius,
                     "orbital_speed": orbital_speed,
-                    "color_hex": "#FFD700" if bit == 1 else "#38BDF8",
-                    "energy_intensity": 1.0 if bit == 1 else 0.6
+                    "color_hex": color_hex,
+                    "energy_intensity": energy,
+                    "frequency_hz": freq_hz
                 })
 
             sector = {
@@ -303,12 +329,22 @@ shadow_enabled = true
       position: absolute; bottom: 20px; left: 20px; z-index: 10;
       background: rgba(11, 15, 25, 0.75); padding: 10px 18px; border-radius: 8px; font-size: 12px; color: #94a3b8; border: 1px solid rgba(255,255,255,0.1);
     }
-    .legend { display: flex; gap: 12px; margin-top: 10px; font-size: 11px; }
+    .legend { display: flex; gap: 12px; margin-top: 10px; font-size: 11px; flex-wrap: wrap; }
     .leg-item { display: flex; align-items: center; gap: 5px; }
     .dot-gold { width: 8px; height: 8px; border-radius: 50%; background: #FFD700; box-shadow: 0 0 6px #FFD700; }
     .dot-blue { width: 8px; height: 8px; border-radius: 50%; background: #38BDF8; box-shadow: 0 0 6px #38BDF8; }
-    .dot-purple { width: 8px; height: 8px; border-radius: 50%; background: #A855F7; }
+    .dot-purple { width: 8px; height: 8px; border-radius: 50%; background: #A855F7; box-shadow: 0 0 6px #A855F7; }
     .dot-white { width: 8px; height: 8px; border-radius: 50%; background: #fff; border: 1px solid #888; }
+    .audio-btn {
+      background: #1e293b; color: #38bdf8; border: 1px solid #38bdf8; padding: 5px 12px;
+      border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s ease;
+    }
+    .audio-btn:hover { background: #38bdf8; color: #0f172a; }
+    .rec-btn {
+      background: #1e293b; color: #f59e0b; border: 1px solid #f59e0b; padding: 5px 12px;
+      border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s ease; margin-left: 6px;
+    }
+    .rec-btn:hover { background: #f59e0b; color: #0f172a; }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -323,10 +359,14 @@ shadow_enabled = true
     <div class="stat-row"><span>Depth Engine:</span><span class="stat-val">Depth Anything V2 (16-bit)</span></div>
     <div class="stat-row"><span>Vortex Physics:</span><span class="stat-val">Schauberger Centripetal Implosion</span></div>
     <div class="legend">
-      <div class="leg-item"><div class="dot-gold"></div> Yang Pellet</div>
-      <div class="leg-item"><div class="dot-blue"></div> Yin Pellet</div>
-      <div class="leg-item"><div class="dot-purple"></div> Porosity Shell</div>
-      <div class="leg-item"><div class="dot-white"></div> Rose-Curve Core</div>
+      <div class="leg-item"><div class="dot-gold"></div> Yang (1)</div>
+      <div class="leg-item"><div class="dot-blue"></div> Yin (0)</div>
+      <div class="leg-item"><div class="dot-purple"></div> Yao/Changing (2)</div>
+      <div class="leg-item"><div class="dot-white"></div> Rose Core</div>
+    </div>
+    <div style="margin-top: 10px; display: flex; align-items: center;">
+      <button class="audio-btn" id="audio-toggle" onclick="toggleAudio()">&#x1F50A; Live Harmonics: OFF</button>
+      <button class="rec-btn" id="record-btn" onclick="recordAudioSample()">&#x1F399;&#xFE0F; Sample WAV</button>
     </div>
     <div id="inspector">
       <div class="inspect-name" id="sel-name">Hover over any Sovereign Node</div>
@@ -336,15 +376,197 @@ shadow_enabled = true
         <div class="inspect-cell"><div class="inspect-label">Schauberger Vortex</div><span id="val-vortex">&tau;: 0.02..1.0</span></div>
         <div class="inspect-cell"><div class="inspect-label">Porosity Window</div><span id="val-porosity">&Pi;: 0.15..0.70</span></div>
         <div class="inspect-cell" style="grid-column: span 2;"><div class="inspect-label">DA-V2 Metric Depth &amp; Point Cloud</div><span id="val-depth">Mean: 10.0m | 122,150 vertices</span></div>
+        <div class="inspect-cell" style="grid-column: span 2;"><div class="inspect-label">6-Yao Acoustic Harmonics &amp; Filter</div><span id="val-audio">Harmonics: Hover Node | Cutoff: --</span></div>
       </div>
       <div class="pellet-row" id="pellet-indicators"></div>
     </div>
   </div>
-  <div id="instructions">&#x1F5B1;&#xFE0F; Left Click + Drag: Orbit | Scroll: Zoom | Right Click: Pan | Hover: Live Node Telemetry</div>
+  <div id="instructions">&#x1F5B1;&#xFE0F; Left Click + Drag: Orbit | Scroll: Zoom | Hover: Live Node Telemetry &amp; Acoustic Harmonics</div>
 
   <script>
     // === DATA INGESTION ===
     const worldData = __WORLD_JSON_PLACEHOLDER__;
+
+    // === WEB AUDIO API SPATIAL HARMONIC SYNTHESIZER ===
+    let audioCtx = null;
+    let audioEnabled = false;
+    let oscillators = [];
+    let oscGains = [];
+    let masterFilter = null;
+    let masterGain = null;
+    let activeHexData = null;
+
+    function initAudio() {
+      if (audioCtx) return;
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      audioCtx = new AudioContext();
+
+      masterGain = audioCtx.createGain();
+      masterGain.gain.setValueAtTime(0.0, audioCtx.currentTime);
+
+      masterFilter = audioCtx.createBiquadFilter();
+      masterFilter.type = 'lowpass';
+      masterFilter.frequency.setValueAtTime(1200, audioCtx.currentTime);
+      masterFilter.Q.setValueAtTime(3.5, audioCtx.currentTime);
+
+      masterGain.connect(masterFilter);
+      masterFilter.connect(audioCtx.destination);
+
+      for (let i = 0; i < 6; i++) {
+        const osc = audioCtx.createOscillator();
+        const g = audioCtx.createGain();
+        osc.type = (i % 2 === 0) ? 'triangle' : 'sine';
+        osc.frequency.setValueAtTime(146.0 * (1.0 + i * 0.15), audioCtx.currentTime);
+        g.gain.setValueAtTime(0.12, audioCtx.currentTime);
+        osc.connect(g);
+        g.connect(masterGain);
+        osc.start();
+        oscillators.push(osc);
+        oscGains.push(g);
+      }
+    }
+
+    function toggleAudio() {
+      initAudio();
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      audioEnabled = !audioEnabled;
+      const btn = document.getElementById('audio-toggle');
+      if (audioEnabled) {
+        btn.innerText = '🔊 Live Harmonics: ON';
+        btn.style.background = '#38bdf8';
+        btn.style.color = '#0f172a';
+        if (activeHexData) playHexHarmonics(activeHexData);
+      } else {
+        btn.innerText = '🔊 Live Harmonics: OFF';
+        btn.style.background = '#1e293b';
+        btn.style.color = '#38bdf8';
+        masterGain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.05);
+      }
+    }
+
+    function playHexHarmonics(d) {
+      activeHexData = d;
+      if (!audioEnabled || !audioCtx) return;
+      const now = audioCtx.currentTime;
+      masterGain.gain.setTargetAtTime(0.22, now, 0.05);
+
+      const qp = d.quantum_physics || {};
+      const porosity = qp.porosity_level || 0.45;
+      const vortex = qp.vortex_tension || 0.5;
+
+      const cutoff = 400 + porosity * 3200;
+      masterFilter.frequency.setTargetAtTime(cutoff, now, 0.06);
+      masterFilter.Q.setTargetAtTime(2.0 + vortex * 4.0, now, 0.06);
+
+      d.yao_pellets.forEach((yp, idx) => {
+        if (oscillators[idx]) {
+          const targetFreq = yp.frequency_hz || (146.0 + idx * 20.0);
+          oscillators[idx].frequency.setTargetAtTime(targetFreq, now, 0.05);
+          if (yp.ternary_state === 2) {
+            oscillators[idx].type = 'sawtooth';
+            oscGains[idx].gain.setTargetAtTime(0.18, now, 0.05);
+          } else if (yp.ternary_state === 1) {
+            oscillators[idx].type = 'triangle';
+            oscGains[idx].gain.setTargetAtTime(0.14, now, 0.05);
+          } else {
+            oscillators[idx].type = 'sine';
+            oscGains[idx].gain.setTargetAtTime(0.10, now, 0.05);
+          }
+        }
+      });
+    }
+
+    function recordAudioSample() {
+      if (!activeHexData) {
+        alert('Hover over any Sovereign Citadel node first to sample its live harmonic field!');
+        return;
+      }
+      const d = activeHexData;
+      const sampleRate = 44100;
+      const durationSec = 3.0;
+      const numSamples = Math.floor(sampleRate * durationSec);
+      const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(2, numSamples, sampleRate);
+
+      const offMaster = offlineCtx.createGain();
+      offMaster.gain.setValueAtTime(0.25, 0);
+
+      const offFilter = offlineCtx.createBiquadFilter();
+      offFilter.type = 'lowpass';
+      const qp = d.quantum_physics || {};
+      offFilter.frequency.setValueAtTime(400 + (qp.porosity_level || 0.45) * 3200, 0);
+      offFilter.Q.setValueAtTime(2.0 + (qp.vortex_tension || 0.5) * 4.0, 0);
+
+      offMaster.connect(offFilter);
+      offFilter.connect(offlineCtx.destination);
+
+      d.yao_pellets.forEach((yp, idx) => {
+        const osc = offlineCtx.createOscillator();
+        const g = offlineCtx.createGain();
+        osc.type = yp.ternary_state === 2 ? 'sawtooth' : (yp.ternary_state === 1 ? 'triangle' : 'sine');
+        osc.frequency.setValueAtTime(yp.frequency_hz || (146.0 + idx * 20.0), 0);
+        g.gain.setValueAtTime(yp.ternary_state === 2 ? 0.2 : (yp.ternary_state === 1 ? 0.15 : 0.10), 0);
+        osc.connect(g);
+        g.connect(offMaster);
+        osc.start(0);
+        osc.stop(durationSec);
+      });
+
+      offlineCtx.startRendering().then(renderedBuffer => {
+        const wavBlob = audioBufferToWavBlob(renderedBuffer);
+        const url = URL.createObjectURL(wavBlob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `kingwen_hex_${d.hexagram_id.toString().padStart(2, '0')}_${d.name.replace(/\\s+/g, '_')}_sound.wav`;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
+    }
+
+    function audioBufferToWavBlob(buffer) {
+      const numChannels = buffer.numberOfChannels;
+      const sampleRate = buffer.sampleRate;
+      const format = 1;
+      const bitDepth = 16;
+      const bytesPerSample = bitDepth / 8;
+      const blockAlign = numChannels * bytesPerSample;
+      const length = buffer.length;
+      const bufferLen = 44 + length * blockAlign;
+      const out = new DataView(new ArrayBuffer(bufferLen));
+
+      function writeString(view, offset, str) {
+        for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+      }
+
+      writeString(out, 0, 'RIFF');
+      out.setUint32(4, 36 + length * blockAlign, true);
+      writeString(out, 8, 'WAVE');
+      writeString(out, 12, 'fmt ');
+      out.setUint32(16, 16, true);
+      out.setUint16(20, format, true);
+      out.setUint16(22, numChannels, true);
+      out.setUint32(24, sampleRate, true);
+      out.setUint32(28, sampleRate * blockAlign, true);
+      out.setUint16(32, blockAlign, true);
+      out.setUint16(34, bitDepth, true);
+      writeString(out, 36, 'data');
+      out.setUint32(40, length * blockAlign, true);
+
+      let offset = 44;
+      const channels = [];
+      for (let c = 0; c < numChannels; c++) channels.push(buffer.getChannelData(c));
+
+      for (let i = 0; i < length; i++) {
+        for (let c = 0; c < numChannels; c++) {
+          let s = Math.max(-1, Math.min(1, channels[c][i]));
+          s = s < 0 ? s * 0x8000 : s * 0x7FFF;
+          out.setInt16(offset, s, true);
+          offset += 2;
+        }
+      }
+      return new Blob([out], { type: 'audio/wav' });
+    }
 
     // === RENDERER SETUP ===
     const container = document.getElementById('canvas-container');
@@ -482,13 +704,16 @@ shadow_enabled = true
       // --- D. 6-Yao Line Quantum Orbiting Pellets ---
       const pelletMeshes = [];
       sec.yao_pellets.forEach((yp, pIdx) => {
+        const rad = yp.ternary_state === 2 ? 1.1 : (yp.ternary_state === 1 ? 0.9 : 0.65);
+        const geo = yp.ternary_state === 2 ? new THREE.IcosahedronGeometry(rad, 1) : new THREE.SphereGeometry(rad, 12, 12);
         const pm = new THREE.Mesh(
-          new THREE.SphereGeometry(yp.line_type === 'yang' ? 0.9 : 0.65, 12, 12),
+          geo,
           new THREE.MeshStandardMaterial({
             color: new THREE.Color(yp.color_hex),
             emissive: new THREE.Color(yp.color_hex),
-            emissiveIntensity: yp.energy_intensity * 0.7,
-            roughness: 0.3
+            emissiveIntensity: yp.energy_intensity * 0.8,
+            roughness: 0.25,
+            wireframe: yp.ternary_state === 2
           })
         );
         group.add(pm);
@@ -527,13 +752,19 @@ shadow_enabled = true
         const ds = d.quantum_physics.depth_statistics || {};
         document.getElementById('val-depth').innerText =
           'Mean: ' + (ds.mean_depth || 10.0) + 'm (Range: ' + (ds.min_depth || 0) + '..' + (ds.max_depth || 20) + 'm) | ' + (d.quantum_physics.depth_pointcloud_vertices || 122150) + ' pts';
+        
+        const freqs = d.yao_pellets.map(yp => yp.frequency_hz + 'Hz').join(', ');
+        const cutoff = Math.round(400 + (d.quantum_physics.porosity_level || 0.45) * 3200);
+        document.getElementById('val-audio').innerText = `Harmonics: [${freqs}] | Cutoff: ${cutoff}Hz`;
+
         let ph = '';
         d.yao_pellets.forEach((yp, idx) => {
-          const c = yp.line_type === 'yang' ? '#FFD700' : '#38BDF8';
-          ph += '<div class="pellet-dot" style="background:' + c +
-                ';" title="L' + (idx+1) + ': ' + yp.line_type + '"></div>';
+          ph += '<div class="pellet-dot" style="background:' + yp.color_hex +
+                '; box-shadow: 0 0 6px ' + yp.color_hex +
+                ';" title="L' + (idx+1) + ' (' + yp.sub_trigram + ' pos ' + yp.sub_position + '): ' + yp.line_type.toUpperCase() + ' | ' + yp.frequency_hz + 'Hz"></div>';
         });
         document.getElementById('pellet-indicators').innerHTML = ph;
+        playHexHarmonics(d);
       }
     });
 
@@ -567,6 +798,10 @@ shadow_enabled = true
           p.mesh.position.x = Math.cos(p.angle) * p.spec.orbit_radius;
           p.mesh.position.z = Math.sin(p.angle) * p.spec.orbit_radius;
           p.mesh.position.y = 8.0 + Math.sin(p.angle * 2.0 + clock) * 1.8;
+          if (p.spec.ternary_state === 2) {
+            p.mesh.rotation.x += 0.05;
+            p.mesh.rotation.y += 0.05;
+          }
         });
       });
 
