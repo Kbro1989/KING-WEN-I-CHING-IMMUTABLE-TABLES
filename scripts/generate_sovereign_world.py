@@ -384,6 +384,17 @@ shadow_enabled = true
       border-radius: 4px; font-size: 9px; font-weight: 700; cursor: pointer; text-align: center;
     }
     .card-toggle-btn.off { background: #334155; color: #ef4444; border-color: #ef4444; }
+    .citadel-matrix-grid {
+      display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; margin-top: 6px; max-height: 110px; overflow-y: auto; padding-right: 2px;
+    }
+    .citadel-chip {
+      background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255,255,255,0.12); border-radius: 4px;
+      padding: 3px 2px; text-align: center; font-size: 8.5px; cursor: pointer; transition: all 0.15s ease;
+      display: flex; flex-direction: column; align-items: center; gap: 1px; color: #cbd5e1;
+    }
+    .citadel-chip:hover { border-color: #38bdf8; background: #1e293b; color: #fff; }
+    .citadel-chip.active { border-color: #38bdf8; box-shadow: 0 0 5px rgba(56,189,248,0.4); }
+    .citadel-chip.muted { opacity: 0.35; border-color: rgba(239,68,68,0.3); color: #64748b; }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -406,8 +417,8 @@ shadow_enabled = true
     <div class="audio-bar">
       <button class="audio-btn" id="audio-toggle" onclick="toggleAudio()">&#x1F50A; Master Audio: OFF</button>
       <select id="audio-mode-select" class="audio-select" onchange="changeAudioMode()">
-        <option value="hover">&#x1F3AF; Focus / Hover Node</option>
-        <option value="field">&#x1F30C; 64-Hex Field Superposition</option>
+        <option value="field">&#x1F30C; 64-Hex Spatial Superposition</option>
+        <option value="hover">&#x1F3AF; Focus / Hover Node Only</option>
         <option value="arpeggio">&#x26A1; 6-Yao Arpeggiator Sweep</option>
         <option value="binaural">&#x262F;&#xFE0F; Yin/Yang Binaural Carrier</option>
         <option value="changing">&#x1F52E; Changing Yao (State 2) Only</option>
@@ -424,9 +435,31 @@ shadow_enabled = true
         <div class="inspect-cell" style="grid-column: span 2;"><div class="inspect-label">Deterministic Spectral Hue (6-Bit Embodiment)</div><span id="val-spectral" style="display:flex;align-items:center;gap:6px;"><span id="spectral-badge" style="width:12px;height:12px;border-radius:3px;background:#FFD700;display:inline-block;box-shadow:0 0 6px rgba(255,215,0,0.6);"></span> <span id="spectral-text">#FFD700 (0.0&deg;)</span></span></div>
         <div class="inspect-cell" style="grid-column: span 2;"><div class="inspect-label">6-Yao Acoustic Harmonics &amp; Filter</div><span id="val-audio">Harmonics: Hover Node | Cutoff: --</span></div>
       </div>
+
+      <!-- 64-Citadel Spatial Superposition Matrix Switchboard -->
+      <div id="citadel-matrix-box" style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.12); padding-top: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px;">
+          <div style="font-size: 11px; font-weight: 700; color: #FFD700; text-transform: uppercase; letter-spacing: 0.5px;">&#x1F30C; 64-Citadel Spatial Matrix (<span id="citadel-active-count">64/64 ON</span>)</div>
+          <div style="display: flex; gap: 3px; flex-wrap: wrap;">
+            <button onclick="filterCitadels('all')" class="sw-pill">All 64</button>
+            <button onclick="filterCitadels('Qian')" class="sw-pill">Qian</button>
+            <button onclick="filterCitadels('Kun')" class="sw-pill">Kun</button>
+            <button onclick="filterCitadels('Zhen')" class="sw-pill">Zhen</button>
+            <button onclick="filterCitadels('Kan')" class="sw-pill">Kan</button>
+            <button onclick="filterCitadels('Li')" class="sw-pill">Li</button>
+            <button onclick="filterCitadels('Xun')" class="sw-pill">Xun</button>
+            <button onclick="filterCitadels('Gen')" class="sw-pill">Gen</button>
+            <button onclick="filterCitadels('Dui')" class="sw-pill">Dui</button>
+            <button onclick="filterCitadels('mute')" class="sw-pill" style="color:#ef4444;">Mute All</button>
+          </div>
+        </div>
+        <div class="citadel-matrix-grid" id="citadel-matrix-container"></div>
+      </div>
+
+      <!-- 6-Yao Line Channel Switchboard -->
       <div id="audio-switchboard" style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.12); padding-top: 8px;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div style="font-size: 11px; font-weight: 700; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.5px;">&#x1F39B;&#xFE0F; 6-Yao Line Audio Switchboard</div>
+          <div style="font-size: 11px; font-weight: 700; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.5px;">&#x1F39B;&#xFE0F; Focused 6-Yao Line Switchboard</div>
           <div style="display: flex; gap: 4px;">
             <button onclick="filterLines('all')" class="sw-pill">All</button>
             <button onclick="filterLines('upper')" class="sw-pill">Upper (L4-6)</button>
@@ -445,16 +478,18 @@ shadow_enabled = true
     // === DATA INGESTION ===
     const worldData = __WORLD_JSON_PLACEHOLDER__;
 
-    // === WEB AUDIO API SPATIAL HARMONIC SYNTHESIZER & SWITCHBOARD ===
+    // === WEB AUDIO API 64-NODE SPATIAL HARMONIC SUPERPOSITION ENGINE ===
     let audioCtx = null;
     let audioEnabled = false;
     let oscillators = [];
     let oscGains = [];
+    let spatialVoices = [];
     let masterFilter = null;
     let masterGain = null;
     let activeHexData = null;
     let lineMuteState = [true, true, true, true, true, true];
-    let currentAudioMode = 'hover';
+    let citadelMuteState = Array(64).fill(true);
+    let currentAudioMode = 'field';
     let allLinesActive = true;
     let arpIndex = 0;
 
@@ -468,12 +503,13 @@ shadow_enabled = true
 
       masterFilter = audioCtx.createBiquadFilter();
       masterFilter.type = 'lowpass';
-      masterFilter.frequency.setValueAtTime(1200, audioCtx.currentTime);
+      masterFilter.frequency.setValueAtTime(1400, audioCtx.currentTime);
       masterFilter.Q.setValueAtTime(3.5, audioCtx.currentTime);
 
       masterGain.connect(masterFilter);
       masterFilter.connect(audioCtx.destination);
 
+      // 1. Focus Node 6-Yao Harmonic Oscillators
       for (let i = 0; i < 6; i++) {
         const osc = audioCtx.createOscillator();
         const g = audioCtx.createGain();
@@ -486,6 +522,43 @@ shadow_enabled = true
         oscillators.push(osc);
         oscGains.push(g);
       }
+
+      // 2. Continuous 64-Citadel Spatial Superposition Field Voices
+      if (worldData.sectors) {
+        worldData.sectors.forEach((sec, sIdx) => {
+          const sOsc = audioCtx.createOscillator();
+          const sGain = audioCtx.createGain();
+          const sFilter = audioCtx.createBiquadFilter();
+
+          const baseFreq = 108.0 + (sec.hexagram_id - 1) * 2.45;
+          sOsc.type = (sec.hexagram_id % 3 === 0) ? 'triangle' : ((sec.hexagram_id % 2 === 0) ? 'sine' : 'sawtooth');
+          sOsc.frequency.setValueAtTime(baseFreq, audioCtx.currentTime);
+
+          sFilter.type = 'lowpass';
+          const qp = sec.quantum_physics || {};
+          sFilter.frequency.setValueAtTime(350 + (qp.porosity_level || 0.45) * 1800, audioCtx.currentTime);
+          sFilter.Q.setValueAtTime(1.5 + (qp.vortex_tension || 0.5) * 2.5, audioCtx.currentTime);
+
+          sGain.gain.setValueAtTime(0.0, audioCtx.currentTime);
+
+          sOsc.connect(sFilter);
+          sFilter.connect(sGain);
+          sGain.connect(masterGain);
+          sOsc.start();
+
+          spatialVoices.push({
+            hexId: sec.hexagram_id,
+            sector: sec,
+            pos3D: new THREE.Vector3(sec.world_position.x, sec.world_position.y, sec.world_position.z),
+            osc: sOsc,
+            filter: sFilter,
+            gain: sGain,
+            baseFreq: baseFreq
+          });
+        });
+      }
+
+      renderCitadelMatrix();
     }
 
     function toggleAudio() {
@@ -499,6 +572,7 @@ shadow_enabled = true
         btn.innerText = '🔊 Master Audio: ON';
         btn.style.background = '#38bdf8';
         btn.style.color = '#0f172a';
+        masterGain.gain.setTargetAtTime(0.28, audioCtx.currentTime, 0.05);
         if (activeHexData) {
           playHexHarmonics(activeHexData);
         } else if (worldData.sectors && worldData.sectors[0]) {
@@ -515,6 +589,47 @@ shadow_enabled = true
     function changeAudioMode() {
       currentAudioMode = document.getElementById('audio-mode-select').value;
       if (activeHexData) playHexHarmonics(activeHexData);
+    }
+
+    function renderCitadelMatrix() {
+      const container = document.getElementById('citadel-matrix-container');
+      if (!container || !worldData.sectors) return;
+      let html = '';
+      let activeCount = 0;
+      worldData.sectors.forEach((sec, idx) => {
+        const isActive = citadelMuteState[idx];
+        if (isActive) activeCount++;
+        const sc = sec.spectral_color || { hex: '#FFD700' };
+        html += `
+          <div class="citadel-chip ${isActive ? 'active' : 'muted'}" onclick="toggleCitadel(${idx})" title="Hex #${sec.hexagram_id} ${sec.hexagram_name} (${sec.upper_trigram}/${sec.lower_trigram})">
+            <span style="width:6px;height:6px;border-radius:50%;background:${sc.hex};display:inline-block;"></span>
+            <span style="font-weight:700;">#${sec.hexagram_id}</span>
+            <span style="font-size:7px;">${sec.hanzi}</span>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+      const countEl = document.getElementById('citadel-active-count');
+      if (countEl) countEl.innerText = `${activeCount}/64 ON`;
+    }
+
+    function toggleCitadel(idx) {
+      citadelMuteState[idx] = !citadelMuteState[idx];
+      renderCitadelMatrix();
+    }
+
+    function filterCitadels(tri) {
+      if (!worldData.sectors) return;
+      worldData.sectors.forEach((sec, idx) => {
+        if (tri === 'all') {
+          citadelMuteState[idx] = true;
+        } else if (tri === 'mute') {
+          citadelMuteState[idx] = false;
+        } else {
+          citadelMuteState[idx] = (sec.upper_trigram === tri || sec.lower_trigram === tri);
+        }
+      });
+      renderCitadelMatrix();
     }
 
     function toggleLineAudio(idx) {
@@ -951,6 +1066,25 @@ shadow_enabled = true
           }
         });
       });
+
+      // === 64-CITADEL SPATIAL AUDIO SUPERPOSITION FIELD UPDATE ===
+      if (audioEnabled && audioCtx && spatialVoices.length > 0) {
+        const camPos = camera.position;
+        const isFieldMode = (currentAudioMode === 'field' || currentAudioMode === 'binaural');
+        const now = audioCtx.currentTime;
+
+        spatialVoices.forEach((sv, idx) => {
+          const isCitadelActive = citadelMuteState[idx];
+          if (!isCitadelActive || !isFieldMode) {
+            sv.gain.gain.setTargetAtTime(0.0, now, 0.04);
+            return;
+          }
+          const dist = camPos.distanceTo(sv.pos3D);
+          // Inverse square distance attenuation with soft roll-off
+          const spatialAtten = Math.min(0.045, 0.05 / (1.0 + Math.pow(dist / 95.0, 2)));
+          sv.gain.gain.setTargetAtTime(spatialAtten, now, 0.05);
+        });
+      }
 
       renderer.render(scene, camera);
     }
