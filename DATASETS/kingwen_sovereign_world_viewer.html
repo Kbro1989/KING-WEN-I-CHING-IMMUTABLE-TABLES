@@ -494,12 +494,15 @@
       roughness: 0.2
     }));
     masterEggMesh.position.set(0, 40, 0);
+    masterEggMesh.userData = { isMasterEgg: true, name: 'Master Centripetal Egg Vortex' };
     scene.add(masterEggMesh);
 
     // === 2. SOVEREIGN NODES: VORTEX + PELLETS + POROSITY + ROSE CORES ===
     const nodeGroup = new THREE.Group();
     const animatedNodes = [];
-    const raycastTargets = [];
+    const raycastTargets = [masterEggMesh];
+    const attractorBeams = [];
+    const eggCenter = new THREE.Vector3(0, 40, 0);
 
     worldData.sectors.forEach((sec, sIdx) => {
       const group = new THREE.Group();
@@ -598,6 +601,29 @@
     });
     scene.add(nodeGroup);
 
+    // === 2B. 64 CENTRIPETAL ATTRACTOR ENERGY BEAMS (ATTRACTING ALL 64 TO MASTER EGG) ===
+    worldData.sectors.forEach((sec, sIdx) => {
+      const pos = sec.world_position;
+      const citadelPos = new THREE.Vector3(pos.x, pos.y + 8.0, pos.z);
+
+      const bGeo = new THREE.BufferGeometry();
+      const bPos = new Float32Array(60 * 3);
+      const bCol = new Float32Array(60 * 3);
+      const specColor = new THREE.Color(sec.spectral_color ? sec.spectral_color.hex : '#FFD700');
+
+      bGeo.setAttribute('position', new THREE.BufferAttribute(bPos, 3));
+      bGeo.setAttribute('color', new THREE.BufferAttribute(bCol, 3));
+
+      const bMesh = new THREE.Line(bGeo, new THREE.LineBasicMaterial({
+        vertexColors: true, transparent: true, opacity: 0.70
+      }));
+      scene.add(bMesh);
+
+      attractorBeams.push({
+        mesh: bMesh, geo: bGeo, startPos: citadelPos, color: specColor, sector: sec
+      });
+    });
+
     // === RAYCASTING INTERACTION ===
     const raycaster = new THREE.Raycaster();
     const mouse = new THREE.Vector2();
@@ -607,7 +633,20 @@
       raycaster.setFromCamera(mouse, camera);
       const hits = raycaster.intersectObjects(raycastTargets);
       if (hits.length > 0) {
-        const d = hits[0].object.userData;
+        const obj = hits[0].object;
+        if (obj.userData && obj.userData.isMasterEgg) {
+          document.getElementById('sel-name').innerText = '🥚 Master Centripetal Egg Vortex Attractor (64-Node Matrix)';
+          document.getElementById('val-biome').innerText = 'All 8 Regional Biomes Integrated';
+          document.getElementById('val-action').innerText = 'Schauberger Implosion (384 Sound Pellets in Unison)';
+          document.getElementById('val-depth').innerText = 'Total 64 Citadels | 7,817,600 DA-V2 Point Cloud Vertices';
+          document.getElementById('spectral-badge').style.background = '#8b5cf6';
+          document.getElementById('spectral-badge').style.boxShadow = '0 0 12px #8b5cf6';
+          document.getElementById('spectral-text').innerText = '#8B5CF6 — Universal 64-Node Spectral Matrix';
+          document.getElementById('val-audio').innerText = '384 Sound Pellets Active | Unified Field Fundamental Range: 108.0Hz .. 199.1Hz';
+          return;
+        }
+
+        const d = obj.userData;
         document.getElementById('sel-name').innerText =
           'Hex #' + d.hexagram_id + ': ' + d.name + ' (' + d.hanzi + ')';
         document.getElementById('val-biome').innerText = d.regional_biome.name;
@@ -712,6 +751,48 @@
         n.beacon.rotation.y += 0.02;
         n.beacon.position.y = 8 + Math.sin(clock * 2 + nIdx) * 1.0;
       });
+
+      // === UPDATE 64 CENTRIPETAL ATTRACTOR ENERGY BEAMS (ATTRACTING ALL 64 TO MASTER EGG) ===
+      if (typeof attractorBeams !== 'undefined' && attractorBeams.length > 0) {
+        attractorBeams.forEach((beam, bIdx) => {
+          if (centripetalEggActive) {
+            beam.mesh.visible = true;
+            const posAttr = beam.geo.attributes.position;
+            const colAttr = beam.geo.attributes.color;
+            const pArray = posAttr.array;
+            const cArray = colAttr.array;
+
+            const start = beam.startPos;
+            const target = eggCenter;
+            const count = 60;
+
+            for (let k = 0; k < count; k++) {
+              const t = k / (count - 1);
+              // Inward spiral interpolation along centripetal egg curve
+              const spiralAngle = t * Math.PI * 6.0 + presentTime * 3.0 + bIdx * 0.1;
+              const spiralRadius = (1.0 - t) * 24.0 * (1.0 + (beam.sector.quantum_physics.vortex_tension || 0.5));
+
+              const cx = start.x + (target.x - start.x) * t + Math.cos(spiralAngle) * spiralRadius;
+              const cy = start.y + (target.y - start.y) * t + Math.sin(t * Math.PI) * 15.0;
+              const cz = start.z + (target.z - start.z) * t + Math.sin(spiralAngle) * spiralRadius;
+
+              pArray[k * 3]     = cx;
+              pArray[k * 3 + 1] = cy;
+              pArray[k * 3 + 2] = cz;
+
+              // Color gradient from citadel spectral color to egg purple
+              const colRatio = Math.sin(t * Math.PI + presentTime * 2.0) * 0.5 + 0.5;
+              cArray[k * 3]     = beam.color.r * (1.0 - colRatio) + 0.54 * colRatio;
+              cArray[k * 3 + 1] = beam.color.g * (1.0 - colRatio) + 0.36 * colRatio;
+              cArray[k * 3 + 2] = beam.color.b * (1.0 - colRatio) + 0.96 * colRatio;
+            }
+            posAttr.needsUpdate = true;
+            colAttr.needsUpdate = true;
+          } else {
+            beam.mesh.visible = false;
+          }
+        });
+      }
 
       // === UNIFIED QUANTUM GROUND FIELD — CENTRIPETAL EGG SPATIAL ATTENUATION & UNISON RESONANCE ===
       if (fieldActive && audioCtx && groundVoices.length > 0) {
