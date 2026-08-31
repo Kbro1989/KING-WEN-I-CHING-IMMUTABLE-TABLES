@@ -10,6 +10,7 @@ ROOT = Path(r"c:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES")
 sys.path.insert(0, str(ROOT))
 
 from kingwen_ternary_tables_complete import HEXAGRAM_BASE
+from emotional_engine import EMOTIONAL_WEIGHTS, collapse_full_128, _compute_consensus_from_resolved
 
 def prewarm_egg_keyframes(sectors, num_frames=60):
     """Pre-computes 60 keyframes of 3D Centripetal Egg vertex deformation from all 64 citadel vortex outputs."""
@@ -195,9 +196,21 @@ def generate_sovereign_world():
 
             u_idx = base.get("upper_idx", 1)
             l_idx = base.get("lower_idx", 1)
-            vortex_tension = round((u_idx * l_idx) / 49.0, 4)
-            suction_coeff = round((u_idx + l_idx) / 14.0, 4)
-            porosity_level = round(0.15 + (u_idx * 0.05) + (l_idx * 0.03), 3)
+
+            # Derive 5-Axis Emotional Vector directly from emotional_engine EMOTIONAL_WEIGHTS
+            ew = EMOTIONAL_WEIGHTS.get(h_id, {})
+            vec5 = {
+                "chaos": round(ew.get("chaos", 2000) / 10000.0, 4),
+                "whimsy": round(ew.get("whimsy", 1500) / 10000.0, 4),
+                "darkTone": round(ew.get("darkTone", 1500) / 10000.0, 4),
+                "coherence": round(ew.get("coherence", 5000) / 10000.0, 4),
+                "voiceWeight": round(ew.get("voiceWeight", 6000) / 10000.0, 4)
+            }
+
+            # Physical vortex field properties derived strictly from the 5-axis emotional vector
+            vortex_tension = round(0.20 + 0.55 * vec5["chaos"] + 0.25 * vec5["darkTone"], 4)
+            suction_coeff  = round(0.20 + 0.50 * vec5["coherence"] + 0.30 * vec5["voiceWeight"], 4)
+            porosity_level = round(0.15 + 0.60 * vec5["whimsy"] * (1.0 - 0.40 * vec5["coherence"]), 4)
 
             da2_rec = da2_lookup.get(h_id, {})
             depth_stats = da2_rec.get("depth_statistics", {
@@ -343,6 +356,7 @@ def generate_sovereign_world():
                 "spectral_color": spectral_color,
                 "palette_16": palette_16,
                 "base_hue_degrees": base_hue,
+                "emotional_vector_5axis": vec5,
                 "quantum_physics": {
                     "vortex_tension": vortex_tension,
                     "suction_coefficient": suction_coeff,
@@ -376,6 +390,12 @@ def generate_sovereign_world():
     egg_keyframes = prewarm_egg_keyframes(sectors, num_frames=60)
     audio_wav_b64 = prewarm_unison_audio_wav_b64(sectors, duration_sec=4.0)
 
+    # Compute 512 Resolved Phase States and Gaussian Consensus from emotional_engine.py
+    collapse_res = collapse_full_128(50.0)
+    resolved_512 = collapse_res.get("resolved", [])
+    consensus_info = collapse_res.get("consensus", {})
+    consensus_vec = consensus_info.get("consensus_vector", [0.2, 0.15, 0.15, 0.5, 0.6])
+
     # 3. Master World Topology Manifest
     world_topology = {
         "world_name": "King Wen Sovereign Macro-World",
@@ -388,6 +408,11 @@ def generate_sovereign_world():
         },
         "temporal_biomes": temporal_biomes,
         "heightmap_matrix_8x8": heightmap_grid,
+        "emotional_engine_consensus": {
+            "input_emotional_value": 50.0,
+            "resolved_state_count": len(resolved_512),
+            "gaussian_consensus_vector_5axis": consensus_vec
+        },
         "quantum_prewarm": prewarm_data if prewarm_data else {"status": "unwarmed"},
         "prewarmed_egg_keyframes": egg_keyframes,
         "prewarmed_audio_wav_b64": audio_wav_b64,
@@ -928,60 +953,82 @@ metadata/attractor_mode = "implosion"
       if (!jkdUnisonActive) return;
       if (!audioCtx || groundVoices.length === 0) {
         jkdReciteIndex++;
-        if (jkdUnisonActive) setTimeout(reciteNextJKDPassage, 2200);
+        if (jkdUnisonActive) setTimeout(reciteNextJKDPassage, 1800);
         return;
       }
 
-      const sec = worldData.sectors[jkdReciteIndex % 64];
-      const passages = sec.jkd_passages || [];
-      const passage = passages[jkdReciteIndex % Math.max(passages.length, 1)] || passages[0];
-      const text = passage ? passage.text : '"Formlessness — be like water." — JKD Tao';
-      const hamiltonian = passage ? (passage.energy || 0.75) : 0.75;
-      const emotion = passage ? (passage.emotion || {}) : {};
+      const now = audioCtx.currentTime;
+      const cycle = jkdReciteIndex;
+      let activeTextSamples = [];
 
-      document.getElementById('val-jkd-text').innerText =
-        `[Hex #${sec.hexagram_id} ${sec.hexagram_name || sec.name}] "${text}"`;
+      // === CONSTANT GENERATION OF ALL 64 CITADELS IN PARALLEL UNISON AS INDIVIDUALS ===
+      worldData.sectors.forEach((sec, sIdx) => {
+        const passages = sec.jkd_passages || [];
+        if (passages.length === 0) return;
 
-      // Find the groundVoice for this hexagram and modulate its 6 pellet oscillators
-      // using Hamiltonian energy and emotion vector — no speechSynthesis bypass
-      const gv = groundVoices.find(v => v.hexId === sec.hexagram_id);
-      if (gv && gv.pelletOscillators && audioCtx) {
-        const now = audioCtx.currentTime;
-        const coherence  = emotion.coherence  || 0.8;
-        const chaos      = emotion.chaos      || 0.2;
-        const voiceWeight = emotion.voiceWeight || 0.9;
-        const darkTone   = emotion.darkTone   || 0.2;
+        // Each citadel derives its own individual passage continuously
+        const passageIdx = (cycle + sIdx) % passages.length;
+        const passage = passages[passageIdx];
+        if (!passage) return;
 
-        gv.pelletOscillators.forEach((pOsc, pIdx) => {
-          const pellet = sec.yao_pellets && sec.yao_pellets[pIdx];
-          if (!pellet) return;
+        const text = passage.text || '"Formlessness — be like water."';
+        const hamiltonian = passage.energy || 0.75;
+        const emotion = passage.emotion || {};
 
-          // JKD emotion vector modulates pellet frequency: coherence tightens, chaos expands
-          const jkdFreq = pellet.frequency_hz
-            * (1.0 + chaos * 0.18 - darkTone * 0.08)
-            * (1.0 + 0.10 * Math.sin(pIdx * 1.27 + hamiltonian * Math.PI));
-          pOsc.frequency.setTargetAtTime(jkdFreq, now, 0.06);
+        if (sIdx % 8 === (cycle % 8)) {
+          activeTextSamples.push(`Hex #${sec.hexagram_id} (${sec.hexagram_name}): "${text.slice(0, 45)}..."`);
+        }
 
-          if (gv.pelletGains[pIdx]) {
-            // Hamiltonian energy × voiceWeight × citadel pellet energy_intensity
-            const jkdGain = hamiltonian * voiceWeight * (pellet.energy_intensity || 0.5) * 0.18;
-            gv.pelletGains[pIdx].gain.setTargetAtTime(jkdGain, now, 0.06);
-          }
-        });
+        // Modulate this individual citadel's 6 yao line pellet oscillators & ground voice
+        const gv = groundVoices.find(v => v.hexId === sec.hexagram_id);
+        if (gv && gv.pelletOscillators) {
+          const coherence   = emotion.coherence   || 0.8;
+          const chaos       = emotion.chaos       || 0.2;
+          const voiceWeight = emotion.voiceWeight || 0.9;
+          const darkTone    = emotion.darkTone    || 0.2;
 
-        // Boost the citadel's master gain for this passage duration
-        gv.gain.gain.setTargetAtTime(hamiltonian * 0.08, now, 0.05);
+          // Modulate all 6 pellets for this individual citadel
+          gv.pelletOscillators.forEach((pOsc, pIdx) => {
+            const pellet = sec.yao_pellets && sec.yao_pellets[pIdx];
+            if (!pellet) return;
 
-        // Duration driven by Hamiltonian energy: higher energy = longer resonance hold
-        const holdMs = Math.round(1200 + hamiltonian * 1800);
-        setTimeout(() => {
-          if (gv.gain) gv.gain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.12);
-          jkdReciteIndex++;
-          if (jkdUnisonActive) setTimeout(reciteNextJKDPassage, 300);
-        }, holdMs);
-      } else {
-        jkdReciteIndex++;
-        if (jkdUnisonActive) setTimeout(reciteNextJKDPassage, 2000);
+            // Individual JKD emotion vector modulates pellet frequency & harmonic state
+            const jkdFreq = pellet.frequency_hz
+              * (1.0 + chaos * 0.18 - darkTone * 0.08)
+              * (1.0 + 0.12 * Math.sin(pIdx * 1.27 + hamiltonian * Math.PI + cycle * 0.2));
+            pOsc.frequency.setTargetAtTime(jkdFreq, now, 0.08);
+
+            // Smooth 0.35s gain envelope for audible per-word acoustic resonance
+            const jkdGain = hamiltonian * voiceWeight * (pellet.energy_intensity || 0.5) * 0.14;
+            gv.pelletGains[pIdx].gain.setTargetAtTime(jkdGain, now, 0.35);
+          });
+
+          // Modulate citadel master ground gain in unison with smooth acoustic sustain
+          const targetGain = Math.min(0.065, (hamiltonian * 0.045) * (1.0 + (sec.quantum_physics.vortex_tension || 0.5) * 0.5));
+          gv.gain.gain.setTargetAtTime(targetGain, now, 0.35);
+        }
+
+        // Modulate 3D node visual wavepacket pulse for this individual citadel
+        const node = animatedNodes[sIdx];
+        if (node && node.superpositionCore) {
+          const visPulse = 1.0 + 0.50 * hamiltonian * Math.sin(presentTime * 4.0 + sIdx * 0.1);
+          node.superpositionCore.scale.set(visPulse, visPulse, visPulse);
+        }
+      });
+
+      // Update UI Ticker with live multi-node JKD Tao Unison Stream
+      if (activeTextSamples.length > 0) {
+        document.getElementById('val-jkd-text').innerHTML =
+          `<strong style="color:#5eead4;">📖 [ALL 64 UNISON GENERATION ACTIVE]:</strong> ` + activeTextSamples.join(' &bull; ');
+      }
+
+      jkdReciteIndex++;
+
+      // At 1.0 Present Time Speed, hold audible per-word output for ~5.2s (scales inversely with timeSpeed)
+      const holdDurationMs = Math.max(1200, Math.round(5200 / timeSpeed));
+
+      if (jkdUnisonActive) {
+        setTimeout(reciteNextJKDPassage, holdDurationMs);
       }
     }
 
@@ -1575,8 +1622,10 @@ metadata/attractor_mode = "implosion"
         document.getElementById('sel-name').innerText =
           'Hex #' + d.hexagram_id + ': ' + d.name + ' (' + d.hanzi + ')';
         document.getElementById('val-biome').innerText = d.regional_biome.name;
+        const vec5 = d.emotional_vector_5axis || {};
+        const vecStr = `Chaos: ${(vec5.chaos || 0.2).toFixed(2)} | Whimsy: ${(vec5.whimsy || 0.15).toFixed(2)} | DarkTone: ${(vec5.darkTone || 0.15).toFixed(2)} | Coherence: ${(vec5.coherence || 0.5).toFixed(2)} | VoiceWeight: ${(vec5.voiceWeight || 0.6).toFixed(2)}`;
         document.getElementById('val-action').innerText =
-          d.action_doctrine + ' (' + d.citadel_archetype + ')';
+          d.action_doctrine + ' (' + d.citadel_archetype + ') — ' + vecStr;
         const ds = d.quantum_physics.depth_statistics || {};
         document.getElementById('val-depth').innerText =
           'Mean: ' + (ds.mean_depth || 10.0) + 'm (Range: ' + (ds.min_depth || 0) + '..' + (ds.max_depth || 20) + 'm) | ' + (d.quantum_physics.depth_pointcloud_vertices || 122150) + ' pts';
@@ -1589,7 +1638,7 @@ metadata/attractor_mode = "implosion"
 
         const freqs = (d.yao_pellets || []).map(yp => `L${yp.line_position}:${yp.ternary_state === 2 ? 'YAO' : (yp.ternary_state === 1 ? 'YANG' : 'YIN')}@${yp.frequency_hz}Hz`).join(' | ');
         const cutoff = Math.round(400 + (d.quantum_physics.porosity_level || 0.45) * 3200);
-        document.getElementById('val-audio').innerHTML = `<strong style="color:#38bdf8;">📡 GibberLink Superposition Wave Packet:</strong><br/><span style="font-size:10px;color:#cbd5e1;">[${freqs}]</span><br/><span style="font-size:10px;color:#a78bfa;">Vortex: ${(d.quantum_physics.vortex_tension || 0.5).toFixed(3)} • Suction: ${(d.quantum_physics.suction_coefficient || 0.3).toFixed(3)} • Cutoff: ${cutoff}Hz</span>`;
+        document.getElementById('val-audio').innerHTML = `<strong style="color:#38bdf8;">📡 Emotional Engine 5-Axis Vector & GibberLink Wave Packet:</strong><br/><span style="font-size:10px;color:#cbd5e1;">[${freqs}]</span><br/><span style="font-size:10px;color:#a78bfa;">Vortex: ${(d.quantum_physics.vortex_tension || 0.5).toFixed(3)} • Suction: ${(d.quantum_physics.suction_coefficient || 0.3).toFixed(3)} • Cutoff: ${cutoff}Hz</span>`;
 
         playHexHarmonics(d);
       }
