@@ -1131,8 +1131,9 @@ metadata/attractor_mode = "implosion"
     // === 1. QUANTUM POTENTIAL-WELL TERRAIN & GRID ===
     const terrainGeo = new THREE.PlaneGeometry(640, 640, 96, 96);
     terrainGeo.rotateX(-Math.PI / 2);
+    terrainGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(terrainGeo.attributes.position.count * 3), 3));
     const terrainMesh = new THREE.Mesh(terrainGeo, new THREE.MeshStandardMaterial({
-      color: 0x111827, roughness: 0.85, metalness: 0.2
+      vertexColors: true, roughness: 0.70, metalness: 0.30
     }));
     terrainMesh.receiveShadow = true;
     scene.add(terrainMesh);
@@ -1151,6 +1152,8 @@ metadata/attractor_mode = "implosion"
     let masterEggMesh = null;
     let eggGeo = null;
     let terrainBasePos = null;
+    let terrainBaseColors = null;
+    let sectorShotgunParams = [];
 
     // === LAYER 0: SKELETON (64 CITADELS & SPATIAL BIOMES) ===
     function applyLayer0(l0) {
@@ -1177,6 +1180,38 @@ metadata/attractor_mode = "implosion"
       // Cache REST position for dynamic centripetal wave attractor
       terrainBasePos = new Float32Array(tPos.array.length);
       terrainBasePos.set(tPos.array);
+
+      // Compute Hexagrams Spectral Color Map across ground vertices
+      const tCol = terrainGeo.attributes.color;
+      terrainBaseColors = new Float32Array(tPos.count * 3);
+      for (let i = 0; i < tPos.count; i++) {
+        const x = tPos.getX(i), z = tPos.getZ(i);
+        let rSum = 0.08, gSum = 0.09, bSum = 0.16, wSum = 1.0;
+
+        worldData.sectors.forEach(sec => {
+          const dx = x - sec.world_position.x, dz = z - sec.world_position.z;
+          const distSq = dx * dx + dz * dz;
+          if (distSq < 14400) {
+            const w = Math.exp(-distSq / 3200.0);
+            const sc = sec.spectral_color || { r: 255, g: 215, b: 0 };
+            const hexR = (sc.r !== undefined ? sc.r : 255) / 255.0;
+            const hexG = (sc.g !== undefined ? sc.g : 215) / 255.0;
+            const hexB = (sc.b !== undefined ? sc.b : 0) / 255.0;
+            rSum += hexR * w * 1.8;
+            gSum += hexG * w * 1.8;
+            bSum += hexB * w * 1.8;
+            wSum += w * 1.8;
+          }
+        });
+        const finalR = Math.min(1.0, rSum / wSum);
+        const finalG = Math.min(1.0, gSum / wSum);
+        const finalB = Math.min(1.0, bSum / wSum);
+        terrainBaseColors[i * 3]     = finalR;
+        terrainBaseColors[i * 3 + 1] = finalG;
+        terrainBaseColors[i * 3 + 2] = finalB;
+        tCol.setXYZ(i, finalR, finalG, finalB);
+      }
+      tCol.needsUpdate = true;
 
       // Spawn 64 Sovereign Beacon Skeletons
       worldData.sectors.forEach((sec, sIdx) => {
@@ -1305,6 +1340,43 @@ metadata/attractor_mode = "implosion"
         });
         node.pellets = pelletMeshes;
 
+        // GibberLink Superposition Quantum Wave Packet Core (Central Interference Node)
+        const coreGeo = new THREE.IcosahedronGeometry(1.6, 1);
+        const coreMat = new THREE.MeshStandardMaterial({
+          color: specColor,
+          emissive: specColor,
+          emissiveIntensity: 0.90,
+          wireframe: true,
+          transparent: true,
+          opacity: 0.85
+        });
+        const superpositionCore = new THREE.Mesh(coreGeo, coreMat);
+        superpositionCore.position.y = 8.0;
+        node.group.add(superpositionCore);
+        node.superpositionCore = superpositionCore;
+
+        // 6 GibberLink Quantum Wavepacket Convergence Conduits (Pellets -> Core)
+        const convergenceBeams = [];
+        sec.yao_pellets.forEach((yp, pIdx) => {
+          const beamGeo = new THREE.BufferGeometry();
+          const beamPos = new Float32Array(20 * 3);
+          const beamCol = new Float32Array(20 * 3);
+          const pCol = new THREE.Color(yp.color_hex);
+          for (let k = 0; k < 20; k++) {
+            beamCol[k * 3] = pCol.r;
+            beamCol[k * 3 + 1] = pCol.g;
+            beamCol[k * 3 + 2] = pCol.b;
+          }
+          beamGeo.setAttribute('position', new THREE.BufferAttribute(beamPos, 3));
+          beamGeo.setAttribute('color', new THREE.BufferAttribute(beamCol, 3));
+          const beamLine = new THREE.Line(beamGeo, new THREE.LineBasicMaterial({
+            vertexColors: true, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending
+          }));
+          node.group.add(beamLine);
+          convergenceBeams.push({ line: beamLine, geo: beamGeo, spec: yp, color: pCol, pIdx });
+        });
+        node.convergenceBeams = convergenceBeams;
+
         // 64 Centripetal Attractor Energy Beams (Connecting Citadels to Master Egg)
         const pos = sec.world_position;
         const citadelPos = new THREE.Vector3(pos.x, pos.y + 8.0, pos.z);
@@ -1322,6 +1394,25 @@ metadata/attractor_mode = "implosion"
         attractorBeams.push({
           mesh: bMesh, geo: bGeo, startPos: citadelPos, color: specColor, sector: sec
         });
+      });
+
+      // Cache Shotgun Wave Parameters from all 64 sectors for Ground Position & Masking Logic
+      sectorShotgunParams = worldData.sectors.map((sec) => {
+        const pos = sec.world_position;
+        const qp = sec.quantum_physics || {};
+        const pellets = sec.yao_pellets || [];
+        return {
+          x: pos.x,
+          z: pos.z,
+          tension: qp.vortex_tension || 0.5,
+          suction: qp.suction_coefficient || 0.3,
+          porosity: qp.porosity_level || 0.45,
+          freqs: pellets.map(p => p.frequency_hz || 146.0),
+          energies: pellets.map(p => p.energy_intensity || 0.5),
+          waveforms: pellets.map(p => p.waveform || "sine"),
+          ternaryStates: pellets.map(p => p.ternary_state !== undefined ? p.ternary_state : 1),
+          color: new THREE.Color(sec.spectral_color ? sec.spectral_color.hex : '#FFD700')
+        };
       });
     }
 
@@ -1470,9 +1561,9 @@ metadata/attractor_mode = "implosion"
         document.getElementById('spectral-badge').style.boxShadow = '0 0 8px ' + sc.hex;
         document.getElementById('spectral-text').innerText = sc.hex + ' (' + hueDeg + '\u00B0) \u2014 ' + (sc.name || 'Spectral Hue');
 
-        const freqs = d.yao_pellets.map(yp => yp.frequency_hz + 'Hz').join(', ');
+        const freqs = (d.yao_pellets || []).map(yp => `L${yp.line_position}:${yp.ternary_state === 2 ? 'YAO' : (yp.ternary_state === 1 ? 'YANG' : 'YIN')}@${yp.frequency_hz}Hz`).join(' | ');
         const cutoff = Math.round(400 + (d.quantum_physics.porosity_level || 0.45) * 3200);
-        document.getElementById('val-audio').innerText = `Harmonics: [${freqs}] | Cutoff: ${cutoff}Hz`;
+        document.getElementById('val-audio').innerHTML = `<strong style="color:#38bdf8;">📡 GibberLink Superposition Wave Packet:</strong><br/><span style="font-size:10px;color:#cbd5e1;">[${freqs}]</span><br/><span style="font-size:10px;color:#a78bfa;">Vortex: ${(d.quantum_physics.vortex_tension || 0.5).toFixed(3)} • Suction: ${(d.quantum_physics.suction_coefficient || 0.3).toFixed(3)} • Cutoff: ${cutoff}Hz</span>`;
 
         playHexHarmonics(d);
       }
@@ -1486,11 +1577,13 @@ metadata/attractor_mode = "implosion"
       presentTime += 0.02 * timeSpeed;
       controls.update();
 
-      // === DYNAMIC QUANTUM GROUND FIELD & CENTRIPETAL TERRAIN ATTRACTION ===
+      // === DYNAMIC QUANTUM GROUND FIELD & CENTRIPETAL TERRAIN ATTRACTION (SHOTGUN WAVE FUNCTIONS & MASKING) ===
       if (terrainBasePos && centripetalEggActive) {
         const tPos = terrainGeo.attributes.position;
         const tArr = tPos.array;
+        const tCol = terrainGeo.attributes.color.array;
         const tBase = terrainBasePos;
+        const tBaseCol = terrainBaseColors;
         const vertCount = tPos.count;
 
         for (let i = 0; i < vertCount; i++) {
@@ -1514,9 +1607,77 @@ metadata/attractor_mode = "implosion"
             ? Math.cos(r * 0.018 - presentTime * 3.0) * (1.8 * Math.exp(-r / 240.0))
             : Math.sin(presentTime * 2.0 + theta * 4.0) * 1.0;
 
-          tArr[idx + 1] = by + centripetalWave + wellBreathing + radialSuction;
+          // 4. Shotgun Wave Functions from 64 Converging Citadels with Porosity & Ternary Changing-Line Masking
+          let shotgunWave = 0.0;
+          let spectralColorGlow = 0.0;
+
+          if (sectorShotgunParams.length > 0) {
+            const gridCol = Math.max(0, Math.min(7, Math.floor((bx + 280.0) / 70.0)));
+            const gridRow = Math.max(0, Math.min(7, Math.floor((bz + 280.0) / 70.0)));
+
+            for (let ro = -1; ro <= 1; ro++) {
+              const rIdx = gridRow + ro;
+              if (rIdx < 0 || rIdx > 7) continue;
+              for (let co = -1; co <= 1; co++) {
+                const cIdx = gridCol + co;
+                if (cIdx < 0 || cIdx > 7) continue;
+                const sIdx = rIdx * 8 + cIdx;
+                const sp = sectorShotgunParams[sIdx];
+                if (!sp) continue;
+
+                const dx = bx - sp.x, dz = bz - sp.z;
+                const distSq = dx * dx + dz * dz;
+                if (distSq > 10000) continue; // 100m cutoff
+
+                const dist = Math.sqrt(distSq);
+                const spatialWeight = Math.exp(-distSq / (2.0 * 2200.0));
+
+                // Masking: Porosity interference masking & boundary attenuation
+                const porosityMask = 1.0 - 0.35 * sp.porosity * Math.sin(bx * 0.12 + bz * 0.12);
+
+                // Shotgun pellet harmonic synthesis across 6 yao lines
+                let pelletHarmonicSum = 0.0;
+                for (let pIdx = 0; pIdx < sp.freqs.length; pIdx++) {
+                  const freq = sp.freqs[pIdx];
+                  const energy = sp.energies[pIdx];
+                  const wType = sp.waveforms[pIdx];
+                  const tState = sp.ternaryStates[pIdx];
+
+                  const phase = presentTime * (freq / 110.0) * 1.2 + pIdx * 1.047 + dist * 0.06;
+                  let wVal = 0.0;
+                  if (wType === 'triangle') {
+                    wVal = 2.0 * Math.abs(2.0 * ((phase / (Math.PI * 2.0)) % 1.0) - 1.0) - 1.0;
+                  } else if (wType === 'sawtooth') {
+                    wVal = 2.0 * ((phase / (Math.PI * 2.0)) % 1.0) - 1.0;
+                  } else {
+                    wVal = Math.sin(phase);
+                  }
+
+                  // Ternary changing line masking: Yao (2) oscillates intensely, Yang (1) lifts crests, Yin (0) indents troughs
+                  const ternarySign = tState === 2 ? 1.4 : (tState === 1 ? 1.0 : -0.7);
+                  pelletHarmonicSum += wVal * energy * ternarySign;
+                }
+
+                const localShotgun = spatialWeight * porosityMask * (pelletHarmonicSum / 6.0) * (sp.tension * 5.5 + sp.suction * 2.5);
+                shotgunWave += localShotgun;
+                spectralColorGlow += spatialWeight * (0.5 + 0.5 * Math.sin(presentTime * 3.0 + sIdx * 0.1));
+              }
+            }
+          }
+
+          tArr[idx + 1] = by + centripetalWave + wellBreathing + radialSuction + shotgunWave;
+
+          // 5. Dynamic Hexagram Spectral Color Pulse across ground terrain
+          if (tBaseCol) {
+            const colorMultiplier = 1.0 + 0.4 * Math.sin(presentTime * 2.5 + theta * 3.0) + spectralColorGlow * 0.8;
+            const coreGlow = Math.exp(-r / 160.0) * 0.35;
+            tCol[idx]     = Math.min(1.0, tBaseCol[idx] * colorMultiplier + coreGlow * 0.54);
+            tCol[idx + 1] = Math.min(1.0, tBaseCol[idx + 1] * colorMultiplier + coreGlow * 0.36);
+            tCol[idx + 2] = Math.min(1.0, tBaseCol[idx + 2] * colorMultiplier + coreGlow * 0.96);
+          }
         }
         tPos.needsUpdate = true;
+        if (tBaseCol) terrainGeo.attributes.color.needsUpdate = true;
       }
 
       if (typeof masterEggMesh !== 'undefined' && masterEggMesh) {
@@ -1605,6 +1766,58 @@ metadata/attractor_mode = "implosion"
 
         n.beacon.rotation.y += 0.02;
         n.beacon.position.y = 8 + Math.sin(clock * 2 + nIdx) * 1.0;
+
+        // === GIBBERLINK QUANTUM WAVEPACKET CONVERGENCE CONDUITS (PELLETS -> CORE) ===
+        if (n.convergenceBeams && n.convergenceBeams.length > 0) {
+          let coreHarmonicInterference = 0.0;
+          n.convergenceBeams.forEach((cb, bIdx) => {
+            const pMesh = n.pellets[bIdx] ? n.pellets[bIdx].mesh : null;
+            if (!pMesh) return;
+
+            const posAttr = cb.geo.attributes.position;
+            const pArr = posAttr.array;
+            const count = 20;
+            const px = pMesh.position.x, py = pMesh.position.y, pz = pMesh.position.z;
+            const cx = 0.0, cy = 8.0, cz = 0.0; // Citadel core center
+
+            const freq = cb.spec.frequency_hz || 146.0;
+            const energy = cb.spec.energy_intensity || 0.5;
+            const pulseSpeed = (freq / 35.0) * timeSpeed;
+            const pulseCycle = (presentTime * pulseSpeed + bIdx * 0.3) % 1.0;
+
+            for (let k = 0; k < count; k++) {
+              const t = k / (count - 1);
+              // Interpolate line from pellet to core
+              const lx = px + (cx - px) * t;
+              const ly = py + (cy - py) * t;
+              const lz = pz + (cz - pz) * t;
+
+              // GibberLink quantum wave packet pulse envelope: Gaussian peak propagating inward
+              const distFromPulse = t - pulseCycle;
+              const packetEnvelope = Math.exp(-(distFromPulse * distFromPulse) / 0.04);
+              const packetOsc = Math.sin(t * Math.PI * 8.0 - presentTime * (freq / 15.0));
+
+              // Transverse wave packet displacement
+              const perpX = -pz * 0.15 * packetOsc * packetEnvelope;
+              const perpZ =  px * 0.15 * packetOsc * packetEnvelope;
+              const perpY = Math.cos(t * Math.PI * 6.0) * 0.6 * packetEnvelope;
+
+              pArr[k * 3]     = lx + perpX;
+              pArr[k * 3 + 1] = ly + perpY;
+              pArr[k * 3 + 2] = lz + perpZ;
+            }
+            posAttr.needsUpdate = true;
+            coreHarmonicInterference += Math.sin(presentTime * (freq / 40.0) + bIdx * 1.047) * energy;
+          });
+
+          // Animate Superposition Wave Packet Core Mesh
+          if (n.superpositionCore) {
+            const superScale = 1.0 + 0.45 * Math.abs(coreHarmonicInterference);
+            n.superpositionCore.scale.set(superScale, superScale, superScale);
+            n.superpositionCore.rotation.x += 0.04 * (1.0 + n.vortexTension);
+            n.superpositionCore.rotation.y += 0.05 * (1.0 + n.vortexTension);
+          }
+        }
       });
 
       // === UPDATE 64 CENTRIPETAL ATTRACTOR ENERGY BEAMS (ATTRACTING ALL 64 TO MASTER EGG) ===
