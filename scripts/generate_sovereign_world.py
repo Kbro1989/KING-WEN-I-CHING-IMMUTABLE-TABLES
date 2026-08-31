@@ -574,23 +574,16 @@ metadata/attractor_mode = "implosion"
         focusGains.push(g);
       }
 
-      // 2. The Unified Quantum Ground Field: All 64 Hexagrams (1..64) Resonating As One Field
+      // 2. The Unified Quantum Ground Field: All 64 Hexagrams & 384 Sound Pellets (1..64)
       if (worldData.sectors) {
         worldData.sectors.forEach((sec) => {
-          const sOsc = audioCtx.createOscillator();
-          const sGain = audioCtx.createGain();
-          const sFilter = audioCtx.createBiquadFilter();
-
-          // Frequency strictly derived from continuous 3D (x, y, z) spatial geometry
           const pos = sec.world_position;
           const normX = pos.x / 280.0, normZ = pos.z / 280.0, normY = pos.y / 35.0;
           const normR = Math.sqrt(normX * normX + normZ * normZ);
           const theta = Math.atan2(pos.z, pos.x);
           const fundamentalFreq = 108.0 * (1.0 + 0.40 * normR + 0.25 * normY + 0.15 * Math.sin(3.0 * theta + normY * Math.PI));
 
-          sOsc.type = (sec.hexagram_id % 3 === 0) ? 'triangle' : ((sec.hexagram_id % 2 === 0) ? 'sine' : 'sawtooth');
-          sOsc.frequency.setValueAtTime(fundamentalFreq, audioCtx.currentTime);
-
+          const sFilter = audioCtx.createBiquadFilter();
           sFilter.type = 'lowpass';
           const qp = sec.quantum_physics || {};
           const cutoff = 350 + (qp.porosity_level || 0.45) * 2400 + 300 * normY;
@@ -598,20 +591,42 @@ metadata/attractor_mode = "implosion"
           sFilter.frequency.setValueAtTime(cutoff, audioCtx.currentTime);
           sFilter.Q.setValueAtTime(qRes, audioCtx.currentTime);
 
+          const sGain = audioCtx.createGain();
           sGain.gain.setValueAtTime(0.0, audioCtx.currentTime);
 
-          sOsc.connect(sFilter);
           sFilter.connect(sGain);
           sGain.connect(masterGain);
-          sOsc.start();
+
+          // Instantiate 6-Yao Line Sound Pellet Oscillators (384 Total Oscillators Across World)
+          const pelletOscillators = [];
+          const pelletGains = [];
+          const pellets = sec.yao_pellets || [];
+
+          pellets.forEach((yp) => {
+            const pOsc = audioCtx.createOscillator();
+            const pGain = audioCtx.createGain();
+
+            pOsc.type = yp.waveform || (yp.ternary_state === 2 ? 'sawtooth' : (yp.ternary_state === 1 ? 'triangle' : 'sine'));
+            pOsc.frequency.setValueAtTime(yp.frequency_hz || fundamentalFreq, audioCtx.currentTime);
+
+            pGain.gain.setValueAtTime(yp.energy_intensity ? yp.energy_intensity * 0.12 : 0.08, audioCtx.currentTime);
+
+            pOsc.connect(pGain);
+            pGain.connect(sFilter);
+            pOsc.start();
+
+            pelletOscillators.push(pOsc);
+            pelletGains.push(pGain);
+          });
 
           groundVoices.push({
             hexId: sec.hexagram_id,
             sector: sec,
             pos3D: new THREE.Vector3(pos.x, pos.y, pos.z),
-            osc: sOsc,
             filter: sFilter,
             gain: sGain,
+            pelletOscillators: pelletOscillators,
+            pelletGains: pelletGains,
             fundamentalFreq: fundamentalFreq
           });
         });
@@ -666,7 +681,6 @@ metadata/attractor_mode = "implosion"
 
     let jkdUnisonActive = false;
     let jkdReciteIndex = 0;
-    let speechSynth = window.speechSynthesis || null;
 
     function toggleJKDUnison() {
       jkdUnisonActive = !jkdUnisonActive;
@@ -682,32 +696,72 @@ metadata/attractor_mode = "implosion"
         btn.innerText = '📖 READ JKD TAO CORPUS IN UNISON (ALL 64)';
         btn.style.background = '#0284c7';
         btn.style.borderColor = '#38bdf8';
-        if (speechSynth) speechSynth.cancel();
+        // Silence all ground voices when stopped
+        if (audioCtx && groundVoices.length > 0) {
+          const now = audioCtx.currentTime;
+          groundVoices.forEach(gv => gv.gain.gain.setTargetAtTime(0.0, now, 0.15));
+        }
       }
     }
 
     function reciteNextJKDPassage() {
       if (!jkdUnisonActive) return;
+      if (!audioCtx || groundVoices.length === 0) {
+        jkdReciteIndex++;
+        if (jkdUnisonActive) setTimeout(reciteNextJKDPassage, 2200);
+        return;
+      }
 
       const sec = worldData.sectors[jkdReciteIndex % 64];
       const passages = sec.jkd_passages || [];
-      const text = passages.length > 0 ? passages[0].text : `"Tao of Jeet Kune Do: Formlessness is the key to fluid adaptation." — Hexagram ${sec.hexagram_id}`;
+      const passage = passages[jkdReciteIndex % Math.max(passages.length, 1)] || passages[0];
+      const text = passage ? passage.text : '"Formlessness — be like water." — JKD Tao';
+      const hamiltonian = passage ? (passage.energy || 0.75) : 0.75;
+      const emotion = passage ? (passage.emotion || {}) : {};
 
-      document.getElementById('val-jkd-text').innerText = `[Citadel #${sec.hexagram_id} ${sec.hexagram_name}]: "${text}"`;
+      document.getElementById('val-jkd-text').innerText =
+        `[Hex #${sec.hexagram_id} ${sec.hexagram_name || sec.name}] "${text}"`;
 
-      if (speechSynth) {
-        speechSynth.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 1.08;
-        utterance.pitch = 0.95;
-        utterance.onend = () => {
+      // Find the groundVoice for this hexagram and modulate its 6 pellet oscillators
+      // using Hamiltonian energy and emotion vector — no speechSynthesis bypass
+      const gv = groundVoices.find(v => v.hexId === sec.hexagram_id);
+      if (gv && gv.pelletOscillators && audioCtx) {
+        const now = audioCtx.currentTime;
+        const coherence  = emotion.coherence  || 0.8;
+        const chaos      = emotion.chaos      || 0.2;
+        const voiceWeight = emotion.voiceWeight || 0.9;
+        const darkTone   = emotion.darkTone   || 0.2;
+
+        gv.pelletOscillators.forEach((pOsc, pIdx) => {
+          const pellet = sec.yao_pellets && sec.yao_pellets[pIdx];
+          if (!pellet) return;
+
+          // JKD emotion vector modulates pellet frequency: coherence tightens, chaos expands
+          const jkdFreq = pellet.frequency_hz
+            * (1.0 + chaos * 0.18 - darkTone * 0.08)
+            * (1.0 + 0.10 * Math.sin(pIdx * 1.27 + hamiltonian * Math.PI));
+          pOsc.frequency.setTargetAtTime(jkdFreq, now, 0.06);
+
+          if (gv.pelletGains[pIdx]) {
+            // Hamiltonian energy × voiceWeight × citadel pellet energy_intensity
+            const jkdGain = hamiltonian * voiceWeight * (pellet.energy_intensity || 0.5) * 0.18;
+            gv.pelletGains[pIdx].gain.setTargetAtTime(jkdGain, now, 0.06);
+          }
+        });
+
+        // Boost the citadel's master gain for this passage duration
+        gv.gain.gain.setTargetAtTime(hamiltonian * 0.08, now, 0.05);
+
+        // Duration driven by Hamiltonian energy: higher energy = longer resonance hold
+        const holdMs = Math.round(1200 + hamiltonian * 1800);
+        setTimeout(() => {
+          if (gv.gain) gv.gain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.12);
           jkdReciteIndex++;
-          if (jkdUnisonActive) setTimeout(reciteNextJKDPassage, 400);
-        };
-        speechSynth.speak(utterance);
+          if (jkdUnisonActive) setTimeout(reciteNextJKDPassage, 300);
+        }, holdMs);
       } else {
         jkdReciteIndex++;
-        if (jkdUnisonActive) setTimeout(reciteNextJKDPassage, 3500);
+        if (jkdUnisonActive) setTimeout(reciteNextJKDPassage, 2000);
       }
     }
 
@@ -766,23 +820,20 @@ metadata/attractor_mode = "implosion"
       offMaster.connect(offFilter);
       offFilter.connect(offlineCtx.destination);
 
-      // All 64 voices of the ground field baked into the WAV
+      // All 64 citadels × 6 yao pellets = 384 oscillators baked into the WAV
       worldData.sectors.forEach((sec) => {
-        const pos = sec.world_position;
-        const normX = pos.x / 280.0, normZ = pos.z / 280.0, normY = pos.y / 35.0;
-        const normR = Math.sqrt(normX * normX + normZ * normZ);
-        const theta = Math.atan2(pos.z, pos.x);
-        const freq = 108.0 * (1.0 + 0.40 * normR + 0.25 * normY + 0.15 * Math.sin(3.0 * theta + normY * Math.PI));
-
-        const osc = offlineCtx.createOscillator();
-        const g = offlineCtx.createGain();
-        osc.type = (sec.hexagram_id % 3 === 0) ? 'triangle' : ((sec.hexagram_id % 2 === 0) ? 'sine' : 'sawtooth');
-        osc.frequency.setValueAtTime(freq, 0);
-        g.gain.setValueAtTime(0.035, 0);
-        osc.connect(g);
-        g.connect(offMaster);
-        osc.start(0);
-        osc.stop(durationSec);
+        const pellets = sec.yao_pellets || [];
+        pellets.forEach((yp) => {
+          const osc = offlineCtx.createOscillator();
+          const g = offlineCtx.createGain();
+          osc.type = yp.waveform || (yp.ternary_state === 2 ? 'sawtooth' : (yp.ternary_state === 1 ? 'triangle' : 'sine'));
+          osc.frequency.setValueAtTime(yp.frequency_hz || 146.0, 0);
+          g.gain.setValueAtTime((yp.energy_intensity || 0.5) * 0.018, 0);
+          osc.connect(g);
+          g.connect(offMaster);
+          osc.start(0);
+          osc.stop(durationSec);
+        });
       });
 
       offlineCtx.startRendering().then(renderedBuffer => {
@@ -1233,9 +1284,16 @@ metadata/attractor_mode = "implosion"
           let spatialAtten = Math.min(0.045, 0.05 / (1.0 + Math.pow(dist / 95.0, 2)));
 
           if (centripetalEggActive) {
-            // Modulate spatial frequency & gain in unison across all 64 nodes from present time
+            // Modulate each 6-yao pellet oscillator frequency in unison from present time
             const eggOsc = 1.0 + 0.12 * Math.sin(presentTime * 3.0 + gv.hexId * 0.1);
-            gv.osc.frequency.setTargetAtTime(gv.fundamentalFreq * eggOsc, now, 0.04);
+            if (gv.pelletOscillators) {
+              gv.pelletOscillators.forEach((pOsc, pIdx) => {
+                const pelletBase = (gv.sector.yao_pellets && gv.sector.yao_pellets[pIdx])
+                  ? gv.sector.yao_pellets[pIdx].frequency_hz
+                  : gv.fundamentalFreq;
+                pOsc.frequency.setTargetAtTime(pelletBase * eggOsc, now, 0.04);
+              });
+            }
             if (attractorMode === 'unison_resonance') {
               spatialAtten *= 1.8; // Boost unison pellet resonance gain
             }
