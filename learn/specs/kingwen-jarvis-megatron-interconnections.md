@@ -74,6 +74,19 @@ Scope: read-only audit of canonical live surfaces from immutable tables, OpenJar
 - `wiki_math_research_batch_2026-07-11.json` / layer2 — wiki-math corpus for ingestion
 - `rsmv_live_cache_tables.json`, `rsmv_kit_version_manifest.json`, `rsmv_common_structures.json` — RuneScape cache schema corpus
 
+## 3D Models & 6-Yao Sound Pellets Subsystem
+- **3D Sovereign Citadels**: 64 hexagram citadels rendered in OpenUSD (`kingwen_sovereign_master_stage.usda`), Godot 3D (`kingwen_sovereign_world_scene.tscn`), and WebGL HTML Viewfinder (`kingwen_sovereign_world_viewer.html`).
+- **6-Yao Orbiting Sound Pellets**: Each citadel node features 6 orbiting sound pellets corresponding to line positions L1..L6.
+  - **Dynamics**: Line type Yin (0, Sine, 0.10 gain), Yang (1, Triangle, 0.14 gain), Yao/Changing (2, Sawtooth, 0.18 gain).
+  - **Frequencies**: Derived from spatial fundamental frequency $f_0(x,y,z) = 108.0 \cdot (1 + 0.40\tilde{r} + 0.25\tilde{y} + 0.15\sin(3\theta + \pi\tilde{y}))$.
+  - **Orbit Mechanics**: Orbital radii $6.0 + 2.2 \cdot \ell$, orbital speeds $0.5 + (\ell + 1) \cdot 0.25 \cdot (1 + \text{vortex\_tension})$.
+
+## GibberLink Acoustic Inter-Agent Protocol
+- **Specification**: [`docs/GIBBERLINK_ACOUSTIC_PROTOCOL.md`](file:///c:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/docs/GIBBERLINK_ACOUSTIC_PROTOCOL.md).
+- **Encoding**: Converts 6-yao line sound pellets and ternary states into 120ms FSK acoustic wave packet frames.
+- **Medium**: Operates over the continuous Schauberger centripetal vortex ground field for zero-latency machine-to-machine peer synchronization.
+- **Jarvis DSP Integration**: OpenJarvis audio DSP (`src/openjarvis/cli/audio_dsp.py`) and worker TTS (`_oracle_speak.py`) decode and emit GibberLink wave packet frames.
+
 ## Known gaps / exact targets
 1. Consensus lock in `emotional_engine.py:_compute_consensus_from_resolved()` — identical output across `emotional_input=0..100`; variance source is in `_tau_for_resolved()` / line-state sampling, not `expand_server.py` serialization
 2. `/journey` has no King Wen consult wiring; currently Avalokiteshvara text only

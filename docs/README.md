@@ -22,5 +22,6 @@ Do not edit source code from these docs. These are research artifacts, not confi
 11. [`AUDIT_PIPELINE_CHECKLIST_2026-08-22.md`](file:///c:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/docs/AUDIT_PIPELINE_CHECKLIST_2026-08-22.md) — Pipeline audit checklist from Shap-E generators to RSMV wire format.
 12. [`AUDIT_QUANTUM_3D_SHAPE_E_2026-08-21.md`](file:///c:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/docs/AUDIT_QUANTUM_3D_SHAPE_E_2026-08-21.md) — Quantum simulation & 3D format audit (RSMV / Shap-E mesh telemetry).
 13. [`OEIS_KING_WEN_SEQUENCE.md`](file:///c:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/docs/OEIS_KING_WEN_SEQUENCE.md) — OEIS submission draft for deterministic phase-space sequences and algebraic properties.
+14. [`GIBBERLINK_ACOUSTIC_PROTOCOL.md`](file:///c:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/docs/GIBBERLINK_ACOUSTIC_PROTOCOL.md) — GibberLink acoustic wave-packet protocol specification for 6-yao sound pellets and peer-to-peer inter-agent ground field transmission.
 
-[Updated 2026-08-29]
+[Updated 2026-08-31]
