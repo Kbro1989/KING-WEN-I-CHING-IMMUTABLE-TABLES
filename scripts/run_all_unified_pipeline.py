@@ -24,22 +24,22 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 PIPELINE_STAGES = [
-    # ── LAYER 0: QUANTUM WAVE PACKET PRE-WARM (must run first — all downstream reads this cache) ──
-    ("00. Quantum Wave Packet Pre-Warm (1D→2D→3D, 5832 states)", [sys.executable, str(ROOT / "scripts" / "prewarm_quantum_wavepackets.py")]),
+    # -- LAYER 0: QUANTUM WAVE PACKET PRE-WARM (must run first -- all downstream reads this cache) --
+    ("00. Quantum Wave Packet Pre-Warm (1D->2D->3D, 5832 states)", [sys.executable, str(ROOT / "scripts" / "prewarm_quantum_wavepackets.py")]),
 
-    # ── LAYER 1: SHOTGUN — 512-state superposition expansion across all 64 ──
-    ("01. Shotgun 512-State Expansion (64×8 vortex blast)", [sys.executable, str(ROOT / "scripts" / "full_hexagram_shotgun.py")]),
+    # -- LAYER 1: SHOTGUN -- 512-state superposition expansion across all 64 --
+    ("01. Shotgun 512-State Expansion (64x8 vortex blast)", [sys.executable, str(ROOT / "scripts" / "full_hexagram_shotgun.py")]),
 
-    # ── LAYER 2: INJECT wave packets from shotgun into 64 model kit JSONs ──
+    # -- LAYER 2: INJECT wave packets from shotgun into 64 model kit JSONs --
     ("02. Inject Quantum Wave Packets & 6-Yao Pellets into 64 3D Kits", [sys.executable, "-B", str(ROOT / "scripts" / "update_3d_kits_with_quantum_wavepackets.py")]),
 
-    # ── LAYER 3: KIT ENRICHMENT — reads kits written in layer 2 ──
+    # -- LAYER 3: KIT ENRICHMENT -- reads kits written in layer 2 --
     ("03. Kit Model Persona Enrichment", [sys.executable, "-B", str(ROOT / "scripts" / "enrich_kit_models.py")]),
 
-    # ── LAYER 4: CORPUS INGESTION — JKD megatron wave packet emotions mapped to 64 hexagrams ──
-    ("04. JKD Megatron Wave Packet Emotion Ingestion (2471 chunks → 64 hexagrams)", [sys.executable, "-B", str(ROOT / "scripts" / "ingest_jkd_megatron_wavepackets.py")]),
+    # -- LAYER 4: CORPUS INGESTION -- JKD megatron wave packet emotions mapped to 64 hexagrams --
+    ("04. JKD Megatron Wave Packet Emotion Ingestion (2471 chunks -> 64 hexagrams)", [sys.executable, "-B", str(ROOT / "scripts" / "ingest_jkd_megatron_wavepackets.py")]),
 
-    # ── LAYER 5: 3D ASSET BRIDGES — read enriched kits ──
+    # -- LAYER 5: 3D ASSET BRIDGES -- read enriched kits --
     ("05. POG2 Ontology & K-Color Integration", [sys.executable, "-B", str(ROOT / "scripts" / "integrate_desktop_3d_pog2_assets.py")]),
     ("06. Standalone 3D Mesh Generation", [sys.executable, "-B", str(ROOT / "scripts" / "shap_e_kingwen_3d_generator.py")]),
     ("07. Repository-Native Voice Profiles Manifest", [sys.executable, "-B", str(ROOT / "scripts" / "sync_voicebox_npc_profiles.py")]),
@@ -57,16 +57,16 @@ PIPELINE_STAGES = [
     ("19. Save String V2.1 & Math Parity Audit", [sys.executable, str(ROOT / "scripts" / "verify_math_jacobian_hamiltonian.py")]),
     ("20. Output Mismatch & Integrity Audit", [sys.executable, "-B", str(ROOT / "scripts" / "verify_output_mismatches.py")]),
 
-    # ── LAYER FINAL: 3D WORLD — runs last, reads ALL upstream output ──
-    # prewarm_cache.npz → quantum_wave_packet kit data → jkd_passages → yao_pellets → sovereign world
+    # -- LAYER FINAL: 3D WORLD -- runs last, reads ALL upstream output --
+    # prewarm_cache.npz -> quantum_wave_packet kit data -> jkd_passages -> yao_pellets -> sovereign world
     ("21. Generate 64-Sovereign 3D World (egg + vortex + JKD unison + 384 pellets)", [sys.executable, "-B", str(ROOT / "scripts" / "generate_sovereign_world.py")]),
 ]
 
 
 def main() -> int:
     print("=" * 80)
-    print("KING WEN 64 SOVEREIGN MODEL ENGINE — UNIFIED SELF-CONTAINED PIPELINE (21 STAGES)")
-    print("Stage 00 (prewarm) → Stage 01 (shotgun) → ... → Stage 21 (generate_sovereign_world)")
+    print("KING WEN 64 SOVEREIGN MODEL ENGINE -- UNIFIED SELF-CONTAINED PIPELINE (22 STAGES)")
+    print("Stage 00 (prewarm) -> Stage 01 (shotgun) -> ... -> Stage 21 (generate_sovereign_world)")
     print("=" * 80)
 
     sub_env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
@@ -82,8 +82,8 @@ def main() -> int:
             return 1
 
     print("\n" + "=" * 80)
-    print(f"UNIFIED PIPELINE COMPLETED: ALL {stage_passed}/{len(PIPELINE_STAGES)} STAGES PASSED — 100% FULL OUTPUT")
-    print("quantum_prewarm_cache → shotgun → kits → JKD corpus → 3D sovereign world: COMPLETE")
+    print(f"UNIFIED PIPELINE COMPLETED: ALL {stage_passed}/{len(PIPELINE_STAGES)} STAGES PASSED -- 100% FULL OUTPUT")
+    print("quantum_prewarm_cache -> shotgun -> kits -> JKD corpus -> 3D sovereign world: COMPLETE")
     print("=" * 80)
 
     return 0
