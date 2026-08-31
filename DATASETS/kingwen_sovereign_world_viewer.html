@@ -63,6 +63,28 @@
       border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s ease;
     }
     .rec-btn:hover { background: #f59e0b; color: #0f172a; }
+
+    /* === CENTRIPETAL EGG VORTEX SWITCHBOARD === */
+    .egg-switchboard {
+      background: rgba(15, 23, 42, 0.92); border: 1px solid #8b5cf6;
+      border-radius: 10px; padding: 10px; margin-top: 10px;
+      box-shadow: 0 0 20px rgba(139, 92, 246, 0.35); backdrop-filter: blur(8px);
+    }
+    .egg-header {
+      font-size: 11px; font-weight: 800; color: #c4b5fd; text-transform: uppercase;
+      letter-spacing: 0.8px; display: flex; align-items: center; justify-content: space-between;
+    }
+    .egg-btn-row { display: flex; gap: 6px; width: 100%; margin-top: 6px; }
+    .egg-toggle-btn {
+      background: #1e1b4b; color: #a78bfa; border: 1px solid #8b5cf6;
+      padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 11px;
+      font-weight: 700; transition: all 0.2s ease; flex: 1; text-align: center;
+    }
+    .egg-toggle-btn:hover { background: #8b5cf6; color: #ffffff; box-shadow: 0 0 16px rgba(139,92,246,0.6); }
+    .egg-toggle-btn.active {
+      background: linear-gradient(135deg, #7c3aed 0%, #d946ef 100%);
+      color: #ffffff; border-color: #f472b6; box-shadow: 0 0 20px rgba(217,70,239,0.8);
+    }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -91,6 +113,25 @@
           <option value="binaural">&#x262F;&#xFE0F; Yin/Yang Binaural Carrier</option>
         </select>
         <button class="rec-btn" id="record-btn" onclick="recordAudioSample()">&#x1F399;&#xFE0F; Sample WAV</button>
+      </div>
+    </div>
+    <div class="egg-switchboard">
+      <div class="egg-header">
+        <span>&#x1F95A; CENTRIPETAL EGG VORTEX ATTRACTOR</span>
+        <span style="font-size:9px; background:#7c3aed; color:#fff; padding:1px 6px; border-radius:4px;">ALL 64 UNISON</span>
+      </div>
+      <div class="egg-btn-row">
+        <button class="egg-toggle-btn" id="egg-toggle-btn" onclick="toggleCentripetalEgg()">&#x26A1; EGG VORTEX: OFF</button>
+        <select id="attractor-mode-select" class="audio-select" onchange="changeAttractorMode()">
+          <option value="implosion">&#x1F300; Schauberger Implosion Egg</option>
+          <option value="toroidal">&#x1F369; Toroidal Egg Oscillation</option>
+          <option value="unison_resonance">&#x1F50A; 64-Unison Pellet Resonance</option>
+        </select>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 10px; color: #cbd5e1;">
+        <span style="font-weight:700; color:#c4b5fd;">Present Time Speed (t):</span>
+        <input type="range" id="time-speed-slider" min="0.1" max="5.0" step="0.1" value="1.0" oninput="updateTimeSpeed(this.value)" style="flex:1; cursor:pointer;">
+        <span id="time-speed-val" style="font-family:monospace; color:#38bdf8; font-weight:700;">1.0x</span>
       </div>
     </div>
     <div id="inspector">
@@ -214,6 +255,32 @@
       }
     }
 
+
+    let centripetalEggActive = false;
+    let attractorMode = 'implosion';
+    let timeSpeed = 1.0;
+    let presentTime = 0.0;
+
+    function toggleCentripetalEgg() {
+      centripetalEggActive = !centripetalEggActive;
+      const btn = document.getElementById('egg-toggle-btn');
+      if (centripetalEggActive) {
+        btn.innerText = '🥚 EGG VORTEX: ACTIVE (1..64 UNISON)';
+        btn.classList.add('active');
+      } else {
+        btn.innerText = '⚡ EGG VORTEX: OFF';
+        btn.classList.remove('active');
+      }
+    }
+
+    function changeAttractorMode() {
+      attractorMode = document.getElementById('attractor-mode-select').value;
+    }
+
+    function updateTimeSpeed(val) {
+      timeSpeed = parseFloat(val);
+      document.getElementById('time-speed-val').innerText = timeSpeed.toFixed(1) + 'x';
+    }
 
     function changeAudioMode() {
       currentAudioMode = document.getElementById('audio-mode-select').value;
@@ -544,49 +611,91 @@
     function animate() {
       requestAnimationFrame(animate);
       clock += 0.02;
+      presentTime += 0.02 * timeSpeed;
       controls.update();
 
       animatedNodes.forEach((n, nIdx) => {
-        // Spin Schauberger centripetal vortex
-        n.vortex.rotation.y += 0.03 * (1.0 + n.vortexTension * 2.0);
+        const sec = worldData.sectors[nIdx];
+        const pos = sec.world_position;
 
-        // Pulsate porosity shell
-        const pulse = 1.0 + Math.sin(clock * 1.5 + nIdx) * 0.06;
+        let spinSpeed = 0.03 * (1.0 + n.vortexTension * 2.0);
+        let pulse = 1.0 + Math.sin(clock * 1.5 + nIdx) * 0.06;
+
+        // === CENTRIPETAL EGG GENERATION FROM PRESENT TIME (ALL 64 UNISON) ===
+        if (centripetalEggActive) {
+          const eggPhase = presentTime * 2.5 + (pos.x * 0.01 + pos.z * 0.01);
+          const eggFactor = 1.0 + 0.35 * Math.sin(eggPhase);
+
+          if (attractorMode === 'implosion') {
+            // Schauberger Implosion Funnel Egg: Contract and accelerate inward toward (x, y, z)
+            spinSpeed *= (1.8 + 0.9 * Math.sin(presentTime * 3.0 + nIdx * 0.1));
+            pulse *= (0.85 + 0.35 * Math.sin(eggPhase));
+            n.vortex.scale.set(eggFactor * 0.9, 1.0 + 0.5 * Math.sin(presentTime * 2.0), eggFactor * 0.9);
+          } else if (attractorMode === 'toroidal') {
+            // Toroidal Egg Oscillation: Breathing torus field
+            const torusPulse = 1.0 + 0.4 * Math.sin(presentTime * 4.0 + nIdx * 0.2);
+            n.porosity.scale.set(torusPulse, torusPulse * 1.25, torusPulse);
+            n.vortex.rotation.z = Math.sin(presentTime * 1.5 + nIdx * 0.1) * 0.3;
+          } else if (attractorMode === 'unison_resonance') {
+            // 64-Unison Audio Pellet Resonance: High-frequency synchronous vortex spin
+            spinSpeed *= 2.8;
+            pulse = 1.0 + 0.25 * Math.sin(presentTime * 6.0);
+          }
+
+          // Implosion orbital physics for 6-yao sound pellets
+          n.pellets.forEach((p, pIdx) => {
+            const pelletPhase = p.angle + presentTime * p.spec.orbital_speed * 1.5;
+            const implosionRadius = p.spec.orbit_radius * (0.60 + 0.40 * Math.sin(presentTime * 2.5 + pIdx * 0.5));
+            p.mesh.position.x = Math.cos(pelletPhase) * implosionRadius;
+            p.mesh.position.z = Math.sin(pelletPhase) * implosionRadius;
+            p.mesh.position.y = 8.0 + Math.sin(pelletPhase * 2.0 + presentTime * 3.0) * 2.2;
+            if (p.spec.ternary_state === 2) {
+              p.mesh.rotation.x += 0.08;
+              p.mesh.rotation.y += 0.08;
+            }
+          });
+        } else {
+          // Standard Orbiting Pellets
+          n.pellets.forEach(p => {
+            p.angle += p.spec.orbital_speed * 0.03;
+            p.mesh.position.x = Math.cos(p.angle) * p.spec.orbit_radius;
+            p.mesh.position.z = Math.sin(p.angle) * p.spec.orbit_radius;
+            p.mesh.position.y = 8.0 + Math.sin(p.angle * 2.0 + clock) * 1.8;
+            if (p.spec.ternary_state === 2) {
+              p.mesh.rotation.x += 0.05;
+              p.mesh.rotation.y += 0.05;
+            }
+          });
+        }
+
+        n.vortex.rotation.y += spinSpeed;
         n.porosity.scale.set(pulse, pulse, pulse);
         n.porosity.rotation.y -= 0.005;
 
-        // Rotate rose-curve avatar core
         n.rose.rotation.y += 0.015;
         n.rose.rotation.z = Math.sin(clock + nIdx) * 0.1;
 
-        // Beacon float
         n.beacon.rotation.y += 0.02;
         n.beacon.position.y = 8 + Math.sin(clock * 2 + nIdx) * 1.0;
-
-        // 6-Yao Line Orbiting Pellets
-        n.pellets.forEach(p => {
-          p.angle += p.spec.orbital_speed * 0.03;
-          p.mesh.position.x = Math.cos(p.angle) * p.spec.orbit_radius;
-          p.mesh.position.z = Math.sin(p.angle) * p.spec.orbit_radius;
-          p.mesh.position.y = 8.0 + Math.sin(p.angle * 2.0 + clock) * 1.8;
-          if (p.spec.ternary_state === 2) {
-            p.mesh.rotation.x += 0.05;
-            p.mesh.rotation.y += 0.05;
-          }
-        });
       });
 
-      // === UNIFIED QUANTUM GROUND FIELD — CENTRIPETAL EGG SPATIAL ATTENUATION ===
-      // The ground connects all 64. Camera position is the only observer.
-      // No per-citadel mute. The field is one continuous resonating medium.
+      // === UNIFIED QUANTUM GROUND FIELD — CENTRIPETAL EGG SPATIAL ATTENUATION & UNISON RESONANCE ===
       if (fieldActive && audioCtx && groundVoices.length > 0) {
         const camPos = camera.position;
         const now = audioCtx.currentTime;
 
         groundVoices.forEach((gv) => {
           const dist = camPos.distanceTo(gv.pos3D);
-          // Inverse square distance attenuation — the centripetal egg
-          const spatialAtten = Math.min(0.045, 0.05 / (1.0 + Math.pow(dist / 95.0, 2)));
+          let spatialAtten = Math.min(0.045, 0.05 / (1.0 + Math.pow(dist / 95.0, 2)));
+
+          if (centripetalEggActive) {
+            // Modulate spatial frequency & gain in unison across all 64 nodes from present time
+            const eggOsc = 1.0 + 0.12 * Math.sin(presentTime * 3.0 + gv.hexId * 0.1);
+            gv.osc.frequency.setTargetAtTime(gv.fundamentalFreq * eggOsc, now, 0.04);
+            if (attractorMode === 'unison_resonance') {
+              spatialAtten *= 1.8; // Boost unison pellet resonance gain
+            }
+          }
           gv.gain.gain.setTargetAtTime(spatialAtten, now, 0.05);
         });
       }
