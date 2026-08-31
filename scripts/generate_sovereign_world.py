@@ -660,6 +660,13 @@ metadata/attractor_mode = "implosion"
     let audioUnlocked = false;
 
     function unlockAudioSystem() {
+      if (audioUnlocked) {
+        // Already unlocked — just resume if browser suspended it again
+        if (audioCtx && audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        return;
+      }
       if (!audioCtx) {
         initAudio();
       }
@@ -682,9 +689,9 @@ metadata/attractor_mode = "implosion"
       }
     }
 
-    window.addEventListener('click', unlockAudioSystem, { once: false });
-    window.addEventListener('touchstart', unlockAudioSystem, { once: false });
-    window.addEventListener('keydown', unlockAudioSystem, { once: false });
+    window.addEventListener('click', unlockAudioSystem, { once: true });
+    window.addEventListener('touchstart', unlockAudioSystem, { once: true });
+    window.addEventListener('keydown', unlockAudioSystem, { once: true });
 
     function initAudio() {
       if (audioCtx) return;
