@@ -357,17 +357,18 @@ function renderAvatar(entry, viewMode) {
   // Scale from wavefunction
   const scale = qa.scale_factor || 1.0;
 
-  // Color from emotional vector + color_shift
-  const rv = entry.resolved_vector || {};
-  const cs = qa.color_shift || {};
-  const chaos = rv.chaos || 0.2;
-  const whimsy = rv.whiskey || rv.whimsy || 0.2;
-  const darkTone = rv.darkTone || 0.1;
+  // Deterministic 64-Color Hexagram Spectrum (360° unaliased basis)
+  const baseHue = (((hexId - 1) * 5.625) + ((cs.r || 0) * 0.05)) % 360;
+  const coh = rv.coherence || 0.85;
+  const sat = Math.max(0.35, Math.min(0.95, 0.50 + (chaos + whimsy) * 0.25));
+  const light = Math.max(0.25, Math.min(0.75, 0.35 + coh * 0.30 - darkTone * 0.15));
 
-  // Color palette: chaos->R, darkTone->G, whimsy->B
-  const r = Math.min(255, Math.round(chaos * 200 + (cs.r || 0) + 55));
-  const g = Math.min(255, Math.round(darkTone * 180 + (cs.g || 0) + 75));
-  const b = Math.min(255, Math.round(whimsy * 220 + (cs.b || 0) + 30));
+  // HSL to RGB converter
+  const a = sat * Math.min(light, 1 - light);
+  const f_c = (n, k = (n + baseHue / 30) % 12) => light - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+  const r = Math.round(f_c(0) * 255);
+  const g = Math.round(f_c(8) * 255);
+  const b = Math.round(f_c(4) * 255);
 
   // Rotation from wavefunction
   const rot = qa.rotation_modulation || { x: 0, y: 0, z: 0 };

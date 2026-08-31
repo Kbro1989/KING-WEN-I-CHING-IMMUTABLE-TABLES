@@ -125,6 +125,18 @@ def generate_sovereign_world():
                     "frequency_hz": freq_hz
                 })
 
+            # Load Deterministic Spectral Color Map from Kit
+            kit_path = ROOT / "DATASETS" / "kingwen_model_sets" / f"kit_{h_id}.json"
+            k_color = {}
+            if kit_path.exists():
+                try:
+                    k_color = json.loads(kit_path.read_text(encoding="utf-8")).get("grounded_npc", {}).get("k_color_map", {})
+                except Exception:
+                    pass
+            spectral_color = k_color.get("primary_color", {"hex": "#FFD700", "name": f"{base['name']} Gold"})
+            palette_16 = k_color.get("palette_16", [])
+            base_hue = k_color.get("final_hue_degrees", (h_id - 1) * 5.625)
+
             sector = {
                 "sector_id": h_id,
                 "hexagram_id": h_id,
@@ -143,6 +155,9 @@ def generate_sovereign_world():
                 "regional_biome": biome,
                 "citadel_archetype": base.get("category", "sovereign"),
                 "action_doctrine": base.get("action", "ASSERT"),
+                "spectral_color": spectral_color,
+                "palette_16": palette_16,
+                "base_hue_degrees": base_hue,
                 "quantum_physics": {
                     "vortex_tension": vortex_tension,
                     "suction_coefficient": suction_coeff,
@@ -373,9 +388,8 @@ shadow_enabled = true
       <div class="inspect-grid" id="sel-grid">
         <div class="inspect-cell"><div class="inspect-label">Regional Biome</div><span id="val-biome">All 8 Sectors Active</span></div>
         <div class="inspect-cell"><div class="inspect-label">Action &amp; Archetype</div><span id="val-action">Superposition Field</span></div>
-        <div class="inspect-cell"><div class="inspect-label">Schauberger Vortex</div><span id="val-vortex">&tau;: 0.02..1.0</span></div>
-        <div class="inspect-cell"><div class="inspect-label">Porosity Window</div><span id="val-porosity">&Pi;: 0.15..0.70</span></div>
         <div class="inspect-cell" style="grid-column: span 2;"><div class="inspect-label">DA-V2 Metric Depth &amp; Point Cloud</div><span id="val-depth">Mean: 10.0m | 122,150 vertices</span></div>
+        <div class="inspect-cell" style="grid-column: span 2;"><div class="inspect-label">Deterministic Spectral Hue (6-Bit Embodiment)</div><span id="val-spectral" style="display:flex;align-items:center;gap:6px;"><span id="spectral-badge" style="width:12px;height:12px;border-radius:3px;background:#FFD700;display:inline-block;box-shadow:0 0 6px rgba(255,215,0,0.6);"></span> <span id="spectral-text">#FFD700 (0.0&deg;)</span></span></div>
         <div class="inspect-cell" style="grid-column: span 2;"><div class="inspect-label">6-Yao Acoustic Harmonics &amp; Filter</div><span id="val-audio">Harmonics: Hover Node | Cutoff: --</span></div>
       </div>
       <div class="pellet-row" id="pellet-indicators"></div>
@@ -684,8 +698,9 @@ shadow_enabled = true
         rPos[r*3+2] = Math.sin(uIdx * t) * Math.sin(lIdx * t) * 4.5;
       }
       rGeo.setAttribute('position', new THREE.BufferAttribute(rPos, 3));
+      const specColor = new THREE.Color(sec.spectral_color ? sec.spectral_color.hex : '#FFD700');
       const roseMesh = new THREE.Line(rGeo, new THREE.LineBasicMaterial({
-        color: 0xFFD700, transparent: true, opacity: 0.85
+        color: specColor, transparent: true, opacity: 0.9
       }));
       group.add(roseMesh);
 
@@ -693,7 +708,7 @@ shadow_enabled = true
       const beacon = new THREE.Mesh(
         new THREE.OctahedronGeometry(2.5),
         new THREE.MeshStandardMaterial({
-          color: 0xffd700, emissive: 0xd97706, emissiveIntensity: 0.6, roughness: 0.2
+          color: specColor, emissive: specColor, emissiveIntensity: 0.6, roughness: 0.2
         })
       );
       beacon.position.y = 8;
@@ -743,16 +758,16 @@ shadow_enabled = true
         document.getElementById('val-biome').innerText = d.regional_biome.name;
         document.getElementById('val-action').innerText =
           d.action_doctrine + ' (' + d.citadel_archetype + ')';
-        document.getElementById('val-vortex').innerText =
-          '\u03C4: ' + d.quantum_physics.vortex_tension +
-          ' (Depth: ' + d.quantum_physics.implosion_funnel_depth + 'm)';
-        document.getElementById('val-porosity').innerText =
-          '\u03A0: ' + d.quantum_physics.porosity_level +
-          ' (R: ' + d.quantum_physics.porosity_cloud_radius + 'm)';
         const ds = d.quantum_physics.depth_statistics || {};
         document.getElementById('val-depth').innerText =
           'Mean: ' + (ds.mean_depth || 10.0) + 'm (Range: ' + (ds.min_depth || 0) + '..' + (ds.max_depth || 20) + 'm) | ' + (d.quantum_physics.depth_pointcloud_vertices || 122150) + ' pts';
         
+        const sc = d.spectral_color || { hex: '#FFD700', name: 'Spectral' };
+        const hueDeg = d.base_hue_degrees !== undefined ? Number(d.base_hue_degrees).toFixed(1) : '0.0';
+        document.getElementById('spectral-badge').style.background = sc.hex;
+        document.getElementById('spectral-badge').style.boxShadow = '0 0 8px ' + sc.hex;
+        document.getElementById('spectral-text').innerText = sc.hex + ' (' + hueDeg + '\u00B0) \u2014 ' + (sc.name || 'Spectral Hue');
+
         const freqs = d.yao_pellets.map(yp => yp.frequency_hz + 'Hz').join(', ');
         const cutoff = Math.round(400 + (d.quantum_physics.porosity_level || 0.45) * 3200);
         document.getElementById('val-audio').innerText = `Harmonics: [${freqs}] | Cutoff: ${cutoff}Hz`;
