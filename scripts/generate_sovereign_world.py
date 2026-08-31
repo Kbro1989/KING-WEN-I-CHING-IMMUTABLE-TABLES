@@ -1150,6 +1150,7 @@ metadata/attractor_mode = "implosion"
     const eggCenter = new THREE.Vector3(0, 40, 0);
     let masterEggMesh = null;
     let eggGeo = null;
+    let terrainBasePos = null;
 
     // === LAYER 0: SKELETON (64 CITADELS & SPATIAL BIOMES) ===
     function applyLayer0(l0) {
@@ -1157,6 +1158,7 @@ metadata/attractor_mode = "implosion"
 
       // Deform terrain with 64 Gaussian potential wells
       const tPos = terrainGeo.attributes.position;
+      terrainGeo.attributes.position.usage = THREE.DynamicDrawUsage;
       for (let i = 0; i < tPos.count; i++) {
         const x = tPos.getX(i), z = tPos.getZ(i);
         let y = Math.sin(x * 0.012) * Math.cos(z * 0.012) * 16.0 + Math.sin(x * 0.035) * 4.0;
@@ -1171,6 +1173,10 @@ metadata/attractor_mode = "implosion"
       }
       terrainGeo.computeVertexNormals();
       tPos.needsUpdate = true;
+
+      // Cache REST position for dynamic centripetal wave attractor
+      terrainBasePos = new Float32Array(tPos.array.length);
+      terrainBasePos.set(tPos.array);
 
       // Spawn 64 Sovereign Beacon Skeletons
       worldData.sectors.forEach((sec, sIdx) => {
@@ -1479,6 +1485,39 @@ metadata/attractor_mode = "implosion"
       clock += 0.02;
       presentTime += 0.02 * timeSpeed;
       controls.update();
+
+      // === DYNAMIC QUANTUM GROUND FIELD & CENTRIPETAL TERRAIN ATTRACTION ===
+      if (terrainBasePos && centripetalEggActive) {
+        const tPos = terrainGeo.attributes.position;
+        const tArr = tPos.array;
+        const tBase = terrainBasePos;
+        const vertCount = tPos.count;
+
+        for (let i = 0; i < vertCount; i++) {
+          const idx = i * 3;
+          const bx = tBase[idx];
+          const by = tBase[idx + 1];
+          const bz = tBase[idx + 2];
+
+          // Radial distance & angle from central Master Egg origin (0, 40, 0)
+          const r = Math.sqrt(bx * bx + bz * bz);
+          const theta = Math.atan2(bz, bx);
+
+          // 1. Centripetal Attractor Inward Traveling Ripple (moving toward Master Egg core)
+          const centripetalWave = Math.sin(r * 0.028 - presentTime * 2.4 + theta * 2.0) * (2.8 * Math.exp(-r / 320.0));
+
+          // 2. Quantum Potential-Well Dynamic Surface Breathing
+          const wellBreathing = Math.sin(presentTime * 3.5 + bx * 0.015 + bz * 0.015) * 1.2;
+
+          // 3. Dynamic radial suction pull toward Master Egg
+          const radialSuction = (attractorMode === 'implosion')
+            ? Math.cos(r * 0.018 - presentTime * 3.0) * (1.8 * Math.exp(-r / 240.0))
+            : Math.sin(presentTime * 2.0 + theta * 4.0) * 1.0;
+
+          tArr[idx + 1] = by + centripetalWave + wellBreathing + radialSuction;
+        }
+        tPos.needsUpdate = true;
+      }
 
       if (typeof masterEggMesh !== 'undefined' && masterEggMesh) {
         masterEggMesh.visible = centripetalEggActive;
