@@ -5,16 +5,14 @@
  */
 export async function onRequestGet(context) {
   const { request, env } = context;
-  const url = new URL(request.url);
 
   try {
-    // Fetch static topology JSON from public asset root
-    const assetUrl = new URL('/DATASETS/kingwen_sovereign_world_topology.json', url.origin);
-    const assetRes = await env.ASSETS ? env.ASSETS.fetch(assetUrl) : await fetch(assetUrl);
+    const assetReq = new Request(new URL('/DATASETS/kingwen_sovereign_world_topology.json', request.url));
+    const assetRes = env.ASSETS ? await env.ASSETS.fetch(assetReq) : await fetch(assetReq);
 
     if (!assetRes.ok) {
       return Response.json(
-        { error: 'World topology manifest not found', status: 404 },
+        { error: 'World topology manifest not found', status: assetRes.status },
         { status: 404 }
       );
     }

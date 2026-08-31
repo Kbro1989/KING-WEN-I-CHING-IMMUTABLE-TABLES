@@ -5,7 +5,6 @@
  */
 export async function onRequestGet(context) {
   const { request, params, env } = context;
-  const url = new URL(request.url);
   const hexId = parseInt(params.id, 10);
 
   if (isNaN(hexId) || hexId < 1 || hexId > 64) {
@@ -16,11 +15,11 @@ export async function onRequestGet(context) {
   }
 
   try {
-    const assetUrl = new URL('/DATASETS/kingwen_sovereign_world_topology.json', url.origin);
-    const assetRes = await env.ASSETS ? env.ASSETS.fetch(assetUrl) : await fetch(assetUrl);
+    const assetReq = new Request(new URL('/DATASETS/kingwen_sovereign_world_topology.json', request.url));
+    const assetRes = env.ASSETS ? await env.ASSETS.fetch(assetReq) : await fetch(assetReq);
 
     if (!assetRes.ok) {
-      return Response.json({ error: 'World topology manifest not found' }, { status: 404 });
+      return Response.json({ error: 'World topology manifest not found', status: assetRes.status }, { status: 404 });
     }
 
     const topo = await assetRes.json();
@@ -30,10 +29,8 @@ export async function onRequestGet(context) {
       return Response.json({ error: `Hexagram #${hexId} sector not found` }, { status: 404 });
     }
 
-    // Build 8-phase binary coordinates
     const binaryStr = sector.binary || '111111';
     const vhdlBaseAddr = (hexId - 1) * 8;
-    const vhdlRange = [vhdlBaseAddr, vhdlBaseAddr + 7];
 
     return Response.json(
       {
@@ -42,7 +39,7 @@ export async function onRequestGet(context) {
         hexagram_id: hexId,
         vhdl_resolver: {
           base_address_9bit: vhdlBaseAddr,
-          address_range_8_phases: vhdlRange,
+          address_range_8_phases: [vhdlBaseAddr, vhdlBaseAddr + 7],
           binary_pattern: binaryStr
         },
         sector: sector
