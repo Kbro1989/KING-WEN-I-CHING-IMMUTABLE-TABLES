@@ -951,27 +951,49 @@ metadata/attractor_mode = "implosion"
     grid.position.y = 0.6;
     scene.add(grid);
 
-    // === 1B. MASTER 3D CENTRIPETAL EGG RESONATOR MESH ENCLOSURE ===
-    const eggGeo = new THREE.SphereGeometry(340, 48, 36);
-    const eggPosAttr = eggGeo.attributes.position;
-    for (let i = 0; i < eggPosAttr.count; i++) {
-      const y = eggPosAttr.getY(i);
-      const normY = y / 340.0;
-      // Schauberger centripetal egg contour (tapered top, wider bottom)
-      const eggContour = 1.0 + 0.25 * (1.0 - normY) * Math.cos(normY * Math.PI * 0.5);
-      eggPosAttr.setX(i, eggPosAttr.getX(i) * eggContour);
-      eggPosAttr.setZ(i, eggPosAttr.getZ(i) * eggContour);
+    // === 1B. MASTER 3D CENTRIPETAL EGG RESONATOR MESH — DERIVED FROM 64-CITADEL SHOTGUN VORTEX OUTPUT ===
+    // Egg vertex positions are NOT static — they are recomputed each frame from the converging
+    // vortex_tension, suction_coefficient, porosity_level, and pellet energy_intensity of all 64 citadels.
+    const EGG_SEGS_W = 48, EGG_SEGS_H = 36;
+    const eggGeo = new THREE.SphereGeometry(340, EGG_SEGS_W, EGG_SEGS_H);
+    eggGeo.attributes.position.usage = THREE.DynamicDrawUsage;
+
+    // Cache the REST (base) vertex positions — the shotgun will deform from here
+    const eggVertCount = eggGeo.attributes.position.count;
+    const eggBasePos = new Float32Array(eggVertCount * 3);
+    for (let i = 0; i < eggVertCount; i++) {
+      eggBasePos[i * 3]     = eggGeo.attributes.position.getX(i);
+      eggBasePos[i * 3 + 1] = eggGeo.attributes.position.getY(i);
+      eggBasePos[i * 3 + 2] = eggGeo.attributes.position.getZ(i);
     }
-    eggGeo.computeVertexNormals();
+
+    // Pre-compute per-vertex influence weights from all 64 citadels
+    // Weight = vortex_tension * suction_coefficient * avg(pellet energy_intensity)
+    // projected onto the unit normal of each vertex
+    const eggSectorInfluences = worldData.sectors.map(sec => {
+      const pos = sec.world_position;
+      const qp  = sec.quantum_physics;
+      const avgPelletEnergy = sec.yao_pellets.reduce((s, p) => s + (p.energy_intensity || 0.5), 0) / 6.0;
+      return {
+        nx: pos.x / 280.0,  // normalized citadel direction in XZ plane
+        nz: pos.z / 280.0,
+        vortexTension:    qp.vortex_tension      || 0.5,
+        suction:          qp.suction_coefficient || 0.3,
+        porosity:         qp.porosity_level       || 0.45,
+        pelletEnergy:     avgPelletEnergy,
+        pelletFreqs:      sec.yao_pellets.map(p => p.frequency_hz || 146.0),
+        hexId:            sec.hexagram_id
+      };
+    });
 
     const masterEggMesh = new THREE.Mesh(eggGeo, new THREE.MeshStandardMaterial({
       color: 0x8b5cf6,
       emissive: 0x6d28d9,
-      emissiveIntensity: 0.35,
+      emissiveIntensity: 0.45,
       wireframe: true,
       transparent: true,
-      opacity: 0.35,
-      roughness: 0.2
+      opacity: 0.38,
+      roughness: 0.15
     }));
     masterEggMesh.position.set(0, 40, 0);
     masterEggMesh.userData = { isMasterEgg: true, name: 'Master Centripetal Egg Vortex' };
@@ -1161,9 +1183,56 @@ metadata/attractor_mode = "implosion"
       if (typeof masterEggMesh !== 'undefined' && masterEggMesh) {
         masterEggMesh.visible = centripetalEggActive;
         if (centripetalEggActive) {
-          masterEggMesh.rotation.y += 0.005 * timeSpeed;
-          const masterPulse = 1.0 + 0.05 * Math.sin(presentTime * 2.0);
-          masterEggMesh.scale.set(masterPulse, 1.0 + 0.08 * Math.cos(presentTime * 1.5), masterPulse);
+          masterEggMesh.rotation.y += 0.003 * timeSpeed;
+
+          // === PER-FRAME VERTEX DEFORMATION — DERIVED FROM 64-CITADEL SHOTGUN VORTEX FIELD ===
+          // Each vertex is displaced by the sum of all 64 citadel contributions:
+          //   vortex_tension × suction_coefficient × pellet_energy × angular_alignment × time oscillation
+          const eggPosAttr = eggGeo.attributes.position;
+          for (let i = 0; i < eggVertCount; i++) {
+            const bx = eggBasePos[i * 3];
+            const by = eggBasePos[i * 3 + 1];
+            const bz = eggBasePos[i * 3 + 2];
+
+            // Unit normal direction of this vertex (outward from sphere center)
+            const len = Math.sqrt(bx * bx + by * by + bz * bz) || 1.0;
+            const nx = bx / len, ny = by / len, nz = bz / len;
+            const normY = by / 340.0; // -1..1
+
+            // Sum vortex implosion contributions from all 64 citadels
+            let radialDisplace = 0.0;
+            let angularTwist   = 0.0;
+            for (let s = 0; s < eggSectorInfluences.length; s++) {
+              const si = eggSectorInfluences[s];
+
+              // Angular alignment: how much this vertex faces toward citadel s in XZ plane
+              const alignment = (nx * si.nx + nz * si.nz);  // -1..1
+
+              // Phase of this citadel's pellet resonance at present time
+              // Uses the 6 pellet frequencies directly from shotgun output
+              let pelletPhase = 0.0;
+              for (let p = 0; p < si.pelletFreqs.length; p++) {
+                pelletPhase += Math.sin(presentTime * (si.pelletFreqs[p] / 108.0) * 0.04 + s * 0.098 + p * 1.047);
+              }
+              pelletPhase /= 6.0;
+
+              // Schauberger centripetal implosion: inward suction scaled by vortex tension
+              // The egg is pulled inward toward each citadel proportionally to its suction
+              const implosionFactor = si.vortexTension * si.suction * si.pelletEnergy;
+
+              // Radial displacement: high-alignment citadels pull vertices inward (centripetal)
+              radialDisplace += alignment * implosionFactor * 28.0 * pelletPhase;
+
+              // Angular (latitudinal) twist from porosity field — shapes the ovoid egg profile
+              angularTwist += si.porosity * alignment * Math.sin(normY * Math.PI + presentTime * 1.2 + s * 0.049) * 8.0;
+            }
+
+            // Apply deformation outward along vertex normal
+            const scale = 1.0 + (radialDisplace + angularTwist) / 340.0;
+            eggPosAttr.setXYZ(i, bx * scale, by * scale, bz * scale);
+          }
+          eggPosAttr.needsUpdate = true;
+          eggGeo.computeVertexNormals();
         }
       }
 
