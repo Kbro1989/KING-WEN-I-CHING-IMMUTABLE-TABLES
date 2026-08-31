@@ -84,12 +84,19 @@
     .egg-toggle-btn.active {
       background: linear-gradient(135deg, #7c3aed 0%, #d946ef 100%);
       color: #ffffff; border-color: #f472b6; box-shadow: 0 0 20px rgba(217,70,239,0.8);
+    @keyframes pulseGlow {
+      0% { box-shadow: 0 0 10px rgba(168, 85, 247, 0.6); transform: translateX(-50%) scale(1.0); }
+      50% { box-shadow: 0 0 26px rgba(236, 72, 153, 0.9); transform: translateX(-50%) scale(1.03); }
+      100% { box-shadow: 0 0 10px rgba(168, 85, 247, 0.6); transform: translateX(-50%) scale(1.0); }
     }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
+  <div id="audio-unlock-overlay" onclick="unlockAudioSystem()" style="position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:9999; background:rgba(124, 58, 237, 0.95); color:#ffffff; font-weight:800; font-size:13px; padding:12px 28px; border-radius:30px; border:2px solid #c4b5fd; box-shadow:0 0 25px rgba(168, 85, 247, 0.95); cursor:pointer; font-family:sans-serif; letter-spacing:0.5px; animation: pulseGlow 1.8s infinite;">
+    🔊 CLICK ANYWHERE ON SCREEN TO ACTIVATE UNIFIED 384-PELLET QUANTUM AUDIO FIELD
+  </div>
   <div id="canvas-container"></div>
   <div id="hud">
     <h1>&#x1F451; King Wen Quantum World <span class="badge">64 Sovereign Nodes</span></h1>
@@ -159,7 +166,7 @@
 
     // === WEB AUDIO API UNIFIED QUANTUM GROUND FIELD ENGINE ===
     let audioCtx = null;
-    let fieldActive = false;
+    let fieldActive = true;
     let groundVoices = [];
     let focusOscillators = [];
     let focusGains = [];
@@ -167,6 +174,34 @@
     let masterGain = null;
     let activeHexData = null;
     let currentAudioMode = 'field';
+    let audioUnlocked = false;
+
+    function unlockAudioSystem() {
+      if (!audioCtx) {
+        initAudio();
+      }
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume().then(() => {
+          console.log('[AUDIO] AudioContext resumed successfully!');
+        });
+      }
+      fieldActive = true;
+      audioUnlocked = true;
+      if (masterGain && audioCtx) {
+        masterGain.gain.setTargetAtTime(0.55, audioCtx.currentTime, 0.05);
+      }
+      const overlay = document.getElementById('audio-unlock-overlay');
+      if (overlay) overlay.style.display = 'none';
+      const btn = document.getElementById('unified-field-btn');
+      if (btn) {
+        btn.innerText = '🌌 UNIFIED QUANTUM GROUND FIELD: ACTIVE (1..64)';
+        btn.classList.add('active');
+      }
+    }
+
+    window.addEventListener('click', unlockAudioSystem, { once: false });
+    window.addEventListener('touchstart', unlockAudioSystem, { once: false });
+    window.addEventListener('keydown', unlockAudioSystem, { once: false });
 
     function initAudio() {
       if (audioCtx) return;
@@ -174,12 +209,12 @@
       audioCtx = new AudioContext();
 
       masterGain = audioCtx.createGain();
-      masterGain.gain.setValueAtTime(0.0, audioCtx.currentTime);
+      masterGain.gain.setValueAtTime(0.55, audioCtx.currentTime);
 
       masterFilter = audioCtx.createBiquadFilter();
       masterFilter.type = 'lowpass';
-      masterFilter.frequency.setValueAtTime(1600, audioCtx.currentTime);
-      masterFilter.Q.setValueAtTime(3.0, audioCtx.currentTime);
+      masterFilter.frequency.setValueAtTime(2400, audioCtx.currentTime);
+      masterFilter.Q.setValueAtTime(2.5, audioCtx.currentTime);
 
       masterGain.connect(masterFilter);
       masterFilter.connect(audioCtx.destination);
@@ -973,8 +1008,9 @@
         const now = audioCtx.currentTime;
 
         groundVoices.forEach((gv) => {
-          const dist = camPos.distanceTo(gv.pos3D);
-          let spatialAtten = Math.min(0.045, 0.05 / (1.0 + Math.pow(dist / 95.0, 2)));
+          // Scaled for macro-world geometry (560m x 560m grid):
+          // High base gain (0.08..0.20) so all 64 citadels are clearly audible in unison, plus proximity boost
+          let spatialAtten = 0.08 + 0.12 / (1.0 + Math.pow(dist / 180.0, 1.5));
 
           if (centripetalEggActive) {
             // Modulate each 6-yao pellet oscillator frequency in unison from present time
