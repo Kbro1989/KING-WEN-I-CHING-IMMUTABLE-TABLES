@@ -377,41 +377,26 @@ shadow_enabled = true
       background: #0f172a; color: #f8fafc; border: 1px solid #3b82f6; padding: 4px 8px;
       border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; outline: none;
     }
+    .audio-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+    .unified-field-btn {
+      background: linear-gradient(135deg, #0284c7 0%, #7c3aed 100%); color: #ffffff; border: 1px solid #38bdf8;
+      padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 800;
+      letter-spacing: 0.5px; box-shadow: 0 0 16px rgba(56,189,248,0.4); transition: all 0.2s ease; width: 100%; text-align: center;
+    }
+    .unified-field-btn:hover { transform: translateY(-1px); box-shadow: 0 0 24px rgba(168,85,247,0.7); }
+    .unified-field-btn.active {
+      background: linear-gradient(135deg, #059669 0%, #0284c7 100%); border-color: #34d399;
+      box-shadow: 0 0 24px rgba(52,211,153,0.8); color: #fff;
+    }
+    .audio-select {
+      background: #0f172a; color: #f8fafc; border: 1px solid #3b82f6; padding: 6px 10px;
+      border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; outline: none; flex: 1;
+    }
     .rec-btn {
-      background: #1e293b; color: #f59e0b; border: 1px solid #f59e0b; padding: 5px 10px;
+      background: #1e293b; color: #f59e0b; border: 1px solid #f59e0b; padding: 6px 12px;
       border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s ease;
     }
     .rec-btn:hover { background: #f59e0b; color: #0f172a; }
-    .sw-pill {
-      background: #0f172a; color: #94a3b8; border: 1px solid rgba(255,255,255,0.15); padding: 2px 6px;
-      border-radius: 4px; font-size: 10px; cursor: pointer; font-weight: 600; transition: all 0.15s ease;
-    }
-    .sw-pill:hover { background: #334155; color: #fff; border-color: #38bdf8; }
-    .line-card-grid {
-      display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px;
-    }
-    .line-card {
-      background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
-      padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; transition: all 0.2s ease;
-    }
-    .line-card.muted { opacity: 0.45; border-color: rgba(239, 68, 68, 0.4); }
-    .line-card-header { display: flex; justify-content: space-between; align-items: center; font-size: 10px; }
-    .card-toggle-btn {
-      background: #1e293b; color: #38bdf8; border: 1px solid #38bdf8; padding: 2px 6px;
-      border-radius: 4px; font-size: 9px; font-weight: 700; cursor: pointer; text-align: center;
-    }
-    .card-toggle-btn.off { background: #334155; color: #ef4444; border-color: #ef4444; }
-    .citadel-matrix-grid {
-      display: grid; grid-template-columns: repeat(8, 1fr); gap: 3px; margin-top: 6px; max-height: 110px; overflow-y: auto; padding-right: 2px;
-    }
-    .citadel-chip {
-      background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255,255,255,0.12); border-radius: 4px;
-      padding: 3px 2px; text-align: center; font-size: 8.5px; cursor: pointer; transition: all 0.15s ease;
-      display: flex; flex-direction: column; align-items: center; gap: 1px; color: #cbd5e1;
-    }
-    .citadel-chip:hover { border-color: #38bdf8; background: #1e293b; color: #fff; }
-    .citadel-chip.active { border-color: #38bdf8; box-shadow: 0 0 5px rgba(56,189,248,0.4); }
-    .citadel-chip.muted { opacity: 0.35; border-color: rgba(239,68,68,0.3); color: #64748b; }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -432,61 +417,24 @@ shadow_enabled = true
       <div class="leg-item"><div class="dot-white"></div> Rose Core</div>
     </div>
     <div class="audio-bar">
-      <button class="audio-btn" id="audio-toggle" onclick="toggleAudio()">&#x1F50A; Master Audio: OFF</button>
-      <select id="audio-mode-select" class="audio-select" onchange="changeAudioMode()">
-        <option value="field">&#x1F30C; 64-Hex Spatial Superposition</option>
-        <option value="hover">&#x1F3AF; Focus / Hover Node Only</option>
-        <option value="arpeggio">&#x26A1; 6-Yao Arpeggiator Sweep</option>
-        <option value="binaural">&#x262F;&#xFE0F; Yin/Yang Binaural Carrier</option>
-        <option value="changing">&#x1F52E; Changing Yao (State 2) Only</option>
-      </select>
-      <button class="audio-btn" id="toggle-all-lines" onclick="toggleAllLines()" style="border-color:#a855f7;color:#a855f7;">&#x26A1; All Lines: ON</button>
-      <a href="kingwen_external_audio_switchboard.html" target="_blank" class="audio-btn" style="text-decoration:none;border-color:#f59e0b;color:#f59e0b;">&#x1F39B;&#xFE0F; Studio Console</a>
-      <button class="rec-btn" id="record-btn" onclick="recordAudioSample()">&#x1F399;&#xFE0F; Sample WAV</button>
+      <button class="unified-field-btn" id="unified-field-btn" onclick="toggleUnifiedField()">&#x26A1; ACTIVATE UNIFIED QUANTUM GROUND FIELD (1..64)</button>
+      <div style="display: flex; gap: 6px; width: 100%; margin-top: 4px;">
+        <select id="audio-mode-select" class="audio-select" onchange="changeAudioMode()">
+          <option value="field">&#x1F30C; Continuous Ground Superposition (1..64)</option>
+          <option value="hover">&#x1F3AF; Focused Node Spatial Isolation</option>
+          <option value="binaural">&#x262F;&#xFE0F; Yin/Yang Binaural Carrier</option>
+        </select>
+        <button class="rec-btn" id="record-btn" onclick="recordAudioSample()">&#x1F399;&#xFE0F; Sample WAV</button>
+      </div>
     </div>
     <div id="inspector">
-      <div class="inspect-name" id="sel-name">Hover over any Sovereign Node</div>
+      <div class="inspect-name" id="sel-name">Hover over any Sovereign Node to observe local interference</div>
       <div class="inspect-grid" id="sel-grid">
         <div class="inspect-cell"><div class="inspect-label">Regional Biome</div><span id="val-biome">All 8 Sectors Active</span></div>
         <div class="inspect-cell"><div class="inspect-label">Action &amp; Archetype</div><span id="val-action">Superposition Field</span></div>
         <div class="inspect-cell" style="grid-column: span 2;"><div class="inspect-label">DA-V2 Metric Depth &amp; Point Cloud</div><span id="val-depth">Mean: 10.0m | 122,150 vertices</span></div>
         <div class="inspect-cell" style="grid-column: span 2;"><div class="inspect-label">Deterministic Spectral Hue (6-Bit Embodiment)</div><span id="val-spectral" style="display:flex;align-items:center;gap:6px;"><span id="spectral-badge" style="width:12px;height:12px;border-radius:3px;background:#FFD700;display:inline-block;box-shadow:0 0 6px rgba(255,215,0,0.6);"></span> <span id="spectral-text">#FFD700 (0.0&deg;)</span></span></div>
-        <div class="inspect-cell" style="grid-column: span 2;"><div class="inspect-label">6-Yao Acoustic Harmonics &amp; Filter</div><span id="val-audio">Harmonics: Hover Node | Cutoff: --</span></div>
-      </div>
-
-      <!-- 64-Citadel Spatial Superposition Matrix Switchboard -->
-      <div id="citadel-matrix-box" style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.12); padding-top: 8px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 4px;">
-          <div style="font-size: 11px; font-weight: 700; color: #FFD700; text-transform: uppercase; letter-spacing: 0.5px;">&#x1F30C; 64-Citadel Spatial Matrix (<span id="citadel-active-count">64/64 ON</span>)</div>
-          <div style="display: flex; gap: 3px; flex-wrap: wrap;">
-            <button onclick="filterCitadels('all')" class="sw-pill">All 64</button>
-            <button onclick="filterCitadels('Qian')" class="sw-pill">Qian</button>
-            <button onclick="filterCitadels('Kun')" class="sw-pill">Kun</button>
-            <button onclick="filterCitadels('Zhen')" class="sw-pill">Zhen</button>
-            <button onclick="filterCitadels('Kan')" class="sw-pill">Kan</button>
-            <button onclick="filterCitadels('Li')" class="sw-pill">Li</button>
-            <button onclick="filterCitadels('Xun')" class="sw-pill">Xun</button>
-            <button onclick="filterCitadels('Gen')" class="sw-pill">Gen</button>
-            <button onclick="filterCitadels('Dui')" class="sw-pill">Dui</button>
-            <button onclick="filterCitadels('mute')" class="sw-pill" style="color:#ef4444;">Mute All</button>
-          </div>
-        </div>
-        <div class="citadel-matrix-grid" id="citadel-matrix-container"></div>
-      </div>
-
-      <!-- 6-Yao Line Channel Switchboard -->
-      <div id="audio-switchboard" style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.12); padding-top: 8px;">
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div style="font-size: 11px; font-weight: 700; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.5px;">&#x1F39B;&#xFE0F; Focused 6-Yao Line Switchboard</div>
-          <div style="display: flex; gap: 4px;">
-            <button onclick="filterLines('all')" class="sw-pill">All</button>
-            <button onclick="filterLines('upper')" class="sw-pill">Upper (L4-6)</button>
-            <button onclick="filterLines('lower')" class="sw-pill">Lower (L1-3)</button>
-            <button onclick="filterLines('changing')" class="sw-pill">Yao (2)</button>
-            <button onclick="filterLines('mute')" class="sw-pill" style="color:#ef4444;">Mute All</button>
-          </div>
-        </div>
-        <div class="line-card-grid" id="line-cards-container"></div>
+        <div class="inspect-cell" style="grid-column: span 2;"><div class="inspect-label">6-Yao Acoustic Harmonics &amp; Filter</div><span id="val-audio">Field Active: Approaching nodes modulates local acoustic interference</span></div>
       </div>
     </div>
   </div>
@@ -496,20 +444,16 @@ shadow_enabled = true
     // === DATA INGESTION ===
     const worldData = __WORLD_JSON_PLACEHOLDER__;
 
-    // === WEB AUDIO API 64-NODE SPATIAL HARMONIC SUPERPOSITION ENGINE ===
+    // === WEB AUDIO API UNIFIED QUANTUM GROUND FIELD ENGINE ===
     let audioCtx = null;
-    let audioEnabled = false;
-    let oscillators = [];
-    let oscGains = [];
-    let spatialVoices = [];
+    let fieldActive = false;
+    let groundVoices = [];
+    let focusOscillators = [];
+    let focusGains = [];
     let masterFilter = null;
     let masterGain = null;
     let activeHexData = null;
-    let lineMuteState = [true, true, true, true, true, true];
-    let citadelMuteState = Array(64).fill(true);
     let currentAudioMode = 'field';
-    let allLinesActive = true;
-    let arpIndex = 0;
 
     function initAudio() {
       if (audioCtx) return;
@@ -521,13 +465,13 @@ shadow_enabled = true
 
       masterFilter = audioCtx.createBiquadFilter();
       masterFilter.type = 'lowpass';
-      masterFilter.frequency.setValueAtTime(1400, audioCtx.currentTime);
-      masterFilter.Q.setValueAtTime(3.5, audioCtx.currentTime);
+      masterFilter.frequency.setValueAtTime(1600, audioCtx.currentTime);
+      masterFilter.Q.setValueAtTime(3.0, audioCtx.currentTime);
 
       masterGain.connect(masterFilter);
       masterFilter.connect(audioCtx.destination);
 
-      // 1. Focus Node 6-Yao Harmonic Oscillators
+      // 1. Focused node 6-yao harmonic oscillators
       for (let i = 0; i < 6; i++) {
         const osc = audioCtx.createOscillator();
         const g = audioCtx.createGain();
@@ -537,26 +481,26 @@ shadow_enabled = true
         osc.connect(g);
         g.connect(masterGain);
         osc.start();
-        oscillators.push(osc);
-        oscGains.push(g);
+        focusOscillators.push(osc);
+        focusGains.push(g);
       }
 
-      // 2. Continuous 64-Citadel Spatial Superposition Field Voices
+      // 2. The Unified Quantum Ground Field: All 64 Hexagrams (1..64) Resonating As One Field
       if (worldData.sectors) {
-        worldData.sectors.forEach((sec, sIdx) => {
+        worldData.sectors.forEach((sec) => {
           const sOsc = audioCtx.createOscillator();
           const sGain = audioCtx.createGain();
           const sFilter = audioCtx.createBiquadFilter();
 
-          // Unified continuous (X, Y, Z) spatial carrier frequency & filter tensor
+          // Frequency strictly derived from continuous 3D (x, y, z) spatial geometry
           const pos = sec.world_position;
           const normX = pos.x / 280.0, normZ = pos.z / 280.0, normY = pos.y / 35.0;
           const normR = Math.sqrt(normX * normX + normZ * normZ);
           const theta = Math.atan2(pos.z, pos.x);
-          const baseFreq = 108.0 * (1.0 + 0.40 * normR + 0.25 * normY + 0.15 * Math.sin(3.0 * theta + normY * Math.PI));
+          const fundamentalFreq = 108.0 * (1.0 + 0.40 * normR + 0.25 * normY + 0.15 * Math.sin(3.0 * theta + normY * Math.PI));
 
           sOsc.type = (sec.hexagram_id % 3 === 0) ? 'triangle' : ((sec.hexagram_id % 2 === 0) ? 'sine' : 'sawtooth');
-          sOsc.frequency.setValueAtTime(baseFreq, audioCtx.currentTime);
+          sOsc.frequency.setValueAtTime(fundamentalFreq, audioCtx.currentTime);
 
           sFilter.type = 'lowpass';
           const qp = sec.quantum_physics || {};
@@ -572,235 +516,107 @@ shadow_enabled = true
           sGain.connect(masterGain);
           sOsc.start();
 
-          spatialVoices.push({
+          groundVoices.push({
             hexId: sec.hexagram_id,
             sector: sec,
             pos3D: new THREE.Vector3(pos.x, pos.y, pos.z),
             osc: sOsc,
             filter: sFilter,
             gain: sGain,
-            baseFreq: baseFreq
+            fundamentalFreq: fundamentalFreq
           });
         });
       }
-
-      renderCitadelMatrix();
     }
 
-    function toggleAudio() {
+    function toggleUnifiedField() {
       initAudio();
       if (audioCtx.state === 'suspended') {
         audioCtx.resume();
       }
-      audioEnabled = !audioEnabled;
-      const btn = document.getElementById('audio-toggle');
-      if (audioEnabled) {
-        btn.innerText = '🔊 Master Audio: ON';
-        btn.style.background = '#38bdf8';
-        btn.style.color = '#0f172a';
-        masterGain.gain.setTargetAtTime(0.28, audioCtx.currentTime, 0.05);
-        if (activeHexData) {
-          playHexHarmonics(activeHexData);
-        } else if (worldData.sectors && worldData.sectors[0]) {
-          playHexHarmonics(worldData.sectors[0]);
-        }
+      fieldActive = !fieldActive;
+      const btn = document.getElementById('unified-field-btn');
+      if (fieldActive) {
+        btn.innerText = '🌌 UNIFIED QUANTUM GROUND FIELD: ACTIVE (1..64)';
+        btn.classList.add('active');
+        masterGain.gain.setTargetAtTime(0.30, audioCtx.currentTime, 0.05);
+        if (activeHexData) playHexHarmonics(activeHexData);
       } else {
-        btn.innerText = '🔊 Master Audio: OFF';
-        btn.style.background = '#1e293b';
-        btn.style.color = '#38bdf8';
+        btn.innerText = '⚡ ACTIVATE UNIFIED QUANTUM GROUND FIELD (1..64)';
+        btn.classList.remove('active');
         masterGain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.05);
       }
     }
+
 
     function changeAudioMode() {
       currentAudioMode = document.getElementById('audio-mode-select').value;
       if (activeHexData) playHexHarmonics(activeHexData);
     }
 
-    function renderCitadelMatrix() {
-      const container = document.getElementById('citadel-matrix-container');
-      if (!container || !worldData.sectors) return;
-      let html = '';
-      let activeCount = 0;
-      worldData.sectors.forEach((sec, idx) => {
-        const isActive = citadelMuteState[idx];
-        if (isActive) activeCount++;
-        const sc = sec.spectral_color || { hex: '#FFD700' };
-        html += `
-          <div class="citadel-chip ${isActive ? 'active' : 'muted'}" onclick="toggleCitadel(${idx})" title="Hex #${sec.hexagram_id} ${sec.hexagram_name} (${sec.upper_trigram}/${sec.lower_trigram})">
-            <span style="width:6px;height:6px;border-radius:50%;background:${sc.hex};display:inline-block;"></span>
-            <span style="font-weight:700;">#${sec.hexagram_id}</span>
-            <span style="font-size:7px;">${sec.hanzi}</span>
-          </div>
-        `;
-      });
-      container.innerHTML = html;
-      const countEl = document.getElementById('citadel-active-count');
-      if (countEl) countEl.innerText = `${activeCount}/64 ON`;
-    }
 
-    function toggleCitadel(idx) {
-      citadelMuteState[idx] = !citadelMuteState[idx];
-      renderCitadelMatrix();
-    }
-
-    function filterCitadels(tri) {
-      if (!worldData.sectors) return;
-      worldData.sectors.forEach((sec, idx) => {
-        if (tri === 'all') {
-          citadelMuteState[idx] = true;
-        } else if (tri === 'mute') {
-          citadelMuteState[idx] = false;
-        } else {
-          citadelMuteState[idx] = (sec.upper_trigram === tri || sec.lower_trigram === tri);
-        }
-      });
-      renderCitadelMatrix();
-    }
-
-    function toggleLineAudio(idx) {
-      lineMuteState[idx] = !lineMuteState[idx];
-      if (activeHexData) {
-        renderLineCards(activeHexData);
-        playHexHarmonics(activeHexData);
-      }
-    }
-
-    function toggleAllLines() {
-      allLinesActive = !allLinesActive;
-      lineMuteState = [allLinesActive, allLinesActive, allLinesActive, allLinesActive, allLinesActive, allLinesActive];
-      const btn = document.getElementById('toggle-all-lines');
-      btn.innerText = allLinesActive ? '⚡ All Lines: ON' : '🔇 All Lines: MUTED';
-      btn.style.color = allLinesActive ? '#a855f7' : '#ef4444';
-      btn.style.borderColor = allLinesActive ? '#a855f7' : '#ef4444';
-      if (activeHexData) {
-        renderLineCards(activeHexData);
-        playHexHarmonics(activeHexData);
-      }
-    }
-
-    function filterLines(type) {
-      if (type === 'all') {
-        lineMuteState = [true, true, true, true, true, true];
-      } else if (type === 'upper') {
-        lineMuteState = [false, false, false, true, true, true];
-      } else if (type === 'lower') {
-        lineMuteState = [true, true, true, false, false, false];
-      } else if (type === 'changing') {
-        if (activeHexData) {
-          lineMuteState = activeHexData.yao_pellets.map(yp => yp.ternary_state === 2);
-        } else {
-          lineMuteState = [false, false, false, true, false, false];
-        }
-      } else if (type === 'mute') {
-        lineMuteState = [false, false, false, false, false, false];
-      }
-      if (activeHexData) {
-        renderLineCards(activeHexData);
-        playHexHarmonics(activeHexData);
-      }
-    }
-
-    function renderLineCards(d) {
-      const container = document.getElementById('line-cards-container');
-      if (!container || !d.yao_pellets) return;
-      let html = '';
-      d.yao_pellets.forEach((yp, idx) => {
-        const isMuted = !lineMuteState[idx];
-        const stateColor = yp.color_hex;
-        const stateName = yp.ternary_state === 2 ? 'YAO 2' : (yp.ternary_state === 1 ? 'YANG 1' : 'YIN 0');
-        html += `
-          <div class="line-card ${isMuted ? 'muted' : ''}">
-            <div class="line-card-header">
-              <span style="font-weight:700;color:#fff;">L${yp.line_position} <span style="font-size:9px;color:#94a3b8;">(${yp.sub_trigram[0].toUpperCase()}${yp.sub_position})</span></span>
-              <span style="background:${stateColor};color:#0f172a;font-size:8px;font-weight:800;padding:1px 4px;border-radius:3px;">${stateName}</span>
-            </div>
-            <div style="font-size:10px;color:#cbd5e1;font-family:monospace;">${yp.frequency_hz}Hz</div>
-            <button class="card-toggle-btn ${isMuted ? 'off' : ''}" onclick="toggleLineAudio(${idx})">
-              ${isMuted ? '🔇 MUTED' : '🔊 LIVE'}
-            </button>
-          </div>
-        `;
-      });
-      container.innerHTML = html;
-    }
 
     function playHexHarmonics(d) {
       activeHexData = d;
-      renderLineCards(d);
-      if (!audioEnabled || !audioCtx) return;
+      if (!fieldActive || !audioCtx) return;
       const now = audioCtx.currentTime;
-      masterGain.gain.setTargetAtTime(0.24, now, 0.05);
 
+      // When hovering a node, modulate the 6 focus oscillators to show local interference
+      // The ground field keeps running — this is observation, not collapse
       const qp = d.quantum_physics || {};
       const porosity = qp.porosity_level || 0.45;
       const vortex = qp.vortex_tension || 0.5;
 
-      const cutoff = 400 + porosity * 3200;
-      masterFilter.frequency.setTargetAtTime(cutoff, now, 0.06);
-      masterFilter.Q.setTargetAtTime(2.0 + vortex * 4.0, now, 0.06);
-
-      d.yao_pellets.forEach((yp, idx) => {
-        if (oscillators[idx]) {
-          const isMuted = !lineMuteState[idx];
-          if (isMuted) {
-            oscGains[idx].gain.setTargetAtTime(0.0, now, 0.03);
-            return;
+      if (currentAudioMode === 'hover') {
+        // Bring focus oscillators forward to hear local pellet harmonics
+        d.yao_pellets.forEach((yp, idx) => {
+          if (focusOscillators[idx]) {
+            focusOscillators[idx].frequency.setTargetAtTime(yp.frequency_hz || 146.0, now, 0.05);
+            focusOscillators[idx].type = yp.ternary_state === 2 ? 'sawtooth' : (yp.ternary_state === 1 ? 'triangle' : 'sine');
+            focusGains[idx].gain.setTargetAtTime(yp.ternary_state === 2 ? 0.12 : 0.08, now, 0.04);
           }
-
-          let targetFreq = yp.frequency_hz || (146.0 + idx * 20.0);
-          if (currentAudioMode === 'binaural') {
-            targetFreq = yp.ternary_state === 1 ? (150.0 + idx * 12.0) : (144.0 + idx * 12.0);
-          } else if (currentAudioMode === 'changing' && yp.ternary_state !== 2) {
-            oscGains[idx].gain.setTargetAtTime(0.0, now, 0.03);
-            return;
-          }
-
-          oscillators[idx].frequency.setTargetAtTime(targetFreq, now, 0.05);
-          if (yp.ternary_state === 2) {
-            oscillators[idx].type = 'sawtooth';
-            oscGains[idx].gain.setTargetAtTime(0.18, now, 0.05);
-          } else if (yp.ternary_state === 1) {
-            oscillators[idx].type = 'triangle';
-            oscGains[idx].gain.setTargetAtTime(0.14, now, 0.05);
-          } else {
-            oscillators[idx].type = 'sine';
-            oscGains[idx].gain.setTargetAtTime(0.10, now, 0.05);
-          }
-        }
-      });
+        });
+      } else {
+        // In field/binaural mode, focus oscillators stay silent — ground field speaks
+        focusGains.forEach(g => g.gain.setTargetAtTime(0.0, now, 0.03));
+      }
     }
 
     function recordAudioSample() {
-      if (!activeHexData) {
-        alert('Hover over any Sovereign Citadel node first to sample its live harmonic field!');
+      if (!worldData.sectors || worldData.sectors.length === 0) {
+        alert('No world data loaded.');
         return;
       }
-      const d = activeHexData;
+      // Record the ENTIRE unified ground field — all 64 voices as one continuous medium
       const sampleRate = 44100;
-      const durationSec = 3.0;
+      const durationSec = 5.0;
       const numSamples = Math.floor(sampleRate * durationSec);
       const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(2, numSamples, sampleRate);
 
       const offMaster = offlineCtx.createGain();
-      offMaster.gain.setValueAtTime(0.25, 0);
+      offMaster.gain.setValueAtTime(0.30, 0);
 
       const offFilter = offlineCtx.createBiquadFilter();
       offFilter.type = 'lowpass';
-      const qp = d.quantum_physics || {};
-      offFilter.frequency.setValueAtTime(400 + (qp.porosity_level || 0.45) * 3200, 0);
-      offFilter.Q.setValueAtTime(2.0 + (qp.vortex_tension || 0.5) * 4.0, 0);
+      offFilter.frequency.setValueAtTime(1600, 0);
+      offFilter.Q.setValueAtTime(3.0, 0);
 
       offMaster.connect(offFilter);
       offFilter.connect(offlineCtx.destination);
 
-      d.yao_pellets.forEach((yp, idx) => {
-        if (!lineMuteState[idx]) return;
+      // All 64 voices of the ground field baked into the WAV
+      worldData.sectors.forEach((sec) => {
+        const pos = sec.world_position;
+        const normX = pos.x / 280.0, normZ = pos.z / 280.0, normY = pos.y / 35.0;
+        const normR = Math.sqrt(normX * normX + normZ * normZ);
+        const theta = Math.atan2(pos.z, pos.x);
+        const freq = 108.0 * (1.0 + 0.40 * normR + 0.25 * normY + 0.15 * Math.sin(3.0 * theta + normY * Math.PI));
+
         const osc = offlineCtx.createOscillator();
         const g = offlineCtx.createGain();
-        osc.type = yp.ternary_state === 2 ? 'sawtooth' : (yp.ternary_state === 1 ? 'triangle' : 'sine');
-        osc.frequency.setValueAtTime(yp.frequency_hz || (146.0 + idx * 20.0), 0);
-        g.gain.setValueAtTime(yp.ternary_state === 2 ? 0.2 : (yp.ternary_state === 1 ? 0.15 : 0.10), 0);
+        osc.type = (sec.hexagram_id % 3 === 0) ? 'triangle' : ((sec.hexagram_id % 2 === 0) ? 'sine' : 'sawtooth');
+        osc.frequency.setValueAtTime(freq, 0);
+        g.gain.setValueAtTime(0.035, 0);
         osc.connect(g);
         g.connect(offMaster);
         osc.start(0);
@@ -812,7 +628,7 @@ shadow_enabled = true
         const url = URL.createObjectURL(wavBlob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `kingwen_hex_${d.hexagram_id.toString().padStart(2, '0')}_${d.name.replace(/\\s+/g, '_')}_sound.wav`;
+        a.download = 'kingwen_unified_ground_field_64_voices.wav';
         a.click();
         URL.revokeObjectURL(url);
       });
@@ -823,43 +639,44 @@ shadow_enabled = true
       const sampleRate = buffer.sampleRate;
       const format = 1;
       const bitDepth = 16;
-      const bytesPerSample = bitDepth / 8;
-      const blockAlign = numChannels * bytesPerSample;
-      const length = buffer.length;
-      const bufferLen = 44 + length * blockAlign;
-      const out = new DataView(new ArrayBuffer(bufferLen));
-
-      function writeString(view, offset, str) {
-        for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+      let result;
+      if (numChannels === 2) {
+        result = interleave(buffer.getChannelData(0), buffer.getChannelData(1));
+      } else {
+        result = buffer.getChannelData(0);
       }
-
-      writeString(out, 0, 'RIFF');
-      out.setUint32(4, 36 + length * blockAlign, true);
-      writeString(out, 8, 'WAVE');
-      writeString(out, 12, 'fmt ');
-      out.setUint32(16, 16, true);
-      out.setUint16(20, format, true);
-      out.setUint16(22, numChannels, true);
-      out.setUint32(24, sampleRate, true);
-      out.setUint32(28, sampleRate * blockAlign, true);
-      out.setUint16(32, blockAlign, true);
-      out.setUint16(34, bitDepth, true);
-      writeString(out, 36, 'data');
-      out.setUint32(40, length * blockAlign, true);
-
+      const dataLength = result.length * (bitDepth / 8);
+      const headerBuffer = new ArrayBuffer(44 + dataLength);
+      const view = new DataView(headerBuffer);
+      function writeString(view, offset, string) {
+        for (let i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i));
+      }
+      function interleave(inputL, inputR) {
+        const length = inputL.length + inputR.length;
+        const result = new Float32Array(length);
+        let index = 0, inputIndex = 0;
+        while (index < length) { result[index++] = inputL[inputIndex]; result[index++] = inputR[inputIndex]; inputIndex++; }
+        return result;
+      }
+      writeString(view, 0, 'RIFF');
+      view.setUint32(4, 36 + dataLength, true);
+      writeString(view, 8, 'WAVE');
+      writeString(view, 12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, format, true);
+      view.setUint16(22, numChannels, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * numChannels * (bitDepth / 8), true);
+      view.setUint16(32, numChannels * (bitDepth / 8), true);
+      view.setUint16(34, bitDepth, true);
+      writeString(view, 36, 'data');
+      view.setUint32(40, dataLength, true);
       let offset = 44;
-      const channels = [];
-      for (let c = 0; c < numChannels; c++) channels.push(buffer.getChannelData(c));
-
-      for (let i = 0; i < length; i++) {
-        for (let c = 0; c < numChannels; c++) {
-          let s = Math.max(-1, Math.min(1, channels[c][i]));
-          s = s < 0 ? s * 0x8000 : s * 0x7FFF;
-          out.setInt16(offset, s, true);
-          offset += 2;
-        }
+      for (let i = 0; i < result.length; i++, offset += 2) {
+        const s = Math.max(-1, Math.min(1, result[i]));
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
       }
-      return new Blob([out], { type: 'audio/wav' });
+      return new Blob([headerBuffer], { type: 'audio/wav' });
     }
 
     // === RENDERER SETUP ===
@@ -1093,22 +910,18 @@ shadow_enabled = true
         });
       });
 
-      // === 64-CITADEL SPATIAL AUDIO SUPERPOSITION FIELD UPDATE ===
-      if (audioEnabled && audioCtx && spatialVoices.length > 0) {
+      // === UNIFIED QUANTUM GROUND FIELD — CENTRIPETAL EGG SPATIAL ATTENUATION ===
+      // The ground connects all 64. Camera position is the only observer.
+      // No per-citadel mute. The field is one continuous resonating medium.
+      if (fieldActive && audioCtx && groundVoices.length > 0) {
         const camPos = camera.position;
-        const isFieldMode = (currentAudioMode === 'field' || currentAudioMode === 'binaural');
         const now = audioCtx.currentTime;
 
-        spatialVoices.forEach((sv, idx) => {
-          const isCitadelActive = citadelMuteState[idx];
-          if (!isCitadelActive || !isFieldMode) {
-            sv.gain.gain.setTargetAtTime(0.0, now, 0.04);
-            return;
-          }
-          const dist = camPos.distanceTo(sv.pos3D);
-          // Inverse square distance attenuation with soft roll-off
+        groundVoices.forEach((gv) => {
+          const dist = camPos.distanceTo(gv.pos3D);
+          // Inverse square distance attenuation — the centripetal egg
           const spatialAtten = Math.min(0.045, 0.05 / (1.0 + Math.pow(dist / 95.0, 2)));
-          sv.gain.gain.setTargetAtTime(spatialAtten, now, 0.05);
+          gv.gain.gain.setTargetAtTime(spatialAtten, now, 0.05);
         });
       }
 
