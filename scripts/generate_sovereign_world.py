@@ -350,16 +350,40 @@ shadow_enabled = true
     .dot-blue { width: 8px; height: 8px; border-radius: 50%; background: #38BDF8; box-shadow: 0 0 6px #38BDF8; }
     .dot-purple { width: 8px; height: 8px; border-radius: 50%; background: #A855F7; box-shadow: 0 0 6px #A855F7; }
     .dot-white { width: 8px; height: 8px; border-radius: 50%; background: #fff; border: 1px solid #888; }
+    .audio-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 10px; }
     .audio-btn {
-      background: #1e293b; color: #38bdf8; border: 1px solid #38bdf8; padding: 5px 12px;
+      background: #1e293b; color: #38bdf8; border: 1px solid #38bdf8; padding: 5px 10px;
       border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s ease;
     }
     .audio-btn:hover { background: #38bdf8; color: #0f172a; }
+    .audio-select {
+      background: #0f172a; color: #f8fafc; border: 1px solid #3b82f6; padding: 4px 8px;
+      border-radius: 6px; font-size: 11px; font-weight: 600; cursor: pointer; outline: none;
+    }
     .rec-btn {
-      background: #1e293b; color: #f59e0b; border: 1px solid #f59e0b; padding: 5px 12px;
-      border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s ease; margin-left: 6px;
+      background: #1e293b; color: #f59e0b; border: 1px solid #f59e0b; padding: 5px 10px;
+      border-radius: 6px; cursor: pointer; font-size: 11px; font-weight: 600; transition: all 0.2s ease;
     }
     .rec-btn:hover { background: #f59e0b; color: #0f172a; }
+    .sw-pill {
+      background: #0f172a; color: #94a3b8; border: 1px solid rgba(255,255,255,0.15); padding: 2px 6px;
+      border-radius: 4px; font-size: 10px; cursor: pointer; font-weight: 600; transition: all 0.15s ease;
+    }
+    .sw-pill:hover { background: #334155; color: #fff; border-color: #38bdf8; }
+    .line-card-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px;
+    }
+    .line-card {
+      background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px;
+      padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; transition: all 0.2s ease;
+    }
+    .line-card.muted { opacity: 0.45; border-color: rgba(239, 68, 68, 0.4); }
+    .line-card-header { display: flex; justify-content: space-between; align-items: center; font-size: 10px; }
+    .card-toggle-btn {
+      background: #1e293b; color: #38bdf8; border: 1px solid #38bdf8; padding: 2px 6px;
+      border-radius: 4px; font-size: 9px; font-weight: 700; cursor: pointer; text-align: center;
+    }
+    .card-toggle-btn.off { background: #334155; color: #ef4444; border-color: #ef4444; }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -379,8 +403,16 @@ shadow_enabled = true
       <div class="leg-item"><div class="dot-purple"></div> Yao/Changing (2)</div>
       <div class="leg-item"><div class="dot-white"></div> Rose Core</div>
     </div>
-    <div style="margin-top: 10px; display: flex; align-items: center;">
-      <button class="audio-btn" id="audio-toggle" onclick="toggleAudio()">&#x1F50A; Live Harmonics: OFF</button>
+    <div class="audio-bar">
+      <button class="audio-btn" id="audio-toggle" onclick="toggleAudio()">&#x1F50A; Master Audio: OFF</button>
+      <select id="audio-mode-select" class="audio-select" onchange="changeAudioMode()">
+        <option value="hover">&#x1F3AF; Focus / Hover Node</option>
+        <option value="field">&#x1F30C; 64-Hex Field Superposition</option>
+        <option value="arpeggio">&#x26A1; 6-Yao Arpeggiator Sweep</option>
+        <option value="binaural">&#x262F;&#xFE0F; Yin/Yang Binaural Carrier</option>
+        <option value="changing">&#x1F52E; Changing Yao (State 2) Only</option>
+      </select>
+      <button class="audio-btn" id="toggle-all-lines" onclick="toggleAllLines()" style="border-color:#a855f7;color:#a855f7;">&#x26A1; All Lines: ON</button>
       <button class="rec-btn" id="record-btn" onclick="recordAudioSample()">&#x1F399;&#xFE0F; Sample WAV</button>
     </div>
     <div id="inspector">
@@ -392,7 +424,19 @@ shadow_enabled = true
         <div class="inspect-cell" style="grid-column: span 2;"><div class="inspect-label">Deterministic Spectral Hue (6-Bit Embodiment)</div><span id="val-spectral" style="display:flex;align-items:center;gap:6px;"><span id="spectral-badge" style="width:12px;height:12px;border-radius:3px;background:#FFD700;display:inline-block;box-shadow:0 0 6px rgba(255,215,0,0.6);"></span> <span id="spectral-text">#FFD700 (0.0&deg;)</span></span></div>
         <div class="inspect-cell" style="grid-column: span 2;"><div class="inspect-label">6-Yao Acoustic Harmonics &amp; Filter</div><span id="val-audio">Harmonics: Hover Node | Cutoff: --</span></div>
       </div>
-      <div class="pellet-row" id="pellet-indicators"></div>
+      <div id="audio-switchboard" style="margin-top: 10px; border-top: 1px solid rgba(255,255,255,0.12); padding-top: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="font-size: 11px; font-weight: 700; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.5px;">&#x1F39B;&#xFE0F; 6-Yao Line Audio Switchboard</div>
+          <div style="display: flex; gap: 4px;">
+            <button onclick="filterLines('all')" class="sw-pill">All</button>
+            <button onclick="filterLines('upper')" class="sw-pill">Upper (L4-6)</button>
+            <button onclick="filterLines('lower')" class="sw-pill">Lower (L1-3)</button>
+            <button onclick="filterLines('changing')" class="sw-pill">Yao (2)</button>
+            <button onclick="filterLines('mute')" class="sw-pill" style="color:#ef4444;">Mute All</button>
+          </div>
+        </div>
+        <div class="line-card-grid" id="line-cards-container"></div>
+      </div>
     </div>
   </div>
   <div id="instructions">&#x1F5B1;&#xFE0F; Left Click + Drag: Orbit | Scroll: Zoom | Hover: Live Node Telemetry &amp; Acoustic Harmonics</div>
@@ -401,7 +445,7 @@ shadow_enabled = true
     // === DATA INGESTION ===
     const worldData = __WORLD_JSON_PLACEHOLDER__;
 
-    // === WEB AUDIO API SPATIAL HARMONIC SYNTHESIZER ===
+    // === WEB AUDIO API SPATIAL HARMONIC SYNTHESIZER & SWITCHBOARD ===
     let audioCtx = null;
     let audioEnabled = false;
     let oscillators = [];
@@ -409,6 +453,10 @@ shadow_enabled = true
     let masterFilter = null;
     let masterGain = null;
     let activeHexData = null;
+    let lineMuteState = [true, true, true, true, true, true];
+    let currentAudioMode = 'hover';
+    let allLinesActive = true;
+    let arpIndex = 0;
 
     function initAudio() {
       if (audioCtx) return;
@@ -431,7 +479,7 @@ shadow_enabled = true
         const g = audioCtx.createGain();
         osc.type = (i % 2 === 0) ? 'triangle' : 'sine';
         osc.frequency.setValueAtTime(146.0 * (1.0 + i * 0.15), audioCtx.currentTime);
-        g.gain.setValueAtTime(0.12, audioCtx.currentTime);
+        g.gain.setValueAtTime(0.0, audioCtx.currentTime);
         osc.connect(g);
         g.connect(masterGain);
         osc.start();
@@ -448,23 +496,100 @@ shadow_enabled = true
       audioEnabled = !audioEnabled;
       const btn = document.getElementById('audio-toggle');
       if (audioEnabled) {
-        btn.innerText = '🔊 Live Harmonics: ON';
+        btn.innerText = '🔊 Master Audio: ON';
         btn.style.background = '#38bdf8';
         btn.style.color = '#0f172a';
-        if (activeHexData) playHexHarmonics(activeHexData);
+        if (activeHexData) {
+          playHexHarmonics(activeHexData);
+        } else if (worldData.sectors && worldData.sectors[0]) {
+          playHexHarmonics(worldData.sectors[0]);
+        }
       } else {
-        btn.innerText = '🔊 Live Harmonics: OFF';
+        btn.innerText = '🔊 Master Audio: OFF';
         btn.style.background = '#1e293b';
         btn.style.color = '#38bdf8';
         masterGain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.05);
       }
     }
 
+    function changeAudioMode() {
+      currentAudioMode = document.getElementById('audio-mode-select').value;
+      if (activeHexData) playHexHarmonics(activeHexData);
+    }
+
+    function toggleLineAudio(idx) {
+      lineMuteState[idx] = !lineMuteState[idx];
+      if (activeHexData) {
+        renderLineCards(activeHexData);
+        playHexHarmonics(activeHexData);
+      }
+    }
+
+    function toggleAllLines() {
+      allLinesActive = !allLinesActive;
+      lineMuteState = [allLinesActive, allLinesActive, allLinesActive, allLinesActive, allLinesActive, allLinesActive];
+      const btn = document.getElementById('toggle-all-lines');
+      btn.innerText = allLinesActive ? '⚡ All Lines: ON' : '🔇 All Lines: MUTED';
+      btn.style.color = allLinesActive ? '#a855f7' : '#ef4444';
+      btn.style.borderColor = allLinesActive ? '#a855f7' : '#ef4444';
+      if (activeHexData) {
+        renderLineCards(activeHexData);
+        playHexHarmonics(activeHexData);
+      }
+    }
+
+    function filterLines(type) {
+      if (type === 'all') {
+        lineMuteState = [true, true, true, true, true, true];
+      } else if (type === 'upper') {
+        lineMuteState = [false, false, false, true, true, true];
+      } else if (type === 'lower') {
+        lineMuteState = [true, true, true, false, false, false];
+      } else if (type === 'changing') {
+        if (activeHexData) {
+          lineMuteState = activeHexData.yao_pellets.map(yp => yp.ternary_state === 2);
+        } else {
+          lineMuteState = [false, false, false, true, false, false];
+        }
+      } else if (type === 'mute') {
+        lineMuteState = [false, false, false, false, false, false];
+      }
+      if (activeHexData) {
+        renderLineCards(activeHexData);
+        playHexHarmonics(activeHexData);
+      }
+    }
+
+    function renderLineCards(d) {
+      const container = document.getElementById('line-cards-container');
+      if (!container || !d.yao_pellets) return;
+      let html = '';
+      d.yao_pellets.forEach((yp, idx) => {
+        const isMuted = !lineMuteState[idx];
+        const stateColor = yp.color_hex;
+        const stateName = yp.ternary_state === 2 ? 'YAO 2' : (yp.ternary_state === 1 ? 'YANG 1' : 'YIN 0');
+        html += `
+          <div class="line-card ${isMuted ? 'muted' : ''}">
+            <div class="line-card-header">
+              <span style="font-weight:700;color:#fff;">L${yp.line_position} <span style="font-size:9px;color:#94a3b8;">(${yp.sub_trigram[0].toUpperCase()}${yp.sub_position})</span></span>
+              <span style="background:${stateColor};color:#0f172a;font-size:8px;font-weight:800;padding:1px 4px;border-radius:3px;">${stateName}</span>
+            </div>
+            <div style="font-size:10px;color:#cbd5e1;font-family:monospace;">${yp.frequency_hz}Hz</div>
+            <button class="card-toggle-btn ${isMuted ? 'off' : ''}" onclick="toggleLineAudio(${idx})">
+              ${isMuted ? '🔇 MUTED' : '🔊 LIVE'}
+            </button>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+    }
+
     function playHexHarmonics(d) {
       activeHexData = d;
+      renderLineCards(d);
       if (!audioEnabled || !audioCtx) return;
       const now = audioCtx.currentTime;
-      masterGain.gain.setTargetAtTime(0.22, now, 0.05);
+      masterGain.gain.setTargetAtTime(0.24, now, 0.05);
 
       const qp = d.quantum_physics || {};
       const porosity = qp.porosity_level || 0.45;
@@ -476,7 +601,20 @@ shadow_enabled = true
 
       d.yao_pellets.forEach((yp, idx) => {
         if (oscillators[idx]) {
-          const targetFreq = yp.frequency_hz || (146.0 + idx * 20.0);
+          const isMuted = !lineMuteState[idx];
+          if (isMuted) {
+            oscGains[idx].gain.setTargetAtTime(0.0, now, 0.03);
+            return;
+          }
+
+          let targetFreq = yp.frequency_hz || (146.0 + idx * 20.0);
+          if (currentAudioMode === 'binaural') {
+            targetFreq = yp.ternary_state === 1 ? (150.0 + idx * 12.0) : (144.0 + idx * 12.0);
+          } else if (currentAudioMode === 'changing' && yp.ternary_state !== 2) {
+            oscGains[idx].gain.setTargetAtTime(0.0, now, 0.03);
+            return;
+          }
+
           oscillators[idx].frequency.setTargetAtTime(targetFreq, now, 0.05);
           if (yp.ternary_state === 2) {
             oscillators[idx].type = 'sawtooth';
@@ -516,6 +654,7 @@ shadow_enabled = true
       offFilter.connect(offlineCtx.destination);
 
       d.yao_pellets.forEach((yp, idx) => {
+        if (!lineMuteState[idx]) return;
         const osc = offlineCtx.createOscillator();
         const g = offlineCtx.createGain();
         osc.type = yp.ternary_state === 2 ? 'sawtooth' : (yp.ternary_state === 1 ? 'triangle' : 'sine');
@@ -772,13 +911,6 @@ shadow_enabled = true
         const cutoff = Math.round(400 + (d.quantum_physics.porosity_level || 0.45) * 3200);
         document.getElementById('val-audio').innerText = `Harmonics: [${freqs}] | Cutoff: ${cutoff}Hz`;
 
-        let ph = '';
-        d.yao_pellets.forEach((yp, idx) => {
-          ph += '<div class="pellet-dot" style="background:' + yp.color_hex +
-                '; box-shadow: 0 0 6px ' + yp.color_hex +
-                ';" title="L' + (idx+1) + ' (' + yp.sub_trigram + ' pos ' + yp.sub_position + '): ' + yp.line_type.toUpperCase() + ' | ' + yp.frequency_hz + 'Hz"></div>';
-        });
-        document.getElementById('pellet-indicators').innerHTML = ph;
         playHexHarmonics(d);
       }
     });
