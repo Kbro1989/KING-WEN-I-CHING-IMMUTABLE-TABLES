@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 King Wen 64-Sovereign External Audio Switchboard Generator
 ==========================================================
@@ -52,24 +52,53 @@ def generate_switchboard_data():
         spectral_hex = k_color.get("primary_color", {}).get("hex", "#FFD700")
         base_hue = k_color.get("final_hue_degrees", (h_id - 1) * 5.625)
 
+        row = (h_id - 1) // 8
+        col = (h_id - 1) % 8
+        world_x = round((col - 3.5) * 70.0, 2)
+        world_z = round((row - 3.5) * 70.0, 2)
         u_idx = base.get("upper_idx", 1)
         l_idx = base.get("lower_idx", 1)
+        elevation = round(
+            math.sin(col * 0.8) * math.cos(row * 0.8) * 14.0
+            + (u_idx * 2.5) + (l_idx * 1.5), 2
+        )
+
+        norm_x = world_x / 280.0
+        norm_z = world_z / 280.0
+        norm_y = elevation / 35.0
+        norm_r = math.sqrt(norm_x * norm_x + norm_z * norm_z)
+        spatial_theta = math.atan2(world_z, world_x)
+
         vortex_tension = round((u_idx * l_idx) / 49.0, 4)
         porosity = round(0.15 + (u_idx * 0.05) + (l_idx * 0.03), 3)
-        base_freq = round(108.0 + (h_id - 1) * 2.45, 2)
 
-        # 6-Yao pellets
+        # Unified fundamental spatial carrier frequency from (x, y, z) field operator
+        spatial_fundamental_hz = round(
+            108.0 * (1.0 + 0.40 * norm_r + 0.25 * norm_y + 0.15 * math.sin(3.0 * spatial_theta + norm_y * math.pi)),
+            2
+        )
+        spatial_cutoff_hz = round(350.0 + porosity * 2400.0 + 300.0 * norm_y, 1)
+        spatial_q = round(1.2 + vortex_tension * 3.5 + 0.8 * norm_r, 2)
+        spatial_phase_rad = round((2.0 * math.pi / 560.0) * (world_x + world_z) + (math.pi * elevation / 35.0), 4)
+
+        # 6-Yao Line Quantum Pellets (L1 to L6) — Unified (X, Y, Z) Spatial Harmonic Resolution
         pellets = []
         for line_idx in range(6):
             bit = int(binary_str[line_idx]) if line_idx < len(binary_str) else 1
-            ternary_state = 1 if bit == 1 else 0
-            freq = round(COPRIME_BASE_FREQS[line_idx] * (1.0 if ternary_state == 1 else 0.82) * (1.0 + vortex_tension * 0.25), 2)
+            is_changing = (row in [3, 4]) and ((line_idx % 3) == (row % 3))
+            ternary_state = 2 if is_changing else (1 if bit == 1 else 0)
+
+            line_ratio = 1.0 + (line_idx / 6.0) * 0.618
+            line_phase_mod = 1.0 + 0.12 * math.cos(spatial_theta * (line_idx + 1) + elevation / 10.0)
+            ternary_mult = 1.18 if ternary_state == 2 else (1.0 if ternary_state == 1 else 0.82)
+            freq = round(spatial_fundamental_hz * line_ratio * ternary_mult * line_phase_mod * (1.0 + vortex_tension * 0.20), 2)
+
             pellets.append({
                 "line": line_idx + 1,
                 "sub_trigram": "lower" if line_idx < 3 else "upper",
                 "state": ternary_state,
-                "type": "yang" if ternary_state == 1 else "yin",
-                "color_hex": "#FFD700" if ternary_state == 1 else "#38BDF8",
+                "type": "yang" if ternary_state == 1 else ("yin" if ternary_state == 0 else "yao"),
+                "color_hex": "#FFD700" if ternary_state == 1 else ("#38BDF8" if ternary_state == 0 else "#A855F7"),
                 "frequency_hz": freq
             })
 
@@ -80,9 +109,13 @@ def generate_switchboard_data():
             "binary": binary_str,
             "upper_trigram": upper_tri,
             "lower_trigram": lower_tri,
+            "world_position": {"x": world_x, "y": elevation, "z": world_z},
             "spectral_color": spectral_hex,
             "base_hue_degrees": base_hue,
-            "base_frequency_hz": base_freq,
+            "base_frequency_hz": spatial_fundamental_hz,
+            "cutoff_frequency_hz": spatial_cutoff_hz,
+            "resonance_q": spatial_q,
+            "phase_rad": spatial_phase_rad,
             "vortex_tension": vortex_tension,
             "porosity": porosity,
             "pellets": pellets

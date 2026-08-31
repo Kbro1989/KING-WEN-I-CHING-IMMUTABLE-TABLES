@@ -84,8 +84,23 @@ def generate_sovereign_world():
             biome_id = row
             biome = temporal_biomes[biome_id]
 
-            # 6-Yao Line Quantum Pellets (L1 to L6) — Full Ternary Resolution (0=Yin, 1=Yang, 2=Yao/Changing)
-            COPRIME_BASE_FREQS = [146.0, 158.0, 166.0, 178.0, 194.0, 206.0]
+            # Unified Continuous (X, Y, Z) Spatial Acoustic Tensor
+            norm_x = world_x / 280.0
+            norm_z = world_z / 280.0
+            norm_y = elevation / 35.0
+            norm_r = math.sqrt(norm_x * norm_x + norm_z * norm_z)
+            spatial_theta = math.atan2(world_z, world_x)
+
+            # Unified fundamental spatial carrier frequency from (x, y, z) field operator
+            spatial_fundamental_hz = round(
+                108.0 * (1.0 + 0.40 * norm_r + 0.25 * norm_y + 0.15 * math.sin(3.0 * spatial_theta + norm_y * math.pi)),
+                2
+            )
+            spatial_cutoff_hz = round(350.0 + porosity_level * 2400.0 + 300.0 * norm_y, 1)
+            spatial_q = round(1.2 + vortex_tension * 3.5 + 0.8 * norm_r, 2)
+            spatial_phase_rad = round((2.0 * math.pi / 560.0) * (world_x + world_z) + (math.pi * elevation / 35.0), 4)
+
+            # 6-Yao Line Quantum Pellets (L1 to L6) — Unified (X, Y, Z) Spatial Harmonic Resolution
             yao_pellets = []
             for line_idx in range(6):
                 bit = int(binary_str[line_idx]) if line_idx < len(binary_str) else 1
@@ -96,21 +111,23 @@ def generate_sovereign_world():
                 orbit_radius = round(6.0 + line_idx * 2.2, 2)
                 orbital_speed = round(0.5 + (line_idx + 1) * 0.25 * (1.0 + vortex_tension) * (1.2 if ternary_state == 2 else 1.0), 3)
 
+                line_ratio = 1.0 + (line_idx / 6.0) * 0.618
+                line_phase_mod = 1.0 + 0.12 * math.cos(spatial_theta * (line_idx + 1) + elevation / 10.0)
+                ternary_mult = 1.18 if ternary_state == 2 else (1.0 if ternary_state == 1 else 0.82)
+                freq_hz = round(spatial_fundamental_hz * line_ratio * ternary_mult * line_phase_mod * (1.0 + vortex_tension * 0.20), 2)
+
                 if ternary_state == 1:
                     line_type = "yang"
                     color_hex = "#FFD700"
                     energy = 1.0
-                    freq_hz = round(COPRIME_BASE_FREQS[line_idx] * (1.0 + vortex_tension * 0.25), 2)
                 elif ternary_state == 0:
                     line_type = "yin"
                     color_hex = "#38BDF8"
                     energy = 0.6
-                    freq_hz = round(COPRIME_BASE_FREQS[line_idx] * 0.82 * (1.0 + vortex_tension * 0.25), 2)
                 else:
                     line_type = "yao"
                     color_hex = "#A855F7"
                     energy = 1.4
-                    freq_hz = round(COPRIME_BASE_FREQS[line_idx] * 1.18 * (1.0 + vortex_tension * 0.25), 2)
 
                 yao_pellets.append({
                     "line_position": line_idx + 1,
@@ -531,14 +548,22 @@ shadow_enabled = true
           const sGain = audioCtx.createGain();
           const sFilter = audioCtx.createBiquadFilter();
 
-          const baseFreq = 108.0 + (sec.hexagram_id - 1) * 2.45;
+          // Unified continuous (X, Y, Z) spatial carrier frequency & filter tensor
+          const pos = sec.world_position;
+          const normX = pos.x / 280.0, normZ = pos.z / 280.0, normY = pos.y / 35.0;
+          const normR = Math.sqrt(normX * normX + normZ * normZ);
+          const theta = Math.atan2(pos.z, pos.x);
+          const baseFreq = 108.0 * (1.0 + 0.40 * normR + 0.25 * normY + 0.15 * Math.sin(3.0 * theta + normY * Math.PI));
+
           sOsc.type = (sec.hexagram_id % 3 === 0) ? 'triangle' : ((sec.hexagram_id % 2 === 0) ? 'sine' : 'sawtooth');
           sOsc.frequency.setValueAtTime(baseFreq, audioCtx.currentTime);
 
           sFilter.type = 'lowpass';
           const qp = sec.quantum_physics || {};
-          sFilter.frequency.setValueAtTime(350 + (qp.porosity_level || 0.45) * 1800, audioCtx.currentTime);
-          sFilter.Q.setValueAtTime(1.5 + (qp.vortex_tension || 0.5) * 2.5, audioCtx.currentTime);
+          const cutoff = 350 + (qp.porosity_level || 0.45) * 2400 + 300 * normY;
+          const qRes = 1.2 + (qp.vortex_tension || 0.5) * 3.5 + 0.8 * normR;
+          sFilter.frequency.setValueAtTime(cutoff, audioCtx.currentTime);
+          sFilter.Q.setValueAtTime(qRes, audioCtx.currentTime);
 
           sGain.gain.setValueAtTime(0.0, audioCtx.currentTime);
 
@@ -550,7 +575,7 @@ shadow_enabled = true
           spatialVoices.push({
             hexId: sec.hexagram_id,
             sector: sec,
-            pos3D: new THREE.Vector3(sec.world_position.x, sec.world_position.y, sec.world_position.z),
+            pos3D: new THREE.Vector3(pos.x, pos.y, pos.z),
             osc: sOsc,
             filter: sFilter,
             gain: sGain,
