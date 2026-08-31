@@ -1,8 +1,8 @@
 # OEIS Submission Draft — King Wen 512-State Deterministic Phase-Space Family
 
 **Author**: Kevin Browder (Kbro1989)  
-**Date**: 2026-08-20 (Updated 2026-08-29)  
-**Repository**: [https://github.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES](https://github.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES)  
+**Date**: 2026-08-20 (Updated 2026-08-31)
+**Repository**: [https://github.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES](https://github.com/Kbro1989/KING-WEN-I-CHING-IMMUTABLE-TABLES)
 
 ---
 
@@ -98,7 +98,7 @@ a[n_] := Floor[10^9 * (Mod[Hash[n, "SHA256"], 97] / 97.0)]
 ## 2. Companion Sequence A357XXY (Structural 512-State Phase Space)
 
 ### Name
-`a(n) = 10 * floor(n/8) + 10 + (n mod 8)` for $n = 0..511$ — compact encoding of the 64 King Wen hexagrams ($1..64$) each paired with 8 temporal phases ($0..7$).
+`a(n) = 10 * floor(n/8) + 10 + (n mod 8)` for $n = 0..511$ — compact encoding of the 64 King Wen hexagrams ($1..64$) each paired with 8 trigram-family phase coordinates ($0..7$).
 
 ### Terms (first 32)
 ```
@@ -112,9 +112,10 @@ a[n_] := Floor[10^9 * (Mod[Hash[n, "SHA256"], 97] / 97.0)]
 $$a(n) = 10 \cdot (\lfloor n/8 \rfloor + 1) + (n \bmod 8)$$
 
 ### Comments
-* Encodes the complete 512-state ($2^9$) phase space of the King Wen 64 Sovereign Model Engine. Each hexagram appears exactly 8 times, once per temporal phase: past, present, future, transition, resolution, dissolution, crystallization, void.
-* The 9-bit state resolver (`KingWen9BitResolver.vhd`) maps any `(emotional_input, request_text)` pair to a unique index $n \in 0..511$, which resolves to hexagram $\lfloor n/8 \rfloor + 1$ in phase $n \bmod 8$.
-* The encoding $10 \cdot h + p$ is chosen because it is human-readable: $a(0)=10$ means hexagram 1, phase 0; $a(511)=647$ means hexagram 64, phase 7.
+* Encodes the complete 512-state ($2^9$) phase space of the King Wen 64 Sovereign Model Engine. Each hexagram appears exactly 8 times, once per trigram-family phase coordinate $p \in \{0..7\}$, corresponding to the 8 Ba Gua trigram families: Qian (0), Kun (1), Zhen (2), Kan (3), Li (4), Xun (5), Gen (6), Dui (7).
+* **Correction from prior draft**: The second coordinate $p \in \{0..7\}$ is the trigram-family phase index, NOT named temporal phases (past/present/future). The system has always used dual orthogonal coordinates: 512 binary phase states ($64 \times 8$) and 729 ternary manifold states ($3^6 = 27 \times 27$), resolving to $5832 = 729 \times 8$ total states. Any agent documentation stating "temporal phases: past, present, future, transition, resolution, dissolution, crystallization, void" was drift and is superseded by the immutable onboarding spec.
+* The 9-bit state resolver (`KingWen9BitResolver.vhd`) maps any `(emotional_input, request_text)` pair to a unique index $n \in 0..511$, which resolves to hexagram $\lfloor n/8 \rfloor + 1$ in trigram-family phase $n \bmod 8$.
+* The encoding $10 \cdot h + p$ is human-readable: $a(0)=10$ means hexagram 1, phase 0 (Qian); $a(511)=647$ means hexagram 64, phase 7 (Dui).
 
 ### Cross-references
 * **A357XXX**: Perturbation sequence above
