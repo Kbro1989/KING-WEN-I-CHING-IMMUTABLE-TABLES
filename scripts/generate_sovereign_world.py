@@ -609,8 +609,25 @@ metadata/attractor_mode = "implosion"
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 </head>
 <body>
+  <div id="prewarm-loader-overlay" style="position:fixed; inset:0; z-index:10000; background:radial-gradient(circle at center, #0f172a 0%, #020617 100%); display:flex; flex-direction:column; align-items:center; justify-content:center; font-family:sans-serif; color:#f8fafc; transition:opacity 0.6s ease;">
+    <div style="font-size:28px; font-weight:900; letter-spacing:2px; color:#f59e0b; text-shadow:0 0 20px rgba(245,158,11,0.6); margin-bottom:6px; text-align:center;">
+      &#x26A1; KING WEN 64 SOVEREIGN ENGINE
+    </div>
+    <div style="font-size:12px; font-weight:700; color:#a78bfa; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:20px; text-align:center;">
+      Edge Pre-Warm Cache &amp; Phased Layer Pipeline
+    </div>
+    <div style="width:340px; height:10px; background:#1e293b; border-radius:5px; overflow:hidden; border:1px solid #475569; box-shadow:0 0 15px rgba(124,58,237,0.4); margin-bottom:12px;">
+      <div id="prewarm-progress-bar" style="width:5%; height:100%; background:linear-gradient(90deg, #3b82f6, #8b5cf6, #ec4899); border-radius:5px; transition:width 0.3s ease-out; box-shadow:0 0 10px #8b5cf6;"></div>
+    </div>
+    <div id="prewarm-layer-status" style="font-size:12px; font-family:monospace; color:#38bdf8; font-weight:600; text-align:center; min-height:18px;">
+      [LAYER 0/3] Connecting to Cloudflare Edge Pre-Warm Cache...
+    </div>
+    <div id="prewarm-stats" style="font-size:10px; font-family:monospace; color:#64748b; margin-top:8px;">
+      64 Citadels &bull; 384 Sound Pellets &bull; 5,832 Quantum States
+    </div>
+  </div>
   <div id="audio-unlock-overlay" onclick="unlockAudioSystem()" style="position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:9999; background:rgba(124, 58, 237, 0.95); color:#ffffff; font-weight:800; font-size:13px; padding:12px 28px; border-radius:30px; border:2px solid #c4b5fd; box-shadow:0 0 25px rgba(168, 85, 247, 0.95); cursor:pointer; font-family:sans-serif; letter-spacing:0.5px; animation: pulseGlow 1.8s infinite;">
-    🔊 CLICK ANYWHERE ON SCREEN TO ACTIVATE UNIFIED 384-PELLET QUANTUM AUDIO FIELD
+    &#x1F50A; CLICK ANYWHERE ON SCREEN TO ACTIVATE UNIFIED 384-PELLET QUANTUM AUDIO FIELD
   </div>
   <div id="canvas-container"></div>
   <div id="hud">
@@ -676,8 +693,16 @@ metadata/attractor_mode = "implosion"
   <div id="instructions">&#x1F5B1;&#xFE0F; Left Click + Drag: Orbit | Scroll: Zoom | Hover: Live Node Telemetry &amp; Acoustic Harmonics</div>
 
   <script>
-    // === DATA INGESTION ===
-    const worldData = __WORLD_JSON_PLACEHOLDER__;
+    // === MASTER DATA STATE & LAYERED PRE-WARM REPOSITORY ===
+    const worldData = {
+      sectors: [],
+      egg_keyframes: [],
+      prewarmed_egg_keyframes: [],
+      audio_unison_wav_b64: "",
+      jkd_passages_by_hex: {}
+    };
+
+    const embeddedTopology = __WORLD_JSON_PLACEHOLDER__;
 
     // === WEB AUDIO API UNIFIED QUANTUM GROUND FIELD ENGINE ===
     let audioCtx = null;
@@ -1103,209 +1128,303 @@ metadata/attractor_mode = "implosion"
     sun.shadow.mapSize.height = 2048;
     scene.add(sun);
 
-    // === 1. QUANTUM POTENTIAL-WELL TERRAIN ===
+    // === 1. QUANTUM POTENTIAL-WELL TERRAIN & GRID ===
     const terrainGeo = new THREE.PlaneGeometry(640, 640, 96, 96);
     terrainGeo.rotateX(-Math.PI / 2);
-    const tPos = terrainGeo.attributes.position;
-    for (let i = 0; i < tPos.count; i++) {
-      const x = tPos.getX(i), z = tPos.getZ(i);
-      let y = Math.sin(x * 0.012) * Math.cos(z * 0.012) * 16.0 + Math.sin(x * 0.035) * 4.0;
-      // Superpose 64 Gaussian potential wells into the terrain
-      worldData.sectors.forEach(sec => {
-        const dx = x - sec.world_position.x, dz = z - sec.world_position.z;
-        const distSq = dx * dx + dz * dz;
-        if (distSq < 2500) {
-          y += Math.exp(-distSq / 400.0) * (sec.world_position.y - y) * 0.7;
-        }
-      });
-      tPos.setY(i, y);
-    }
-    terrainGeo.computeVertexNormals();
     const terrainMesh = new THREE.Mesh(terrainGeo, new THREE.MeshStandardMaterial({
       color: 0x111827, roughness: 0.85, metalness: 0.2
     }));
     terrainMesh.receiveShadow = true;
     scene.add(terrainMesh);
 
-    // Grid matrix overlay
     const grid = new THREE.GridHelper(560, 8, 0xffd700, 0x334155);
     grid.position.y = 0.6;
     scene.add(grid);
 
-    // === 1B. MASTER 3D CENTRIPETAL EGG RESONATOR MESH — DERIVED FROM 64-CITADEL SHOTGUN VORTEX OUTPUT ===
-    // Egg vertex positions are NOT static — they are recomputed each frame from the converging
-    // vortex_tension, suction_coefficient, porosity_level, and pellet energy_intensity of all 64 citadels.
-    const EGG_SEGS_W = 48, EGG_SEGS_H = 36;
-    const eggGeo = new THREE.SphereGeometry(340, EGG_SEGS_W, EGG_SEGS_H);
-    eggGeo.attributes.position.usage = THREE.DynamicDrawUsage;
-
-    // Cache the REST (base) vertex positions — the shotgun will deform from here
-    const eggVertCount = eggGeo.attributes.position.count;
-    const eggBasePos = new Float32Array(eggVertCount * 3);
-    for (let i = 0; i < eggVertCount; i++) {
-      eggBasePos[i * 3]     = eggGeo.attributes.position.getX(i);
-      eggBasePos[i * 3 + 1] = eggGeo.attributes.position.getY(i);
-      eggBasePos[i * 3 + 2] = eggGeo.attributes.position.getZ(i);
-    }
-
-    // Pre-compute per-vertex influence weights from all 64 citadels
-    // Weight = vortex_tension * suction_coefficient * avg(pellet energy_intensity)
-    // projected onto the unit normal of each vertex
-    const eggSectorInfluences = worldData.sectors.map(sec => {
-      const pos = sec.world_position;
-      const qp  = sec.quantum_physics;
-      const avgPelletEnergy = sec.yao_pellets.reduce((s, p) => s + (p.energy_intensity || 0.5), 0) / 6.0;
-      return {
-        nx: pos.x / 280.0,  // normalized citadel direction in XZ plane
-        nz: pos.z / 280.0,
-        vortexTension:    qp.vortex_tension      || 0.5,
-        suction:          qp.suction_coefficient || 0.3,
-        porosity:         qp.porosity_level       || 0.45,
-        pelletEnergy:     avgPelletEnergy,
-        pelletFreqs:      sec.yao_pellets.map(p => p.frequency_hz || 146.0),
-        hexId:            sec.hexagram_id
-      };
-    });
-
-    const masterEggMesh = new THREE.Mesh(eggGeo, new THREE.MeshStandardMaterial({
-      color: 0x8b5cf6,
-      emissive: 0x6d28d9,
-      emissiveIntensity: 0.45,
-      wireframe: true,
-      transparent: true,
-      opacity: 0.38,
-      roughness: 0.15
-    }));
-    masterEggMesh.position.set(0, 40, 0);
-    masterEggMesh.userData = { isMasterEgg: true, name: 'Master Centripetal Egg Vortex' };
-    scene.add(masterEggMesh);
-
-    // === 2. SOVEREIGN NODES: VORTEX + PELLETS + POROSITY + ROSE CORES ===
+    // Global registries populated layer by layer
     const nodeGroup = new THREE.Group();
+    scene.add(nodeGroup);
     const animatedNodes = [];
-    const raycastTargets = [masterEggMesh];
+    const raycastTargets = [];
     const attractorBeams = [];
     const eggCenter = new THREE.Vector3(0, 40, 0);
+    let masterEggMesh = null;
+    let eggGeo = null;
 
-    worldData.sectors.forEach((sec, sIdx) => {
-      const group = new THREE.Group();
-      group.position.set(sec.world_position.x, sec.world_position.y, sec.world_position.z);
-      const qp = sec.quantum_physics;
-      const uIdx = sec.grid_coordinates.col + 1;
-      const lIdx = sec.grid_coordinates.row + 1;
+    // === LAYER 0: SKELETON (64 CITADELS & SPATIAL BIOMES) ===
+    function applyLayer0(l0) {
+      worldData.sectors = (l0.sectors || []).map(s => ({ ...s }));
 
-      // --- A. Schauberger Centripetal Implosion Vortex Spiral ---
-      const vCount = 120;
-      const vGeo = new THREE.BufferGeometry();
-      const vPos = new Float32Array(vCount * 3);
-      const vCol = new Float32Array(vCount * 3);
-      const vBase = new THREE.Color(sec.regional_biome.accent);
-      for (let p = 0; p < vCount; p++) {
-        const t = p / vCount;
-        const theta = t * Math.PI * 8.0;
-        const r = (1.0 - t) * 14.0 * (1.0 + qp.vortex_tension);
-        vPos[p*3]   = Math.cos(theta) * r;
-        vPos[p*3+1] = -(t) * qp.implosion_funnel_depth + 6.0;
-        vPos[p*3+2] = Math.sin(theta) * r;
-        vCol[p*3] = vBase.r; vCol[p*3+1] = vBase.g; vCol[p*3+2] = vBase.b;
+      // Deform terrain with 64 Gaussian potential wells
+      const tPos = terrainGeo.attributes.position;
+      for (let i = 0; i < tPos.count; i++) {
+        const x = tPos.getX(i), z = tPos.getZ(i);
+        let y = Math.sin(x * 0.012) * Math.cos(z * 0.012) * 16.0 + Math.sin(x * 0.035) * 4.0;
+        worldData.sectors.forEach(sec => {
+          const dx = x - sec.world_position.x, dz = z - sec.world_position.z;
+          const distSq = dx * dx + dz * dz;
+          if (distSq < 2500) {
+            y += Math.exp(-distSq / 400.0) * (sec.world_position.y - y) * 0.7;
+          }
+        });
+        tPos.setY(i, y);
       }
-      vGeo.setAttribute('position', new THREE.BufferAttribute(vPos, 3));
-      vGeo.setAttribute('color', new THREE.BufferAttribute(vCol, 3));
-      const vortex = new THREE.Points(vGeo, new THREE.PointsMaterial({
-        size: 1.8, vertexColors: true, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending
-      }));
-      group.add(vortex);
+      terrainGeo.computeVertexNormals();
+      tPos.needsUpdate = true;
 
-      // --- B. Volumetric Porosity Resonance Shell ---
-      const pShell = new THREE.Mesh(
-        new THREE.SphereGeometry(qp.porosity_cloud_radius * 0.7, 16, 16),
-        new THREE.MeshBasicMaterial({
-          color: new THREE.Color(sec.regional_biome.color),
-          wireframe: true, transparent: true,
-          opacity: Math.max(0.12, qp.porosity_level * 0.35)
-        })
-      );
-      pShell.position.y = 8;
-      group.add(pShell);
+      // Spawn 64 Sovereign Beacon Skeletons
+      worldData.sectors.forEach((sec, sIdx) => {
+        const group = new THREE.Group();
+        group.position.set(sec.world_position.x, sec.world_position.y, sec.world_position.z);
 
-      // --- C. Parametric Rose-Curve Avatar Core (Lissajous) ---
-      const rCount = 360;
-      const rGeo = new THREE.BufferGeometry();
-      const rPos = new Float32Array(rCount * 3);
-      for (let r = 0; r < rCount; r++) {
-        const t = (r / rCount) * Math.PI * 2.0;
-        rPos[r*3]   = Math.cos(uIdx * t) * Math.sin(lIdx * t) * 4.5;
-        rPos[r*3+1] = Math.cos(lIdx * t) * 4.5 + 8.0;
-        rPos[r*3+2] = Math.sin(uIdx * t) * Math.sin(lIdx * t) * 4.5;
-      }
-      rGeo.setAttribute('position', new THREE.BufferAttribute(rPos, 3));
-      const specColor = new THREE.Color(sec.spectral_color ? sec.spectral_color.hex : '#FFD700');
-      const roseMesh = new THREE.Line(rGeo, new THREE.LineBasicMaterial({
-        color: specColor, transparent: true, opacity: 0.9
-      }));
-      group.add(roseMesh);
-
-      // --- Central Sovereign Beacon ---
-      const beacon = new THREE.Mesh(
-        new THREE.OctahedronGeometry(2.5),
-        new THREE.MeshStandardMaterial({
-          color: specColor, emissive: specColor, emissiveIntensity: 0.6, roughness: 0.2
-        })
-      );
-      beacon.position.y = 8;
-      beacon.userData = sec;
-      group.add(beacon);
-      raycastTargets.push(beacon);
-
-      // --- D. 6-Yao Line Quantum Orbiting Pellets ---
-      const pelletMeshes = [];
-      sec.yao_pellets.forEach((yp, pIdx) => {
-        const rad = yp.ternary_state === 2 ? 1.1 : (yp.ternary_state === 1 ? 0.9 : 0.65);
-        const geo = yp.ternary_state === 2 ? new THREE.IcosahedronGeometry(rad, 1) : new THREE.SphereGeometry(rad, 12, 12);
-        const pm = new THREE.Mesh(
-          geo,
+        const specColor = new THREE.Color(sec.spectral_color ? sec.spectral_color.hex : '#FFD700');
+        const beacon = new THREE.Mesh(
+          new THREE.OctahedronGeometry(2.5),
           new THREE.MeshStandardMaterial({
-            color: new THREE.Color(yp.color_hex),
-            emissive: new THREE.Color(yp.color_hex),
-            emissiveIntensity: yp.energy_intensity * 0.8,
-            roughness: 0.25,
-            wireframe: yp.ternary_state === 2
+            color: specColor, emissive: specColor, emissiveIntensity: 0.6, roughness: 0.2
           })
         );
-        group.add(pm);
-        pelletMeshes.push({ mesh: pm, spec: yp, angle: pIdx * (Math.PI / 3.0) });
+        beacon.position.y = 8;
+        beacon.userData = sec;
+        group.add(beacon);
+        raycastTargets.push(beacon);
+
+        nodeGroup.add(group);
+        animatedNodes.push({
+          group, beacon, pellets: [], vortexTension: 0.5,
+          vortex: null, porosity: null, rose: null
+        });
+      });
+    }
+
+    // === LAYER 1: QUANTUM PHYSICS (VORTICES, POROSITY & ROSES) ===
+    function applyLayer1(l1) {
+      (l1.sectors || []).forEach((ls, idx) => {
+        const sec = worldData.sectors[idx];
+        if (!sec) return;
+        sec.quantum_physics = ls.quantum_physics || {};
+        sec.quantum_wave_packet = ls.quantum_wave_packet || {};
+        sec.action_doctrine = ls.action_doctrine || "ASSERT";
+        sec.citadel_archetype = ls.citadel_archetype || "sovereign";
+
+        const node = animatedNodes[idx];
+        if (!node) return;
+        const qp = sec.quantum_physics;
+        node.vortexTension = qp.vortex_tension || 0.5;
+        const uIdx = (sec.grid_coordinates ? sec.grid_coordinates.col : (idx % 8)) + 1;
+        const lIdx = (sec.grid_coordinates ? sec.grid_coordinates.row : Math.floor(idx / 8)) + 1;
+
+        // Schauberger Centripetal Implosion Vortex Spiral
+        const vCount = 120;
+        const vGeo = new THREE.BufferGeometry();
+        const vPos = new Float32Array(vCount * 3);
+        const vCol = new Float32Array(vCount * 3);
+        const vBase = new THREE.Color(sec.regional_biome ? sec.regional_biome.accent : '#9CA3AF');
+        for (let p = 0; p < vCount; p++) {
+          const t = p / vCount;
+          const theta = t * Math.PI * 8.0;
+          const r = (1.0 - t) * 14.0 * (1.0 + (qp.vortex_tension || 0.5));
+          vPos[p*3]   = Math.cos(theta) * r;
+          vPos[p*3+1] = -(t) * (qp.implosion_funnel_depth || 8.0) + 6.0;
+          vPos[p*3+2] = Math.sin(theta) * r;
+          vCol[p*3] = vBase.r; vCol[p*3+1] = vBase.g; vCol[p*3+2] = vBase.b;
+        }
+        vGeo.setAttribute('position', new THREE.BufferAttribute(vPos, 3));
+        vGeo.setAttribute('color', new THREE.BufferAttribute(vCol, 3));
+        const vortex = new THREE.Points(vGeo, new THREE.PointsMaterial({
+          size: 1.8, vertexColors: true, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending
+        }));
+        node.group.add(vortex);
+        node.vortex = vortex;
+
+        // Volumetric Porosity Resonance Shell
+        const pShell = new THREE.Mesh(
+          new THREE.SphereGeometry((qp.porosity_cloud_radius || 15.0) * 0.7, 16, 16),
+          new THREE.MeshBasicMaterial({
+            color: new THREE.Color(sec.regional_biome ? sec.regional_biome.color : '#4B5563'),
+            wireframe: true, transparent: true,
+            opacity: Math.max(0.12, (qp.porosity_level || 0.45) * 0.35)
+          })
+        );
+        pShell.position.y = 8;
+        node.group.add(pShell);
+        node.porosity = pShell;
+
+        // Parametric Rose-Curve Avatar Core (Lissajous)
+        const rCount = 360;
+        const rGeo = new THREE.BufferGeometry();
+        const rPos = new Float32Array(rCount * 3);
+        for (let r = 0; r < rCount; r++) {
+          const t = (r / rCount) * Math.PI * 2.0;
+          rPos[r*3]   = Math.cos(uIdx * t) * Math.sin(lIdx * t) * 4.5;
+          rPos[r*3+1] = Math.cos(lIdx * t) * 4.5 + 8.0;
+          rPos[r*3+2] = Math.sin(uIdx * t) * Math.sin(lIdx * t) * 4.5;
+        }
+        rGeo.setAttribute('position', new THREE.BufferAttribute(rPos, 3));
+        const specColor = new THREE.Color(sec.spectral_color ? sec.spectral_color.hex : '#FFD700');
+        const roseMesh = new THREE.Line(rGeo, new THREE.LineBasicMaterial({
+          color: specColor, transparent: true, opacity: 0.9
+        }));
+        node.group.add(roseMesh);
+        node.rose = roseMesh;
+      });
+    }
+
+    // === LAYER 2: 384 SOUND PELLETS & ATTRACTOR BEAMS ===
+    function applyLayer2(l2) {
+      (l2.sectors || []).forEach((ls, idx) => {
+        const sec = worldData.sectors[idx];
+        if (!sec) return;
+        sec.yao_pellets = ls.yao_pellets || [];
+
+        const node = animatedNodes[idx];
+        if (!node) return;
+
+        const pelletMeshes = [];
+        sec.yao_pellets.forEach((yp, pIdx) => {
+          const rad = yp.ternary_state === 2 ? 1.1 : (yp.ternary_state === 1 ? 0.9 : 0.65);
+          const geo = yp.ternary_state === 2 ? new THREE.IcosahedronGeometry(rad, 1) : new THREE.SphereGeometry(rad, 12, 12);
+          const pm = new THREE.Mesh(
+            geo,
+            new THREE.MeshStandardMaterial({
+              color: new THREE.Color(yp.color_hex),
+              emissive: new THREE.Color(yp.color_hex),
+              emissiveIntensity: (yp.energy_intensity || 0.5) * 0.8,
+              roughness: 0.25,
+              wireframe: yp.ternary_state === 2
+            })
+          );
+          node.group.add(pm);
+          pelletMeshes.push({ mesh: pm, spec: yp, angle: pIdx * (Math.PI / 3.0) });
+        });
+        node.pellets = pelletMeshes;
+
+        // 64 Centripetal Attractor Energy Beams (Connecting Citadels to Master Egg)
+        const pos = sec.world_position;
+        const citadelPos = new THREE.Vector3(pos.x, pos.y + 8.0, pos.z);
+        const bGeo = new THREE.BufferGeometry();
+        const bPos = new Float32Array(60 * 3);
+        const bCol = new Float32Array(60 * 3);
+        const specColor = new THREE.Color(sec.spectral_color ? sec.spectral_color.hex : '#FFD700');
+
+        bGeo.setAttribute('position', new THREE.BufferAttribute(bPos, 3));
+        bGeo.setAttribute('color', new THREE.BufferAttribute(bCol, 3));
+        const bMesh = new THREE.Line(bGeo, new THREE.LineBasicMaterial({
+          vertexColors: true, transparent: true, opacity: 0.70
+        }));
+        scene.add(bMesh);
+        attractorBeams.push({
+          mesh: bMesh, geo: bGeo, startPos: citadelPos, color: specColor, sector: sec
+        });
+      });
+    }
+
+    // === LAYER 3: MASTER CENTRIPETAL EGG & UNISON AUDIO ===
+    function applyLayer3(l3) {
+      worldData.egg_keyframes = l3.egg_keyframes || [];
+      worldData.prewarmed_egg_keyframes = l3.egg_keyframes || [];
+      worldData.audio_unison_wav_b64 = l3.audio_unison_wav_b64 || "";
+      worldData.jkd_passages_by_hex = l3.jkd_passages_by_hex || {};
+
+      worldData.sectors.forEach(sec => {
+        sec.jkd_passages = worldData.jkd_passages_by_hex[sec.hexagram_id] || [];
       });
 
-      animatedNodes.push({
-        group, vortex, porosity: pShell, rose: roseMesh,
-        beacon, pellets: pelletMeshes, vortexTension: qp.vortex_tension
-      });
-      nodeGroup.add(group);
-    });
-    scene.add(nodeGroup);
+      // Master 3D Centripetal Egg Resonator Mesh
+      const EGG_SEGS_W = 48, EGG_SEGS_H = 36;
+      eggGeo = new THREE.SphereGeometry(340, EGG_SEGS_W, EGG_SEGS_H);
+      eggGeo.attributes.position.usage = THREE.DynamicDrawUsage;
 
-    // === 2B. 64 CENTRIPETAL ATTRACTOR ENERGY BEAMS (ATTRACTING ALL 64 TO MASTER EGG) ===
-    worldData.sectors.forEach((sec, sIdx) => {
-      const pos = sec.world_position;
-      const citadelPos = new THREE.Vector3(pos.x, pos.y + 8.0, pos.z);
-
-      const bGeo = new THREE.BufferGeometry();
-      const bPos = new Float32Array(60 * 3);
-      const bCol = new Float32Array(60 * 3);
-      const specColor = new THREE.Color(sec.spectral_color ? sec.spectral_color.hex : '#FFD700');
-
-      bGeo.setAttribute('position', new THREE.BufferAttribute(bPos, 3));
-      bGeo.setAttribute('color', new THREE.BufferAttribute(bCol, 3));
-
-      const bMesh = new THREE.Line(bGeo, new THREE.LineBasicMaterial({
-        vertexColors: true, transparent: true, opacity: 0.70
+      masterEggMesh = new THREE.Mesh(eggGeo, new THREE.MeshStandardMaterial({
+        color: 0x8b5cf6,
+        emissive: 0x6d28d9,
+        emissiveIntensity: 0.45,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.38,
+        roughness: 0.15
       }));
-      scene.add(bMesh);
+      masterEggMesh.position.set(0, 40, 0);
+      masterEggMesh.userData = { isMasterEgg: true, name: 'Master Centripetal Egg Vortex' };
+      scene.add(masterEggMesh);
+      raycastTargets.unshift(masterEggMesh);
+    }
 
-      attractorBeams.push({
-        mesh: bMesh, geo: bGeo, startPos: citadelPos, color: specColor, sector: sec
-      });
-    });
+    // === PROGRESSIVE EDGE PRE-WARM CACHE PIPELINE ===
+    async function startLayeredPrewarmPipeline() {
+      const progressBar = document.getElementById('prewarm-progress-bar');
+      const statusText = document.getElementById('prewarm-layer-status');
+      const overlay = document.getElementById('prewarm-loader-overlay');
+
+      try {
+        // [LAYER 0/3]
+        if (statusText) statusText.innerText = '[LAYER 0/3] Pre-warming 64 Spatial Skeleton Citadels & Biomes...';
+        if (progressBar) progressBar.style.width = '20%';
+        let l0 = null;
+        try {
+          const r0 = await fetch('/api/cache/layer/0');
+          if (r0.ok) { const j0 = await r0.json(); l0 = j0.data; }
+        } catch(e) {}
+        if (!l0 && embeddedTopology.sectors) { l0 = { sectors: embeddedTopology.sectors }; }
+        applyLayer0(l0);
+        if (progressBar) progressBar.style.width = '25%';
+
+        // [LAYER 1/3]
+        if (statusText) statusText.innerText = '[LAYER 1/3] Synthesizing 64 Quantum Physics Vortices & Depth Clouds...';
+        let l1 = null;
+        try {
+          const r1 = await fetch('/api/cache/layer/1');
+          if (r1.ok) { const j1 = await r1.json(); l1 = j1.data; }
+        } catch(e) {}
+        if (!l1 && embeddedTopology.sectors) { l1 = { sectors: embeddedTopology.sectors }; }
+        applyLayer1(l1);
+        if (progressBar) progressBar.style.width = '50%';
+
+        // [LAYER 2/3]
+        if (statusText) statusText.innerText = '[LAYER 2/3] Tuning 384 Sound Pellets & Web Audio Ground Field...';
+        let l2 = null;
+        try {
+          const r2 = await fetch('/api/cache/layer/2');
+          if (r2.ok) { const j2 = await r2.json(); l2 = j2.data; }
+        } catch(e) {}
+        if (!l2 && embeddedTopology.sectors) { l2 = { sectors: embeddedTopology.sectors }; }
+        applyLayer2(l2);
+        if (progressBar) progressBar.style.width = '75%';
+
+        // [LAYER 3/3]
+        if (statusText) statusText.innerText = '[LAYER 3/3] Materializing 60-Keyframe Centripetal Egg & Audio Unison...';
+        let l3 = null;
+        try {
+          const r3 = await fetch('/api/cache/layer/3');
+          if (r3.ok) { const j3 = await r3.json(); l3 = j3.data; }
+        } catch(e) {}
+        if (!l3) {
+          l3 = {
+            egg_keyframes: embeddedTopology.prewarmed_egg_keyframes || embeddedTopology.egg_keyframes || [],
+            audio_unison_wav_b64: embeddedTopology.audio_unison_wav_b64 || "",
+            jkd_passages_by_hex: (embeddedTopology.sectors || []).reduce((acc, s) => {
+              if (s.jkd_passages) acc[s.hexagram_id] = s.jkd_passages;
+              return acc;
+            }, {})
+          };
+        }
+        applyLayer3(l3);
+        if (progressBar) progressBar.style.width = '100%';
+        if (statusText) statusText.innerText = '✨ [ALL 4 LAYERS PRE-WARMED] Sovereign 3D Macro-World Ready!';
+
+        setTimeout(() => {
+          if (overlay) {
+            overlay.style.opacity = '0';
+            overlay.style.pointerEvents = 'none';
+            setTimeout(() => { overlay.style.display = 'none'; }, 600);
+          }
+        }, 350);
+
+      } catch(err) {
+        console.error('[PREWARM] Phased loader fallback:', err);
+        if (overlay) overlay.style.display = 'none';
+      }
+    }
 
     // === RAYCASTING INTERACTION ===
     const raycaster = new THREE.Raycaster();
@@ -1523,6 +1642,7 @@ metadata/attractor_mode = "implosion"
 
       renderer.render(scene, camera);
     }
+    startLayeredPrewarmPipeline();
     animate();
 
     window.addEventListener('resize', () => {
