@@ -25,8 +25,8 @@ export async function onRequest(context) {
   phaseId = Math.max(0, Math.min(7, phaseId));
 
   try {
-    const assetUrl = new URL('/DATASETS/kingwen_sovereign_world_topology.json', url.origin);
-    const assetRes = await env.ASSETS ? env.ASSETS.fetch(assetUrl) : await fetch(assetUrl);
+    const assetReq = new Request(new URL('/DATASETS/kingwen_sovereign_world_topology.json', request.url));
+    const assetRes = env.ASSETS ? await env.ASSETS.fetch(assetReq) : await fetch(assetReq);
     const topo = assetRes.ok ? await assetRes.json() : { sectors: [] };
     const sector = (topo.sectors || []).find(s => s.hexagram_id === hexId) || {};
 

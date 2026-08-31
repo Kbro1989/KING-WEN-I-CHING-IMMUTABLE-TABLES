@@ -5,18 +5,16 @@
  */
 export async function onRequestGet(context) {
   const { request, params, env } = context;
-  const url = new URL(request.url);
   const rawId = (params.id || 'all').toLowerCase();
 
   try {
-    const assetUrl = new URL('/DATASETS/kingwen_sovereign_world_topology.json', url.origin);
-    const assetRes = await env.ASSETS ? env.ASSETS.fetch(assetUrl) : await fetch(assetUrl);
+    const assetReq = new Request(new URL('/DATASETS/kingwen_sovereign_world_topology.json', request.url));
+    const assetRes = env.ASSETS ? await env.ASSETS.fetch(assetReq) : await fetch(assetReq);
     const topo = assetRes.ok ? await assetRes.json() : { sectors: [] };
     const sectors = topo.sectors || [];
 
     if (rawId === 'all' || rawId === '512' || rawId === 'grid') {
-      // Render Master 64-Sovereign Widget Grid
-      const html = generateMasterGridWidgetHTML(sectors, url.origin);
+      const html = generateMasterGridWidgetHTML(sectors);
       return new Response(html, {
         headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }
       });
@@ -31,7 +29,7 @@ export async function onRequestGet(context) {
     }
 
     const sector = sectors.find(s => s.hexagram_id === hexId) || {};
-    const html = generateSingleHexagramWidgetHTML(sector, url.origin);
+    const html = generateSingleHexagramWidgetHTML(sector);
 
     return new Response(html, {
       headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=3600' }
@@ -44,12 +42,12 @@ export async function onRequestGet(context) {
   }
 }
 
-function generateSingleHexagramWidgetHTML(s, origin) {
+function generateSingleHexagramWidgetHTML(s) {
   const pellets = s.yao_pellets || [];
   const sc = s.spectral_color || { hex: '#FFD700' };
 
   const pelletItems = pellets.map(p => `
-    <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.05); padding:4px 8px; border-radius:4px; margin-bottom:4px; font-size:11px;">
+    <div style="display:flex; justify-space-between; align-items:center; background:rgba(255,255,255,0.05); padding:4px 8px; border-radius:4px; margin-bottom:4px; font-size:11px;">
       <span style="color:${p.color_hex}; font-weight:700;">Line ${p.line_position} (${p.line_type.toUpperCase()})</span>
       <span style="font-family:monospace; color:#38bdf8;">${p.frequency_hz}Hz</span>
     </div>
@@ -81,7 +79,7 @@ function generateSingleHexagramWidgetHTML(s, origin) {
 </html>`;
 }
 
-function generateMasterGridWidgetHTML(sectors, origin) {
+function generateMasterGridWidgetHTML(sectors) {
   const gridItems = sectors.map(s => {
     const sc = s.spectral_color || { hex: '#FFD700' };
     return `
