@@ -1,12 +1,113 @@
+import base64
+import io
 import json
 import math
 import sys
+import wave
 from pathlib import Path
 
 ROOT = Path(r"c:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES")
 sys.path.insert(0, str(ROOT))
 
 from kingwen_ternary_tables_complete import HEXAGRAM_BASE
+
+def prewarm_egg_keyframes(sectors, num_frames=60):
+    """Pre-computes 60 keyframes of 3D Centripetal Egg vertex deformation from all 64 citadel vortex outputs."""
+    segs_w, segs_h = 48, 36
+    verts = []
+    for j in range(segs_h + 1):
+        v = j / segs_h
+        theta = v * math.pi
+        sin_theta = math.sin(theta)
+        cos_theta = math.cos(theta)
+        for i in range(segs_w + 1):
+            u = i / segs_w
+            phi = u * 2.0 * math.pi
+            x = 340.0 * sin_theta * math.cos(phi)
+            y = 340.0 * cos_theta
+            z = 340.0 * sin_theta * math.sin(phi)
+            verts.append((x, y, z))
+
+    sec_influences = []
+    for s in sectors:
+        pos = s["world_position"]
+        qp = s["quantum_physics"]
+        avg_pellet_e = sum(p.get("energy_intensity", 0.5) for p in s["yao_pellets"]) / 6.0
+        sec_influences.append({
+            "nx": pos["x"] / 280.0,
+            "nz": pos["z"] / 280.0,
+            "tension": qp.get("vortex_tension", 0.5),
+            "suction": qp.get("suction_coefficient", 0.3),
+            "porosity": qp.get("porosity_level", 0.45),
+            "energy": avg_pellet_e,
+            "freqs": [p.get("frequency_hz", 146.0) for p in s["yao_pellets"]]
+        })
+
+    keyframes = []
+    for f_idx in range(num_frames):
+        t = f_idx * (2.0 * math.pi / num_frames)
+        frame_coords = []
+        for vx, vy, vz in verts:
+            length = math.sqrt(vx * vx + vy * vy + vz * vz) or 1.0
+            nx, ny, nz = vx / length, vy / length, vz / length
+            norm_y = vy / 340.0
+
+            radial_disp = 0.0
+            angular_twist = 0.0
+            for s_idx, si in enumerate(sec_influences):
+                align = nx * si["nx"] + nz * si["nz"]
+                pellet_phase = sum(
+                    math.sin(t * (freq / 108.0) * 0.4 + s_idx * 0.098 + p_i * 1.047)
+                    for p_i, freq in enumerate(si["freqs"])
+                ) / 6.0
+                implosion = si["tension"] * si["suction"] * si["energy"]
+                radial_disp += align * implosion * 28.0 * pellet_phase
+                angular_twist += si["porosity"] * align * math.sin(norm_y * math.pi + t * 1.2 + s_idx * 0.049) * 8.0
+
+            scale = 1.0 + (radial_disp + angular_twist) / 340.0
+            frame_coords.extend([round(vx * scale, 2), round(vy * scale, 2), round(vz * scale, 2)])
+        keyframes.append(frame_coords)
+
+    return keyframes
+
+def prewarm_unison_audio_wav_b64(sectors, duration_sec=4.0, sample_rate=22050):
+    """Pre-renders 384 sound pellet wavepacket ground field PCM audio buffer into Base64 WAV."""
+    num_samples = int(duration_sec * sample_rate)
+    buffer = [0.0] * num_samples
+
+    for sec in sectors:
+        for p in sec["yao_pellets"]:
+            freq = p.get("frequency_hz", 146.0)
+            amp = p.get("energy_intensity", 0.5) * 0.008
+            w_type = p.get("waveform", "sine")
+            omega = 2.0 * math.pi * freq / sample_rate
+
+            for i in range(num_samples):
+                t_sample = i * omega
+                if w_type == "sine":
+                    val = math.sin(t_sample)
+                elif w_type == "triangle":
+                    val = 2.0 * abs(2.0 * (t_sample / (2.0 * math.pi) - math.floor(t_sample / (2.0 * math.pi) + 0.5))) - 1.0
+                else:
+                    val = 2.0 * (t_sample / (2.0 * math.pi) - math.floor(t_sample / (2.0 * math.pi) + 0.5))
+                buffer[i] += val * amp
+
+    import struct
+    max_peak = max(abs(s) for s in buffer) or 1.0
+    norm_factor = 0.90 / max_peak
+
+    byte_io = io.BytesIO()
+    with wave.open(byte_io, 'wb') as wav_file:
+        wav_file.setnchannels(1)
+        wav_file.setsampwidth(2)
+        wav_file.setframerate(sample_rate)
+        pcm_bytes = bytearray()
+        for sample in buffer:
+            val_int = int(max(-32767, min(32767, sample * norm_factor * 32767.0)))
+            pcm_bytes.extend(struct.pack('<h', val_int))
+        wav_file.writeframes(pcm_bytes)
+
+    return base64.b64encode(byte_io.getvalue()).decode('ascii')
 
 def generate_sovereign_world():
     print("=" * 85)
@@ -225,10 +326,14 @@ def generate_sovereign_world():
             sectors.append(sector)
         heightmap_grid.append(row_heights)
 
+    print("[PRE-WARMING] Building 60 pre-warmed 3D Egg Mesh keyframes & 384-pellet audio WAV buffer...")
+    egg_keyframes = prewarm_egg_keyframes(sectors, num_frames=60)
+    audio_wav_b64 = prewarm_unison_audio_wav_b64(sectors, duration_sec=4.0)
+
     # 3. Master World Topology Manifest
     world_topology = {
         "world_name": "King Wen Sovereign Macro-World",
-        "version": "3.1.0",
+        "version": "3.2.0",
         "spatial_metrics": {
             "world_dimensions_meters": [560.0, 560.0],
             "total_sectors": 64,
@@ -238,6 +343,8 @@ def generate_sovereign_world():
         "temporal_biomes": temporal_biomes,
         "heightmap_matrix_8x8": heightmap_grid,
         "quantum_prewarm": prewarm_data if prewarm_data else {"status": "unwarmed"},
+        "prewarmed_egg_keyframes": egg_keyframes,
+        "prewarmed_audio_wav_b64": audio_wav_b64,
         "sectors": sectors
     }
 
@@ -1220,54 +1327,21 @@ metadata/attractor_mode = "implosion"
         if (centripetalEggActive) {
           masterEggMesh.rotation.y += 0.003 * timeSpeed;
 
-          // === PER-FRAME VERTEX DEFORMATION — DERIVED FROM 64-CITADEL SHOTGUN VORTEX FIELD ===
-          // Each vertex is displaced by the sum of all 64 citadel contributions:
-          //   vortex_tension × suction_coefficient × pellet_energy × angular_alignment × time oscillation
-          const eggPosAttr = eggGeo.attributes.position;
-          for (let i = 0; i < eggVertCount; i++) {
-            const bx = eggBasePos[i * 3];
-            const by = eggBasePos[i * 3 + 1];
-            const bz = eggBasePos[i * 3 + 2];
+          // === PRE-WARMED 60-KEYFRAME VERTEX ANIMATION (ZERO CPU/GPU OVERLOAD) ===
+          if (worldData.prewarmed_egg_keyframes && worldData.prewarmed_egg_keyframes.length > 0) {
+            const numFrames = worldData.prewarmed_egg_keyframes.length;
+            const cycle = (presentTime * 0.4) % 1.0;
+            const frameIdx = Math.floor(cycle * numFrames) % numFrames;
+            const kf = worldData.prewarmed_egg_keyframes[frameIdx];
 
-            // Unit normal direction of this vertex (outward from sphere center)
-            const len = Math.sqrt(bx * bx + by * by + bz * bz) || 1.0;
-            const nx = bx / len, ny = by / len, nz = bz / len;
-            const normY = by / 340.0; // -1..1
-
-            // Sum vortex implosion contributions from all 64 citadels
-            let radialDisplace = 0.0;
-            let angularTwist   = 0.0;
-            for (let s = 0; s < eggSectorInfluences.length; s++) {
-              const si = eggSectorInfluences[s];
-
-              // Angular alignment: how much this vertex faces toward citadel s in XZ plane
-              const alignment = (nx * si.nx + nz * si.nz);  // -1..1
-
-              // Phase of this citadel's pellet resonance at present time
-              // Uses the 6 pellet frequencies directly from shotgun output
-              let pelletPhase = 0.0;
-              for (let p = 0; p < si.pelletFreqs.length; p++) {
-                pelletPhase += Math.sin(presentTime * (si.pelletFreqs[p] / 108.0) * 0.04 + s * 0.098 + p * 1.047);
-              }
-              pelletPhase /= 6.0;
-
-              // Schauberger centripetal implosion: inward suction scaled by vortex tension
-              // The egg is pulled inward toward each citadel proportionally to its suction
-              const implosionFactor = si.vortexTension * si.suction * si.pelletEnergy;
-
-              // Radial displacement: high-alignment citadels pull vertices inward (centripetal)
-              radialDisplace += alignment * implosionFactor * 28.0 * pelletPhase;
-
-              // Angular (latitudinal) twist from porosity field — shapes the ovoid egg profile
-              angularTwist += si.porosity * alignment * Math.sin(normY * Math.PI + presentTime * 1.2 + s * 0.049) * 8.0;
+            const posAttr = eggGeo.attributes.position;
+            const pArray = posAttr.array;
+            for (let i = 0; i < kf.length; i++) {
+              pArray[i] = kf[i];
             }
-
-            // Apply deformation outward along vertex normal
-            const scale = 1.0 + (radialDisplace + angularTwist) / 340.0;
-            eggPosAttr.setXYZ(i, bx * scale, by * scale, bz * scale);
+            posAttr.needsUpdate = true;
+            eggGeo.computeVertexNormals();
           }
-          eggPosAttr.needsUpdate = true;
-          eggGeo.computeVertexNormals();
         }
       }
 
