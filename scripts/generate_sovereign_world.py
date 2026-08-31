@@ -424,6 +424,7 @@ shadow_enabled = true
         <option value="changing">&#x1F52E; Changing Yao (State 2) Only</option>
       </select>
       <button class="audio-btn" id="toggle-all-lines" onclick="toggleAllLines()" style="border-color:#a855f7;color:#a855f7;">&#x26A1; All Lines: ON</button>
+      <a href="kingwen_external_audio_switchboard.html" target="_blank" class="audio-btn" style="text-decoration:none;border-color:#f59e0b;color:#f59e0b;">&#x1F39B;&#xFE0F; Studio Console</a>
       <button class="rec-btn" id="record-btn" onclick="recordAudioSample()">&#x1F399;&#xFE0F; Sample WAV</button>
     </div>
     <div id="inspector">
