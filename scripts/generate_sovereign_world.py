@@ -247,7 +247,7 @@ def generate_sovereign_world():
     defaultPrim = "KingWenSovereignWorld"
     metersPerUnit = 1.0
     upAxis = "Y"
-    doc = "Master 64-Sovereign Macro World: 8 Biomes, Schauberger Vortices, 6-Yao Pellets, 64 Citadels"
+    doc = "Master 64-Sovereign Macro World: 8 Biomes, Schauberger Centripetal Egg Vortices, 6-Yao Pellets, 64 Citadels"
 )
 
 def Xform "KingWenSovereignWorld"
@@ -262,6 +262,16 @@ def Xform "KingWenSovereignWorld"
             float inputs:intensity = 1000.0
             color3f inputs:color = (0.85, 0.9, 1.0)
         }}
+    }}
+
+    def Scope "MasterCentripetalEggVortex"
+    {{
+        double3 xformOp:translate = (0, 40.0, 0)
+        double3 xformOp:scale = (340.0, 180.0, 340.0)
+        uniform token[] xformOpOrder = ["xformOp:translate", "xformOp:scale"]
+        custom string kingwen:attractor_mode = "implosion"
+        custom bool kingwen:egg_active = true
+        custom float kingwen:present_time = 0.0
     }}
 
     def Scope "SovereignCitadels"
@@ -320,6 +330,11 @@ environment = SubResource("Environment_1")
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.866, -0.353, 0.353, 0, 0.707, 0.707, -0.5, -0.612, 0.612, 0, 50, 0)
 shadow_enabled = true
+
+[node name="MasterCentripetalEggVortex" type="Node3D" parent="."]
+transform = Transform3D(340, 0, 0, 0, 180, 0, 0, 0, 340, 0, 40, 0)
+metadata/egg_active = true
+metadata/attractor_mode = "implosion"
 
 [node name="Citadels" type="Node3D" parent="."]
 {chr(10).join(godot_nodes)}
@@ -459,7 +474,7 @@ shadow_enabled = true
         <span style="font-size:9px; background:#7c3aed; color:#fff; padding:1px 6px; border-radius:4px;">ALL 64 UNISON</span>
       </div>
       <div class="egg-btn-row">
-        <button class="egg-toggle-btn" id="egg-toggle-btn" onclick="toggleCentripetalEgg()">&#x26A1; EGG VORTEX: OFF</button>
+        <button class="egg-toggle-btn active" id="egg-toggle-btn" onclick="toggleCentripetalEgg()">&#x1F95A; EGG VORTEX: ACTIVE (1..64 UNISON)</button>
         <select id="attractor-mode-select" class="audio-select" onchange="changeAttractorMode()">
           <option value="implosion">&#x1F300; Schauberger Implosion Egg</option>
           <option value="toroidal">&#x1F369; Toroidal Egg Oscillation</option>
@@ -594,7 +609,7 @@ shadow_enabled = true
     }
 
 
-    let centripetalEggActive = false;
+    let centripetalEggActive = true;
     let attractorMode = 'implosion';
     let timeSpeed = 1.0;
     let presentTime = 0.0;
@@ -809,6 +824,31 @@ shadow_enabled = true
     grid.position.y = 0.6;
     scene.add(grid);
 
+    // === 1B. MASTER 3D CENTRIPETAL EGG RESONATOR MESH ENCLOSURE ===
+    const eggGeo = new THREE.SphereGeometry(340, 48, 36);
+    const eggPosAttr = eggGeo.attributes.position;
+    for (let i = 0; i < eggPosAttr.count; i++) {
+      const y = eggPosAttr.getY(i);
+      const normY = y / 340.0;
+      // Schauberger centripetal egg contour (tapered top, wider bottom)
+      const eggContour = 1.0 + 0.25 * (1.0 - normY) * Math.cos(normY * Math.PI * 0.5);
+      eggPosAttr.setX(i, eggPosAttr.getX(i) * eggContour);
+      eggPosAttr.setZ(i, eggPosAttr.getZ(i) * eggContour);
+    }
+    eggGeo.computeVertexNormals();
+
+    const masterEggMesh = new THREE.Mesh(eggGeo, new THREE.MeshStandardMaterial({
+      color: 0x8b5cf6,
+      emissive: 0x6d28d9,
+      emissiveIntensity: 0.35,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.35,
+      roughness: 0.2
+    }));
+    masterEggMesh.position.set(0, 40, 0);
+    scene.add(masterEggMesh);
+
     // === 2. SOVEREIGN NODES: VORTEX + PELLETS + POROSITY + ROSE CORES ===
     const nodeGroup = new THREE.Group();
     const animatedNodes = [];
@@ -951,6 +991,15 @@ shadow_enabled = true
       clock += 0.02;
       presentTime += 0.02 * timeSpeed;
       controls.update();
+
+      if (typeof masterEggMesh !== 'undefined' && masterEggMesh) {
+        masterEggMesh.visible = centripetalEggActive;
+        if (centripetalEggActive) {
+          masterEggMesh.rotation.y += 0.005 * timeSpeed;
+          const masterPulse = 1.0 + 0.05 * Math.sin(presentTime * 2.0);
+          masterEggMesh.scale.set(masterPulse, 1.0 + 0.08 * Math.cos(presentTime * 1.5), masterPulse);
+        }
+      }
 
       animatedNodes.forEach((n, nIdx) => {
         const sec = worldData.sectors[nIdx];
