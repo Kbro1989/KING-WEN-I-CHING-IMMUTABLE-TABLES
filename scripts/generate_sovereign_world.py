@@ -1421,6 +1421,8 @@ metadata/attractor_mode = "implosion"
         const pos = sec.world_position;
         const qp = sec.quantum_physics || {};
         const pellets = sec.yao_pellets || [];
+        const qwp = sec.quantum_wave_packet || {};
+        const qwpPellets = qwp.sound_pellets || [];
         return {
           x: pos.x,
           z: pos.z,
@@ -1431,6 +1433,10 @@ metadata/attractor_mode = "implosion"
           energies: pellets.map(p => p.energy_intensity || 0.5),
           waveforms: pellets.map(p => p.waveform || "sine"),
           ternaryStates: pellets.map(p => p.ternary_state !== undefined ? p.ternary_state : 1),
+          // Quantum Wave Packet superposition vectors from pre-computed kit
+          qwpFreqs: qwpPellets.map(qp => qp.frequency_hz || 200.0),
+          qwpEnergies: qwpPellets.map(qp => qp.energy_intensity || 1.0),
+          qwpFundHz: qwp.fundamental_frequency_hz || qp.fundamental_frequency_hz || 108.0,
           color: new THREE.Color(sec.spectral_color ? sec.spectral_color.hex : '#FFD700')
         };
       });
@@ -1655,7 +1661,7 @@ metadata/attractor_mode = "implosion"
                 // Masking: Porosity interference masking & boundary attenuation
                 const porosityMask = 1.0 - 0.35 * sp.porosity * Math.sin(bx * 0.12 + bz * 0.12);
 
-                // Shotgun pellet harmonic synthesis across 6 yao lines
+                // Quantum Wave Packet Superposition (Spatial Field Wavepacket + Pre-computed Kit Quantum Wavepacket)
                 let pelletHarmonicSum = 0.0;
                 for (let pIdx = 0; pIdx < sp.freqs.length; pIdx++) {
                   const freq = sp.freqs[pIdx];
@@ -1663,24 +1669,31 @@ metadata/attractor_mode = "implosion"
                   const wType = sp.waveforms[pIdx];
                   const tState = sp.ternaryStates[pIdx];
 
-                  const phase = presentTime * (freq / 110.0) * 1.2 + pIdx * 1.047 + dist * 0.06;
+                  // 1. Spatial Field Wave Packet Component
+                  const phaseSpatial = presentTime * (freq / 110.0) * 1.2 + pIdx * 1.047 + dist * 0.06;
                   let wVal = 0.0;
                   if (wType === 'triangle') {
-                    wVal = 2.0 * Math.abs(2.0 * ((phase / (Math.PI * 2.0)) % 1.0) - 1.0) - 1.0;
+                    wVal = 2.0 * Math.abs(2.0 * ((phaseSpatial / (Math.PI * 2.0)) % 1.0) - 1.0) - 1.0;
                   } else if (wType === 'sawtooth') {
-                    wVal = 2.0 * ((phase / (Math.PI * 2.0)) % 1.0) - 1.0;
+                    wVal = 2.0 * ((phaseSpatial / (Math.PI * 2.0)) % 1.0) - 1.0;
                   } else {
-                    wVal = Math.sin(phase);
+                    wVal = Math.sin(phaseSpatial);
                   }
-
-                  // Ternary changing line masking: Yao (2) oscillates intensely, Yang (1) lifts crests, Yin (0) indents troughs
                   const ternarySign = tState === 2 ? 1.4 : (tState === 1 ? 1.0 : -0.7);
-                  pelletHarmonicSum += wVal * energy * ternarySign;
+
+                  // 2. Pre-computed Kit Quantum Wave Packet Component
+                  const qwpFreq = sp.qwpFreqs[pIdx] || freq;
+                  const qwpEnergy = sp.qwpEnergies[pIdx] || energy;
+                  const phaseKit = presentTime * (qwpFreq / 120.0) + pIdx * 0.523 + dist * 0.04;
+                  const wValKit = Math.sin(phaseKit);
+
+                  // Construct superposition Psi_total = Psi_spatial + Psi_kit
+                  pelletHarmonicSum += (wVal * energy * ternarySign + 0.45 * wValKit * qwpEnergy);
                 }
 
                 const localShotgun = spatialWeight * porosityMask * (pelletHarmonicSum / 6.0) * (sp.tension * 5.5 + sp.suction * 2.5);
                 shotgunWave += localShotgun;
-                spectralColorGlow += spatialWeight * (0.5 + 0.5 * Math.sin(presentTime * 3.0 + sIdx * 0.1));
+                spectralColorGlow += spatialWeight * (0.5 + 0.5 * Math.sin(presentTime * (sp.qwpFundHz / 40.0) + sIdx * 0.1));
               }
             }
           }
