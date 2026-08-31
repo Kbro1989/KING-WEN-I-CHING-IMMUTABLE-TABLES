@@ -1458,6 +1458,7 @@ metadata/attractor_mode = "implosion"
         const now = audioCtx.currentTime;
 
         groundVoices.forEach((gv) => {
+          const dist = camPos.distanceTo(gv.pos3D);
           // Scaled for macro-world geometry (560m x 560m grid):
           // High base gain (0.08..0.20) so all 64 citadels are clearly audible in unison, plus proximity boost
           let spatialAtten = 0.08 + 0.12 / (1.0 + Math.pow(dist / 180.0, 1.5));
