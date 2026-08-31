@@ -257,18 +257,27 @@ def generate_sovereign_world():
                 ternary_mult = 1.18 if ternary_state == 2 else (1.0 if ternary_state == 1 else 0.82)
                 freq_hz = round(spatial_fundamental_hz * line_ratio * ternary_mult * line_phase_mod * (1.0 + vortex_tension * 0.20), 2)
 
-                if ternary_state == 1:
-                    line_type = "yang"
-                    color_hex = "#FFD700"
-                    waveform = "triangle"
-                elif ternary_state == 0:
-                    line_type = "yin"
-                    color_hex = "#38BDF8"
-                    waveform = "sine"
-                else:
-                    line_type = "yao"
-                    color_hex = "#A855F7"
-                    waveform = "sawtooth"
+                # Pellet spectral color: derived from hexagram spectral hue + line index offset (384 unique colors)
+                # NOT a 3-value ternary collapse. Base hue from hexagram (h_id - 1) * 5.625°, shifted
+                # per line by (line_idx * 60°) and per ternary state by (ternary_state * 20°).
+                pellet_hue = ((h_id - 1) * 5.625 + line_idx * 60.0 + ternary_state * 20.0) % 360.0
+                pr, pg, pb = _hue_to_rgb(pellet_hue)
+                pr_i, pg_i, pb_i = int(pr * 255), int(pg * 255), int(pb * 255)
+                color_hex = f"#{pr_i:02X}{pg_i:02X}{pb_i:02X}"
+
+                # Waveform: derived from upper + lower trigram index pair, not ternary state alone.
+                # 8 trigrams (Heaven=1..Earth=8), upper drives coarse waveform family,
+                # lower drives sub-variant. Maps to 8 waveform shapes across the 64.
+                trigram_pair_key = (u_idx - 1) % 4  # 0..3 coarse families
+                sub_key = (l_idx - 1) % 2            # 0..1 sub-variant
+                waveform_table = [
+                    ["sine",     "triangle"],   # Heaven/Creative family
+                    ["sawtooth", "square"],     # Thunder/Arousing family
+                    ["triangle", "sine"],       # Water/Abysmal family
+                    ["sawtooth", "triangle"]    # Mountain/Keeping Still family
+                ]
+                waveform = waveform_table[trigram_pair_key][sub_key]
+                line_type = "yao" if ternary_state == 2 else ("yang" if ternary_state == 1 else "yin")
 
                 # Energy uniquely derived per-hexagram per-line from full spatial field (not a 3-value enum)
                 energy = round(
@@ -287,6 +296,7 @@ def generate_sovereign_world():
                     "orbit_radius": orbit_radius,
                     "orbital_speed": orbital_speed,
                     "color_hex": color_hex,
+                    "pellet_hue_degrees": round(pellet_hue, 3),
                     "waveform": waveform,
                     "energy_intensity": energy,
                     "frequency_hz": freq_hz
@@ -337,6 +347,10 @@ def generate_sovereign_world():
                     "vortex_tension": vortex_tension,
                     "suction_coefficient": suction_coeff,
                     "porosity_level": porosity_level,
+                    "fundamental_frequency_hz": spatial_fundamental_hz,
+                    "spatial_cutoff_hz": spatial_cutoff_hz,
+                    "spatial_q_factor": spatial_q,
+                    "spatial_phase_rad": spatial_phase_rad,
                     "implosion_funnel_depth": round(vortex_tension * 18.0, 2),
                     "porosity_cloud_radius": round(12.0 + porosity_level * 16.0, 2),
                     "depth_statistics": depth_stats,
@@ -1256,19 +1270,25 @@ metadata/attractor_mode = "implosion"
         const lIdx = (sec.grid_coordinates ? sec.grid_coordinates.row : Math.floor(idx / 8)) + 1;
 
         // Schauberger Centripetal Implosion Vortex Spiral
+        // Number of turns = upper_trigram_idx + lower_trigram_idx (unique per hexagram, 2..16)
+        const vortexTurns = uIdx + lIdx;
         const vCount = 120;
         const vGeo = new THREE.BufferGeometry();
         const vPos = new Float32Array(vCount * 3);
         const vCol = new Float32Array(vCount * 3);
         const vBase = new THREE.Color(sec.regional_biome ? sec.regional_biome.accent : '#9CA3AF');
+        const vSpec = new THREE.Color(sec.spectral_color ? sec.spectral_color.hex : '#FFD700');
         for (let p = 0; p < vCount; p++) {
           const t = p / vCount;
-          const theta = t * Math.PI * 8.0;
+          const theta = t * Math.PI * 2.0 * vortexTurns;
           const r = (1.0 - t) * 14.0 * (1.0 + (qp.vortex_tension || 0.5));
           vPos[p*3]   = Math.cos(theta) * r;
           vPos[p*3+1] = -(t) * (qp.implosion_funnel_depth || 8.0) + 6.0;
           vPos[p*3+2] = Math.sin(theta) * r;
-          vCol[p*3] = vBase.r; vCol[p*3+1] = vBase.g; vCol[p*3+2] = vBase.b;
+          // Radial color blend: biome accent at outer edge → hexagram spectral_color at vortex core
+          vCol[p*3]   = vBase.r + (vSpec.r - vBase.r) * t;
+          vCol[p*3+1] = vBase.g + (vSpec.g - vBase.g) * t;
+          vCol[p*3+2] = vBase.b + (vSpec.b - vBase.b) * t;
         }
         vGeo.setAttribute('position', new THREE.BufferAttribute(vPos, 3));
         vGeo.setAttribute('color', new THREE.BufferAttribute(vCol, 3));
@@ -1706,50 +1726,65 @@ metadata/attractor_mode = "implosion"
       animatedNodes.forEach((n, nIdx) => {
         const sec = worldData.sectors[nIdx];
         const pos = sec.world_position;
+        const qp = sec.quantum_physics || {};
 
-        let spinSpeed = 0.03 * (1.0 + n.vortexTension * 2.0);
-        let pulse = 1.0 + Math.sin(clock * 1.5 + nIdx) * 0.06;
+        // All motion rates derived from the hexagram's own spatial frequency field — not shared clock constants.
+        const hexFundHz = qp.fundamental_frequency_hz || (108.0 * (1.0 + 0.40 * Math.sqrt(pos.x*pos.x + pos.z*pos.z) / 280.0));
+        const hexDriveRate = hexFundHz / 55.0;
+        const hexSpin = hexFundHz / 420.0;
+
+        // Spin speed derived from hexagram vortex tension + suction — not a flat scalar.
+        let spinSpeed = hexSpin * (1.0 + qp.vortex_tension * 2.2 + qp.suction_coefficient * 0.8);
+
+        // Pulse derived from hexagram's mean yao pellet frequency — not shared clock * 1.5.
+        const meanPelletFreq = n.pellets.length > 0
+          ? n.pellets.reduce((s, p) => s + (p.spec.frequency_hz || 146.0), 0) / n.pellets.length
+          : hexFundHz;
+        let pulse = 1.0 + Math.sin(presentTime * (meanPelletFreq / 90.0) + nIdx * 0.098) * 0.06;
 
         // === CENTRIPETAL EGG GENERATION FROM PRESENT TIME (ALL 64 UNISON) ===
         if (centripetalEggActive) {
-          const eggPhase = presentTime * 2.5 + (pos.x * 0.01 + pos.z * 0.01);
+          const eggPhase = presentTime * hexDriveRate + (pos.x * 0.01 + pos.z * 0.01);
           const eggFactor = 1.0 + 0.35 * Math.sin(eggPhase);
 
           if (attractorMode === 'implosion') {
-            // Schauberger Implosion Funnel Egg: Contract and accelerate inward toward (x, y, z)
-            spinSpeed *= (1.8 + 0.9 * Math.sin(presentTime * 3.0 + nIdx * 0.1));
+            // Spin rate from hexagram fundamental, not scripted 3.0 constant.
+            spinSpeed *= (1.8 + 0.9 * Math.sin(presentTime * hexDriveRate + nIdx * 0.1));
             pulse *= (0.85 + 0.35 * Math.sin(eggPhase));
-            n.vortex.scale.set(eggFactor * 0.9, 1.0 + 0.5 * Math.sin(presentTime * 2.0), eggFactor * 0.9);
+            n.vortex.scale.set(eggFactor * 0.9, 1.0 + 0.5 * Math.sin(presentTime * (hexFundHz / 160.0)), eggFactor * 0.9);
           } else if (attractorMode === 'toroidal') {
-            // Toroidal Egg Oscillation: Breathing torus field
-            const torusPulse = 1.0 + 0.4 * Math.sin(presentTime * 4.0 + nIdx * 0.2);
+            const torusPulse = 1.0 + 0.4 * Math.sin(presentTime * (hexFundHz / 55.0) + nIdx * 0.2);
             n.porosity.scale.set(torusPulse, torusPulse * 1.25, torusPulse);
-            n.vortex.rotation.z = Math.sin(presentTime * 1.5 + nIdx * 0.1) * 0.3;
+            n.vortex.rotation.z = Math.sin(presentTime * (hexFundHz / 195.0) + nIdx * 0.1) * 0.3;
           } else if (attractorMode === 'unison_resonance') {
-            // 64-Unison Audio Pellet Resonance: High-frequency synchronous vortex spin
-            spinSpeed *= 2.8;
-            pulse = 1.0 + 0.25 * Math.sin(presentTime * 6.0);
+            // Drive from hexagram vortex tension + suction — not flat 2.8 constant.
+            spinSpeed *= (qp.vortex_tension * 4.2 + qp.suction_coefficient * 1.8);
+            pulse = 1.0 + 0.25 * Math.sin(presentTime * (meanPelletFreq / 35.0));
           }
 
-          // Implosion orbital physics for 6-yao sound pellets
+          // Implosion orbital physics for 6-yao sound pellets — each driven by its own frequency
           n.pellets.forEach((p, pIdx) => {
+            const pelletFreq = p.spec.frequency_hz || 146.0;
             const pelletPhase = p.angle + presentTime * p.spec.orbital_speed * 1.5;
-            const implosionRadius = p.spec.orbit_radius * (0.60 + 0.40 * Math.sin(presentTime * 2.5 + pIdx * 0.5));
+            // Orbital radius oscillation driven by pellet's own wave frequency — not shared 2.5 constant.
+            const implosionRadius = p.spec.orbit_radius * (0.60 + 0.40 * Math.sin(presentTime * (pelletFreq / 50.0) + pIdx * 0.5));
             p.mesh.position.x = Math.cos(pelletPhase) * implosionRadius;
             p.mesh.position.z = Math.sin(pelletPhase) * implosionRadius;
-            p.mesh.position.y = 8.0 + Math.sin(pelletPhase * 2.0 + presentTime * 3.0) * 2.2;
+            // Vertical oscillation driven by pellet's own frequency — not shared 3.0 constant.
+            p.mesh.position.y = 8.0 + Math.sin(pelletPhase * 2.0 + presentTime * (pelletFreq / 46.0)) * 2.2;
             if (p.spec.ternary_state === 2) {
               p.mesh.rotation.x += 0.08;
               p.mesh.rotation.y += 0.08;
             }
           });
         } else {
-          // Standard Orbiting Pellets
+          // Standard Orbiting Pellets — still driven by per-pellet orbital_speed from generator
           n.pellets.forEach(p => {
+            const pelletFreq = p.spec.frequency_hz || 146.0;
             p.angle += p.spec.orbital_speed * 0.03;
             p.mesh.position.x = Math.cos(p.angle) * p.spec.orbit_radius;
             p.mesh.position.z = Math.sin(p.angle) * p.spec.orbit_radius;
-            p.mesh.position.y = 8.0 + Math.sin(p.angle * 2.0 + clock) * 1.8;
+            p.mesh.position.y = 8.0 + Math.sin(p.angle * 2.0 + presentTime * (pelletFreq / 90.0)) * 1.8;
             if (p.spec.ternary_state === 2) {
               p.mesh.rotation.x += 0.05;
               p.mesh.rotation.y += 0.05;
