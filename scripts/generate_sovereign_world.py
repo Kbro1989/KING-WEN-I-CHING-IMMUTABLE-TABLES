@@ -109,6 +109,16 @@ def prewarm_unison_audio_wav_b64(sectors, duration_sec=4.0, sample_rate=22050):
 
     return base64.b64encode(byte_io.getvalue()).decode('ascii')
 
+
+def _hue_to_rgb(hue_deg):
+    """Convert a 0-360 hue (full saturation, 50% lightness) to (r, g, b) floats 0-1."""
+    h = hue_deg / 60.0
+    hi = int(h) % 6
+    f = h - int(h)
+    q, t = 1.0 - f, f
+    lut = [(1, t, 0), (q, 1, 0), (0, 1, t), (0, q, 1), (t, 0, 1), (1, 0, q)]
+    return lut[hi]
+
 def generate_sovereign_world():
     print("=" * 85)
     print("GENERATING KING WEN 64-SOVEREIGN MACRO-WORLD WITH REAL VORTEX, POROSITY & PELLETS")
@@ -227,9 +237,17 @@ def generate_sovereign_world():
             yao_pellets = []
             for line_idx in range(6):
                 bit = int(binary_str[line_idx]) if line_idx < len(binary_str) else 1
-                # Check for temporal phase changing line modulation (ternary state 2 = yao)
-                is_changing = (biome_id in [3, 4]) and ((line_idx % 3) == (biome_id % 3))
-                ternary_state = 2 if is_changing else (1 if bit == 1 else 0)
+                # Changing line (yao / ternary 2) fires on any of the 64 hexagrams:
+                # A yang line (bit=1) becomes yao when vortex_tension exceeds the per-line threshold.
+                # A yin  line (bit=0) becomes yao when suction_coeff exceeds the per-line threshold.
+                yang_yao_thresh = 0.45 + (line_idx * 0.07)   # lines 0-5: 0.45 .. 0.80
+                yin_yao_thresh  = 0.60 + (line_idx * 0.05)   # lines 0-5: 0.60 .. 0.85
+                if bit == 1 and vortex_tension > yang_yao_thresh:
+                    ternary_state = 2
+                elif bit == 0 and suction_coeff > yin_yao_thresh:
+                    ternary_state = 2
+                else:
+                    ternary_state = 1 if bit == 1 else 0
 
                 orbit_radius = round(6.0 + line_idx * 2.2, 2)
                 orbital_speed = round(0.5 + (line_idx + 1) * 0.25 * (1.0 + vortex_tension) * (1.2 if ternary_state == 2 else 1.0), 3)
@@ -242,15 +260,23 @@ def generate_sovereign_world():
                 if ternary_state == 1:
                     line_type = "yang"
                     color_hex = "#FFD700"
-                    energy = 1.0
+                    waveform = "triangle"
                 elif ternary_state == 0:
                     line_type = "yin"
                     color_hex = "#38BDF8"
-                    energy = 0.6
+                    waveform = "sine"
                 else:
                     line_type = "yao"
                     color_hex = "#A855F7"
-                    energy = 1.4
+                    waveform = "sawtooth"
+
+                # Energy uniquely derived per-hexagram per-line from full spatial field (not a 3-value enum)
+                energy = round(
+                    (0.5 + vortex_tension * 0.6 + suction_coeff * 0.25)
+                    * (line_phase_mod * ternary_mult)
+                    * (0.85 + (line_idx / 6.0) * 0.30),
+                    4
+                )
 
                 yao_pellets.append({
                     "line_position": line_idx + 1,
@@ -261,6 +287,7 @@ def generate_sovereign_world():
                     "orbit_radius": orbit_radius,
                     "orbital_speed": orbital_speed,
                     "color_hex": color_hex,
+                    "waveform": waveform,
                     "energy_intensity": energy,
                     "frequency_hz": freq_hz
                 })
@@ -276,7 +303,12 @@ def generate_sovereign_world():
                     quantum_wp = kit_json.get("quantum_wave_packet", {})
                 except Exception:
                     pass
-            spectral_color = k_color.get("primary_color", {"hex": "#FFD700", "name": f"{base['name']} Gold"})
+            spectral_color = k_color.get("primary_color", None)
+            if not spectral_color:
+                # Derive a unique spectral color per hexagram from its 5.625° hue step
+                _hue = (h_id - 1) * 5.625
+                _r, _g, _b = [int(x * 255) for x in _hue_to_rgb(_hue)]
+                spectral_color = {"hex": f"#{_r:02X}{_g:02X}{_b:02X}", "name": f"{base['name']} Spectrum"}
             palette_16 = k_color.get("palette_16", [])
             base_hue = k_color.get("final_hue_degrees", (h_id - 1) * 5.625)
 
