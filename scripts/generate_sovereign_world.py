@@ -40,6 +40,28 @@ def generate_sovereign_world():
         except Exception:
             pass
 
+    # Load JKD Megatron Wavepacket Emotions JSONL if present
+    jkd_jsonl_path = ROOT / "DATASETS" / "jkd_megatron_wavepacket_emotions.jsonl"
+    jkd_passages_by_hex = {h: [] for h in range(1, 65)}
+    if jkd_jsonl_path.exists():
+        try:
+            with open(jkd_jsonl_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    if not line.strip(): continue
+                    rec = json.loads(line)
+                    res_hex = rec.get("resolved_hexagram", {}).get("hexagram_id")
+                    prompt_text = rec.get("prompt", "").strip()
+                    if res_hex and 1 <= res_hex <= 64 and prompt_text:
+                        if len(jkd_passages_by_hex[res_hex]) < 5:  # Keep top 5 key passages per hexagram
+                            jkd_passages_by_hex[res_hex].append({
+                                "chunk_id": rec.get("chunk_id"),
+                                "text": prompt_text,
+                                "emotion": rec.get("emotion_vector", {}),
+                                "energy": rec.get("hamiltonian_energy", 0.75)
+                            })
+        except Exception:
+            pass
+
     # Load Quantum Wave Packet Pre-Warm Manifest if present
     prewarm_manifest_path = ROOT / "DATASETS" / "quantum_prewarm_manifest.json"
     prewarm_data = {}
@@ -189,6 +211,7 @@ def generate_sovereign_world():
                 },
                 "quantum_wave_packet": quantum_wp,
                 "yao_pellets": yao_pellets,
+                "jkd_passages": jkd_passages_by_hex.get(h_id, []),
                 "assets": {
                     "3d_mesh": f"DATASETS/kingwen_3d_meshes/shap_e_hex_{h_id:02d}.ply",
                     "openusd_stage": f"DATASETS/openusd_stages/npc_hex_{h_id:02d}.usda",
@@ -480,6 +503,8 @@ metadata/attractor_mode = "implosion"
           <option value="toroidal">&#x1F369; Toroidal Egg Oscillation</option>
           <option value="unison_resonance">&#x1F50A; 64-Unison Pellet Resonance</option>
         </select>
+      <div class="egg-btn-row" style="margin-top: 6px;">
+        <button class="rec-btn" id="jkd-unison-btn" onclick="toggleJKDUnison()" style="background:#0284c7; border-color:#38bdf8; color:#fff; font-weight:800; width:100%;">📖 READ JKD TAO CORPUS IN UNISON (ALL 64)</button>
       </div>
       <div style="display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 10px; color: #cbd5e1;">
         <span style="font-weight:700; color:#c4b5fd;">Present Time Speed (t):</span>
@@ -495,6 +520,10 @@ metadata/attractor_mode = "implosion"
         <div class="inspect-cell" style="grid-column: span 2;"><div class="inspect-label">DA-V2 Metric Depth &amp; Point Cloud</div><span id="val-depth">Mean: 10.0m | 122,150 vertices</span></div>
         <div class="inspect-cell" style="grid-column: span 2;"><div class="inspect-label">Deterministic Spectral Hue (6-Bit Embodiment)</div><span id="val-spectral" style="display:flex;align-items:center;gap:6px;"><span id="spectral-badge" style="width:12px;height:12px;border-radius:3px;background:#FFD700;display:inline-block;box-shadow:0 0 6px rgba(255,215,0,0.6);"></span> <span id="spectral-text">#FFD700 (0.0&deg;)</span></span></div>
         <div class="inspect-cell" style="grid-column: span 2;"><div class="inspect-label">6-Yao Acoustic Harmonics &amp; Filter</div><span id="val-audio">Field Active: Approaching nodes modulates local acoustic interference</span></div>
+        <div class="inspect-cell" style="grid-column: span 2; background: rgba(13, 148, 136, 0.15); border: 1px solid #14b8a6;">
+          <div class="inspect-label" style="color: #2dd4bf;">📖 JKD Tao Unison Corpus Recitation</div>
+          <span id="val-jkd-text" style="font-style: italic; color: #5eead4; font-size: 11px;">"Take what is useful, discard what is useless, add what is specifically your own." — JKD Tao Unison Corpus Field Active</span>
+        </div>
       </div>
     </div>
   </div>
@@ -633,6 +662,53 @@ metadata/attractor_mode = "implosion"
     function updateTimeSpeed(val) {
       timeSpeed = parseFloat(val);
       document.getElementById('time-speed-val').innerText = timeSpeed.toFixed(1) + 'x';
+    }
+
+    let jkdUnisonActive = false;
+    let jkdReciteIndex = 0;
+    let speechSynth = window.speechSynthesis || null;
+
+    function toggleJKDUnison() {
+      jkdUnisonActive = !jkdUnisonActive;
+      const btn = document.getElementById('jkd-unison-btn');
+      if (jkdUnisonActive) {
+        btn.innerText = '📖 JKD UNISON RECITING (ALL 64)...';
+        btn.style.background = '#059669';
+        btn.style.borderColor = '#34d399';
+        if (!centripetalEggActive) toggleCentripetalEgg();
+        if (!fieldActive) toggleUnifiedField();
+        reciteNextJKDPassage();
+      } else {
+        btn.innerText = '📖 READ JKD TAO CORPUS IN UNISON (ALL 64)';
+        btn.style.background = '#0284c7';
+        btn.style.borderColor = '#38bdf8';
+        if (speechSynth) speechSynth.cancel();
+      }
+    }
+
+    function reciteNextJKDPassage() {
+      if (!jkdUnisonActive) return;
+
+      const sec = worldData.sectors[jkdReciteIndex % 64];
+      const passages = sec.jkd_passages || [];
+      const text = passages.length > 0 ? passages[0].text : `"Tao of Jeet Kune Do: Formlessness is the key to fluid adaptation." — Hexagram ${sec.hexagram_id}`;
+
+      document.getElementById('val-jkd-text').innerText = `[Citadel #${sec.hexagram_id} ${sec.hexagram_name}]: "${text}"`;
+
+      if (speechSynth) {
+        speechSynth.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.08;
+        utterance.pitch = 0.95;
+        utterance.onend = () => {
+          jkdReciteIndex++;
+          if (jkdUnisonActive) setTimeout(reciteNextJKDPassage, 400);
+        };
+        speechSynth.speak(utterance);
+      } else {
+        jkdReciteIndex++;
+        if (jkdUnisonActive) setTimeout(reciteNextJKDPassage, 3500);
+      }
     }
 
     function changeAudioMode() {
