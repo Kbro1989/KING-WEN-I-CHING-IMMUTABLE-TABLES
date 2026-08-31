@@ -142,12 +142,15 @@ def generate_sovereign_world():
                     "frequency_hz": freq_hz
                 })
 
-            # Load Deterministic Spectral Color Map from Kit
+            # Load Deterministic Spectral Color Map & Quantum Wave Packet from Kit
             kit_path = ROOT / "DATASETS" / "kingwen_model_sets" / f"kit_{h_id}.json"
             k_color = {}
+            quantum_wp = {}
             if kit_path.exists():
                 try:
-                    k_color = json.loads(kit_path.read_text(encoding="utf-8")).get("grounded_npc", {}).get("k_color_map", {})
+                    kit_json = json.loads(kit_path.read_text(encoding="utf-8"))
+                    k_color = kit_json.get("grounded_npc", {}).get("k_color_map", {})
+                    quantum_wp = kit_json.get("quantum_wave_packet", {})
                 except Exception:
                     pass
             spectral_color = k_color.get("primary_color", {"hex": "#FFD700", "name": f"{base['name']} Gold"})
@@ -184,6 +187,7 @@ def generate_sovereign_world():
                     "depth_statistics": depth_stats,
                     "depth_pointcloud_vertices": pc_verts
                 },
+                "quantum_wave_packet": quantum_wp,
                 "yao_pellets": yao_pellets,
                 "assets": {
                     "3d_mesh": f"DATASETS/kingwen_3d_meshes/shap_e_hex_{h_id:02d}.ply",
