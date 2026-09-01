@@ -792,7 +792,15 @@ function captureEvent(event) {
     session_id: window.__kingwenRuntimePayload ? window.__kingwenRuntimePayload.session_id : 'widget',
     emotional_input: window.__kingwenRuntimePayload ? window.__kingwenRuntimePayload.emotional_input : null,
   };
-  const payload = Object.assign(base, event);
+  const payload = Object.assign({}, base, event);
+  if (payload.hexagram_id == null) {
+    const resolved = (window.__kingwenRuntimePayload && Array.isArray(window.__kingwenRuntimePayload.resolved)) ? window.__kingwenRuntimePayload.resolved : [];
+    const match = resolved.find(r => r.hexagram_id === selectedHexagram && r.phase_bits === selectedPhase) || resolved.find(r => r.hexagram_id === selectedHexagram) || null;
+    payload.hexagram_id = match ? match.hexagram_id : null;
+    payload.phase_bits = match ? match.phase_bits : null;
+    payload.phase_temporal = match ? match.phase_temporal : null;
+    payload.null_reason = payload.hexagram_id == null ? 'unresolved_selection' : 'resolved_from_selection';
+  }
   fetch('http://127.0.0.1:8765/capture', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

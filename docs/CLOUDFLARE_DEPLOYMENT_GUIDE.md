@@ -22,7 +22,7 @@ The King Wen 64 Sovereign Model Engine is packaged for zero-cold-start deploymen
        public/index.html (3D Viewfinder)                       functions/api/world.js
        public/DATASETS/topology.json                           functions/api/hexagram/[id].js
        public/DATASETS/manifest.json                          functions/api/jkd/[id].js
-                                                               functions/api/gibberlink.js
+                                                               functions/api/kingwen-link.js
                                                                functions/widget/[id].js
 ```
 
@@ -36,7 +36,7 @@ The King Wen 64 Sovereign Model Engine is packaged for zero-cold-start deploymen
 | `GET /api/world` | GET | Serves full 64-sector topology, 60 pre-warmed 3D egg keyframes, pre-rendered audio PCM WAV buffer | `s-maxage=86400` |
 | `GET /api/hexagram/:id` | GET | Serves hexagram `$1 \dots 64$` metadata, 9-bit VHDL resolver address, and 6-yao sound pellet frequencies | `s-maxage=86400` |
 | `GET /api/jkd/:id` | GET | Serves JKD Megatron wavepacket text passages, 5-axis emotion vectors, and Hamiltonian energy | `s-maxage=86400` |
-| `GET /api/gibberlink` | GET/POST | GibberLink peer-to-peer acoustic wavepacket protocol exchange | Edge Dynamic |
+| `GET /api/kingwen-link` | GET/POST | King Wen Link peer-to-peer acoustic wavepacket protocol exchange | Edge Dynamic |
 | `GET /widget/:id` | GET | Serves standalone hexagram HTML widgets (`:id` = `$1 \dots 64$`, `all`, or `512`) | `max-age=3600` |
 
 ---
@@ -61,12 +61,12 @@ npx wrangler pages deploy public --project-name=kingwen-sovereign-engine
 
 ---
 
-## 4. GibberLink Acoustic Peer Handshake Example
+## 4. King Wen Link Acoustic Peer Handshake Example
 
-To initiate a machine-to-machine GibberLink acoustic wavepacket handshake via Cloudflare Edge Workers:
+To initiate a machine-to-machine King Wen Link acoustic wavepacket handshake via Cloudflare Edge Workers:
 
 ```bash
-curl -X POST https://kingwen-sovereign-engine.pages.dev/api/gibberlink \
+curl -X POST https://kingwen-sovereign-engine.pages.dev/api/kingwen-link \
   -H "Content-Type: application/json" \
   -d '{"hexagram_id": 1, "phase_id": 1}'
 ```
@@ -74,7 +74,7 @@ curl -X POST https://kingwen-sovereign-engine.pages.dev/api/gibberlink \
 **Response**:
 ```json
 {
-  "protocol": "GibberLink Acoustic Peer-to-Peer Protocol v1.0",
+  "protocol": "King Wen Link Acoustic Peer-to-Peer Protocol v1.0",
   "hexagram_id": 1,
   "phase_id": 1,
   "vhdl_resolved_address_9bit": 1,

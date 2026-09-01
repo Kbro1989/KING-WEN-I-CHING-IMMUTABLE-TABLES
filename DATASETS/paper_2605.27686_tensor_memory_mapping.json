@@ -1,0 +1,156 @@
+{
+  "paper_id": "2605.27686",
+  "title": "Tensor Memory: Fixed-Size Recurrent State for Long-Horizon Transformers",
+  "authors": [
+    "Kabir Swain",
+    "Sijie Han",
+    "Daniel Karl I. Weidele",
+    "Mauro Martino",
+    "Antonio Torralba"
+  ],
+  "institutions": [
+    "MIT",
+    "University of Toronto",
+    "IBM Research"
+  ],
+  "year": 2026,
+  "core_contribution": "Fixed-size recurrent 3D voxel memory tensor for Transformers; decouples state capacity from input length via continuous Gaussian write/read + ConvLSTM update",
+  "key_mechanisms": [
+    "ht, ct ∈ R^(C×D×H×W) fixed-size hidden/cell state pair",
+    "Gaussian write volume: U(t) = content(t) ⊗ M(t) around μ_write with spread σ",
+    "Shared coordinate predictor for read/write coordinates in [-1,1]^3",
+    "Trilinear GridSample read with gated residual fusion: x̂ = x + σ(γ)·D(m)",
+    "Factorized 3D ConvLSTM update: depthwise DW1×1×3, DW1×3×1, DW3×1×1 + pointwise projection",
+    "Learned scalar gate γ suppresses memory path when not useful (no-harm control)"
+  ],
+  "sovereign_stack_mappings": [
+    {
+      "program": "KING-WEN-I-CHING-IMMUTABLE-TABLES",
+      "role": "Wave-function persistence layer for 512-state expansion; each hex/phase is a voxel coordinate; JSON corpus files are the recurrent state; input refills via Gaussian write; consult reads via trilinear sample",
+      "integration_points": [
+        "collapse_full_128() writes 512 resolved states to 8x8x8 voxel grid once; subsequent consults read cached state unless input delta exceeds threshold",
+        "Gaussian write volume deposits at mu_write = f(hex_id, phase, porosity, emotional_input) -> continuous 3D coordinate",
+        "9-bit/13-bit save-string fields are voxel channel encodings: 9-bit hex ID + 4-bit phase + 4-bit porosity + ... = fixed-width channel vector",
+        "Batch refill: new input writes new Gaussian volume; ConvLSTM update blends with existing state; no full recompute",
+        "Inversion pairs share mirrored coordinates; read/write naturally handles in/out via coordinate transform",
+        "64-domain specialization: each hex has own sub-voxel region; 3D/text/agentic/video/audio/code domains are read-head projections off shared memory",
+        "Deterministic coordinate function: mu = (hex_id/8, phase/8, porosity) maps directly to grid; no learned predictor needed"
+      ],
+      "artifacts": [
+        "scripts/full_hexagram_shotgun.py",
+        "emotional_engine.py",
+        "decision_matrix.py",
+        "src/core/pog3_hexagram_runtime_substrate.py",
+        "DATASETS/full_shotgun_expansion_all.jsonl",
+        "DATASETS/kingwen_save_strings.csv",
+        "DATASETS/kingwen_sovereign_world_topology.json"
+      ]
+    },
+    {
+      "program": "OpenJarvis",
+      "role": "Fixed-size persistent state for event broadcaster + journey mesh + consult history; replaces growing token/KV cache",
+      "integration_points": [
+        "EventBroadcasterRegistry queue replaced by 3D voxel state (subscribers read from memory tensor instead of queue)",
+        "Journey mesh nodes stored in persistent memory rather than recomputed from graph",
+        "Consult history written via Gaussian splatting into memory; read via coordinate lookup",
+        "64 hexagram slots × 8 phases = 512 fixed addresses in voxel grid"
+      ],
+      "artifacts": [
+        "src/openjarvis/core/events.py",
+        "src/openjarvis/core/journey_executor.py",
+        "src/openjarvis/cli/_oracle_speak.py"
+      ]
+    },
+    {
+      "program": "Megatron-LM-review",
+      "role": "Memory-efficient per-hex training with fixed recurrent state; replaces growing KV cache; enables longer horizons on RTX A1000 6GB",
+      "integration_points": [
+        "Per-hex head maintains own Tensor Memory state (64 independent voxel grids)",
+        "Training step: write current hex state → update ConvLSTM → read next hex prediction",
+        "KV cache replaced by fixed-size memory; batch inference scales to arbitrary sequence length",
+        "Factorized 3D operator keeps compute tractable on limited VRAM"
+      ],
+      "artifacts": [
+        "kingwen_train_data/hybrid_kimi_k2_config.json",
+        "kingwen_training.py",
+        "kingwen_train_data/tokenize_for_megatron.py"
+      ]
+    },
+    {
+      "program": "rsmv-upstream + POG2",
+      "role": "3D spatial memory for cache topology; loc/item/npc relationships written to voxel grid; persistent state across game ticks",
+      "integration_points": [
+        "Cache topology encoded as 3D voxel grid (map x, y, layer)",
+        "Loc/item/npc writes to spatial coordinates; relationship queries via trilinear read",
+        "Portal detection via memory norm peaks at house/homestead coordinates",
+        "Game tick updates memory state; no need to re-parse cache each tick"
+      ],
+      "artifacts": [
+        "C:/Users/krist/Desktop/rsmv-upstream/src/parser/jsondecoders.ts",
+        "C:/Users/krist/.gemini/antigravity/scratch/pog2/src/limbs/"
+      ]
+    },
+    {
+      "program": "Cinder",
+      "role": "Frontend state management with fixed-size persistent memory; dashboard/world state without growing React state",
+      "integration_points": [
+        "Zustand store backed by Tensor Memory instead of growing JS objects",
+        "64 hexagram UI states + 8 phase transitions stored in 3D voxel grid",
+        "Read/write via coordinate hooks; gated residual fusion into React components"
+      ],
+      "artifacts": [
+        "C:/Users/krist/Desktop/cinder/src/renderer/src/state/ui.ts",
+        "C:/Users/krist/Desktop/cinder/src/renderer/src/features/graph/"
+      ]
+    }
+  ],
+  "technical_alignment": {
+    "determinism": "Fully deterministic when coordinate predictor is frozen or hard-coded; matches King Wen zero-roll requirement",
+    "fixed_size": "State capacity decoupled from input length; 512-state King Wen expansion fits in 8×8×8×C voxel grid",
+    "spatial_bias": "3D voxel layout matches sovereign world topology (64 sectors × 6 yao pellets)",
+    "recurrent_dynamics": "ConvLSTM-style update matches emotional_engine.py phase transitions",
+    "continuous_coordinates": "Gaussian write/read aligns with Schauberger vortex continuous-field formulation",
+    "gated_fusion": "Learned γ gate matches porosity-based voice modulation threshold"
+  },
+  "implementation_priority": [
+    "Phase 1: King Wen voxel memory prototype (8×8×8 grid, 512 hex states)",
+    "Phase 2: OpenJarvis event broadcaster migration to Tensor Memory",
+    "Phase 3: Megatron per-hex training with fixed recurrent state",
+    "Phase 4: rsmv-upstream spatial cache indexing"
+  ],
+  "artifact_paths": [
+    "C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/DATASETS/kingwen_tensor_memory_voxel.json",
+    "C:/Users/krist/Desktop/OpenJarvis/src/openjarvis/core/tensor_memory.py",
+    "C:/Users/krist/Desktop/Megatron-LM-review/kingwen_train_data/tensor_memory_config.json"
+  ],
+  "wave_pulse_bit_field_mapping": {
+    "save_string_v21": "KW64_SAVE_STRING_V2.1::HEX{hid}|{binary}|{cat}|{act}|{agent_type}|{domain}|{element}|{spec}|{rs3}|{rsmv_id}|{blended_hex}|{chaos}|{whimsy}|{dark}|{coherence}|{vweight}|{dy_yang_yin}|{yao_dy}|{porosity}|{vmode}|{vtension}|ARM{arm_id}|{jkd_anchor}|{qfid}::...::SHA256[:8]",
+    "tensor_memory_encoding": {
+      "voxel_grid": "8x8x8 = 512 slots = 64 hex x 8 phases",
+      "channel_width": "C = 24 save-string tokens per pellet -> 24-channel voxel feature",
+      "coordinate_mapping": "mu = (hex_id/8.0, phase/8.0, porosity) -> [-1,1]^3 continuous",
+      "write_spread": "sigma = f(yao_dy, vortex_tension, emotional_input) -> Gaussian radius per write",
+      "read_coordinate": "mu_read = projection of current consult vector into 3D via shared coordinate head",
+      "gate_gamma": "gamma = f(phase_temporal, trajectory, agree_temporal) -> suppress memory when not useful"
+    },
+    "inversion_pair_encoding": {
+      "pattern": "Inversion pairs share mirrored coordinates: (x,y,z) <-> (1-x,1-y,1-z) or (x,y,1-z)",
+      "pairs_count": "28 inversion pairs + 6 complementary pairs",
+      "read_write_flow": "Write to hex A reads from hex A' via coordinate mirror; in/out is natural"
+    },
+    "domain_projection": {
+      "shared_memory": "All 64 hexes write to same 8x8x8 grid; no per-hex separate memory",
+      "domain_read_heads": "3D/text/agentic/video/audio/code are learned projections W_out^domain from voxel channels to token dim",
+      "subdomain_split": "32-domain split = 2 hexes per subdomain via inversion pairing; each subdomain has own projection head"
+    }
+  },
+  "implementation_sequence": [
+    "1. Define voxel grid schema: 8x8x8x24, dtype float32, deterministic coordinate mapping",
+    "2. Implement Gaussian write: content otimes exp(-||G-mu||^2/(2*sigma^2+epsilon)) with sigma from yao_dy + emotional_input",
+    "3. Implement ConvLSTM update: factorized 3D DW convs + pointwise -> 4 gates -> (ht+1, ct+1)",
+    "4. Implement trilinear read: GridSample(ht, mu_read) -> W_out -> gated residual fusion",
+    "5. Wire collapse_full_128() to write-through on first call, read-on-miss on subsequent calls",
+    "6. Batch refill: new input writes new volume; ConvLSTM blends; no full recompute unless gate gamma opens",
+    "7. Verification: py_compile + deterministic replay (same input -> same voxel state) + 512-slot occupancy check"
+  ]
+}

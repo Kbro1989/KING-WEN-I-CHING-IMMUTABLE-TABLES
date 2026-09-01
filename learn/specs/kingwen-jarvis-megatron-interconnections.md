@@ -81,11 +81,11 @@ Scope: read-only audit of canonical live surfaces from immutable tables, OpenJar
   - **Frequencies**: Derived from spatial fundamental frequency $f_0(x,y,z) = 108.0 \cdot (1 + 0.40\tilde{r} + 0.25\tilde{y} + 0.15\sin(3\theta + \pi\tilde{y}))$.
   - **Orbit Mechanics**: Orbital radii $6.0 + 2.2 \cdot \ell$, orbital speeds $0.5 + (\ell + 1) \cdot 0.25 \cdot (1 + \text{vortex\_tension})$.
 
-## GibberLink Acoustic Inter-Agent Protocol
-- **Specification**: [`docs/GIBBERLINK_ACOUSTIC_PROTOCOL.md`](file:///c:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/docs/GIBBERLINK_ACOUSTIC_PROTOCOL.md).
+## King Wen Link Acoustic Inter-Agent Protocol
+- **Specification**: [`docs/KING_WEN_LINK_ACOUSTIC_PROTOCOL.md`](file:///c:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/docs/KING_WEN_LINK_ACOUSTIC_PROTOCOL.md).
 - **Encoding**: Converts 6-yao line sound pellets and ternary states into 120ms FSK acoustic wave packet frames.
 - **Medium**: Operates over the continuous Schauberger centripetal vortex ground field for zero-latency machine-to-machine peer synchronization.
-- **Jarvis DSP Integration**: OpenJarvis audio DSP (`src/openjarvis/cli/audio_dsp.py`) and worker TTS (`_oracle_speak.py`) decode and emit GibberLink wave packet frames.
+- **Jarvis DSP Integration**: OpenJarvis audio DSP (`src/openjarvis/cli/audio_dsp.py`) and worker TTS (`_oracle_speak.py`) decode and emit King Wen Link wave packet frames.
 
 ## Known gaps / exact targets
 1. Consensus lock in `emotional_engine.py:_compute_consensus_from_resolved()` — identical output across `emotional_input=0..100`; variance source is in `_tau_for_resolved()` / line-state sampling, not `expand_server.py` serialization
