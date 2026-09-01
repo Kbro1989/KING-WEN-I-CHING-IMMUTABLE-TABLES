@@ -1,0 +1,83 @@
+{
+  "schema_version": "1.0.0",
+  "memory_name": "kingwen_tensor_memory",
+  "grid": {
+    "D": 8,
+    "H": 8,
+    "W": 8,
+    "C": 24,
+    "total_slots": 512,
+    "slot_mapping": "64 hexagrams x 8 phases = 512 deterministic slots"
+  },
+  "coordinate_system": {
+    "range": "[-1, 1]^3",
+    "x_axis": "hexagram_id / 8.0",
+    "y_axis": "phase_id / 8.0",
+    "z_axis": "porosity_normalized",
+    "inversion_mirror": "(1-x, 1-y, 1-z)"
+  },
+  "channel_layout": [
+    {"index": 0, "field": "hex_id", "bits": 9, "range": "1-64"},
+    {"index": 1, "field": "binary", "bits": 6, "range": "0-63"},
+    {"index": 2, "field": "category", "bits": 3, "range": "0-7"},
+    {"index": 3, "field": "action", "bits": 3, "range": "0-7"},
+    {"index": 4, "field": "agent_type", "bits": 2, "range": "0-3"},
+    {"index": 5, "field": "domain", "bits": 4, "range": "0-15"},
+    {"index": 6, "field": "element", "bits": 3, "range": "0-7"},
+    {"index": 7, "field": "specialty", "bits": 4, "range": "0-15"},
+    {"index": 8, "field": "rs3_entity", "bits": 16, "range": "0-65535"},
+    {"index": 9, "field": "rsmv_id", "bits": 16, "range": "0-65535"},
+    {"index": 10, "field": "blended_hex", "bits": 7, "range": "1-64"},
+    {"index": 11, "field": "chaos", "bits": 8, "range": "0-255"},
+    {"index": 12, "field": "whimsy", "bits": 8, "range": "0-255"},
+    {"index": 13, "field": "darkTone", "bits": 8, "range": "0-255"},
+    {"index": 14, "field": "coherence", "bits": 8, "range": "0-255"},
+    {"index": 15, "field": "voiceWeight", "bits": 8, "range": "0-255"},
+    {"index": 16, "field": "dy_yang_yin", "bits": 8, "range": "signed ternary"},
+    {"index": 17, "field": "yao_dy", "bits": 8, "range": "signed ternary"},
+    {"index": 18, "field": "porosity", "bits": 8, "range": "0-255"},
+    {"index": 19, "field": "voice_mode", "bits": 4, "range": "0-15"},
+    {"index": 20, "field": "vortex_tension", "bits": 8, "range": "0-255"},
+    {"index": 21, "field": "arm_id", "bits": 16, "range": "0-65535"},
+    {"index": 22, "field": "jkd_anchor", "bits": 16, "range": "0-65535"},
+    {"index": 23, "field": "state_fidelity", "bits": 8, "range": "0-255"}
+  ],
+  "write_spread": {
+    "base_sigma": 0.12,
+    "sigma_scale": 0.5,
+    "min_sigma": 0.05,
+    "max_sigma": 0.5,
+    "formula": "sigma = base_sigma + sigma_scale * softplus(W_sigma * x_write + b_sigma)",
+    "inputs": ["yao_dy", "vortex_tension", "emotional_input"]
+  },
+  "gated_fusion": {
+    "gamma_init": -2.0,
+    "gamma_range": "(-inf, inf)",
+    "suppression_threshold": 0.0,
+    "no_harm_target": 0.5
+  },
+  "domain_read_heads": {
+    "count": 6,
+    "names": ["3D", "text", "agentic", "video", "audio", "code"],
+    "projection": "W_out^domain from 24-channel voxel to token dimension",
+    "subdomain_split": "32 subdomains via inversion pairs; 2 hexes per subdomain"
+  },
+  "inversion_pairs": {
+    "count": 28,
+    "complementary": 6,
+    "mirror_transform": "(1-x, 1-y, 1-z)",
+    "read_write_flow": "Write to hex A, read from hex A' via coordinate mirror"
+  },
+  "determinism": {
+    "coordinate_predictor": "hard-coded: mu = (hex_id/8.0, phase/8.0, porosity)",
+    "no_random": true,
+    "no_learned_weights": true,
+    "reproducibility": "identical input -> identical voxel state"
+  },
+  "verification": {
+    "py_compile": "tensor_memory.py",
+    "deterministic_replay": "same consult input -> same voxel hash",
+    "occupancy_check": "512 slots all reachable, no collisions",
+    "gate_suppression": "no-harm input -> gamma near 0.5"
+  }
+}

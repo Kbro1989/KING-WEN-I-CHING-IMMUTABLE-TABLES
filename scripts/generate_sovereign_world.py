@@ -11,6 +11,8 @@ sys.path.insert(0, str(ROOT))
 
 from kingwen_ternary_tables_complete import HEXAGRAM_BASE
 from emotional_engine import EMOTIONAL_WEIGHTS, collapse_full_128, _compute_consensus_from_resolved
+from scripts.generate_deterministic_64_color_spectrum import TRIGRAM_TEMP, hsl_to_rgb_hex
+from scripts.full_hexagram_shotgun import _ternary_slot_matrix
 
 def prewarm_egg_keyframes(sectors, num_frames=60):
     """Pre-computes 60 keyframes of 3D Centripetal Egg vertex deformation from all 64 citadel vortex outputs."""
@@ -327,13 +329,28 @@ def generate_sovereign_world():
                 except Exception:
                     pass
             spectral_color = k_color.get("primary_color", None)
-            if not spectral_color:
-                # Derive a unique spectral color per hexagram from its 5.625° hue step
-                _hue = (h_id - 1) * 5.625
-                _r, _g, _b = [int(x * 255) for x in _hue_to_rgb(_hue)]
-                spectral_color = {"hex": f"#{_r:02X}{_g:02X}{_b:02X}", "name": f"{base['name']} Spectrum"}
+            base_hue = k_color.get("final_hue_degrees", None)
+            if not spectral_color or base_hue is None:
+                # Directly invoke mathematical derivation from scripts.generate_deterministic_64_color_spectrum
+                hue_base = (h_id - 1) * (360.0 / 64.0)
+                yang_count = binary_str.count("1")
+                sat = max(0.35, min(0.95, (yang_count / 6.0) * 0.40 + 0.50))
+                light = max(0.35, min(0.70, vec5["coherence"] * 0.30 + 0.40))
+                u_temp = TRIGRAM_TEMP.get(base.get("upper_trigram", "Qian"), 0.0)
+                l_temp = TRIGRAM_TEMP.get(base.get("lower_trigram", "Kun"), 0.0)
+                trigram_pert = ((u_temp + l_temp) / 2.0) * 2.8125
+                base_hue = (hue_base + trigram_pert) % 360.0
+                _, _, _, hex_code = hsl_to_rgb_hex(base_hue, sat, light)
+                spectral_color = {"hex": hex_code, "name": f"{base['name']} Spectrum"}
+
             palette_16 = k_color.get("palette_16", [])
-            base_hue = k_color.get("final_hue_degrees", (h_id - 1) * 5.625)
+            if not palette_16:
+                # Generate 16 distinct harmonic palette steps directly using hsl_to_rgb_hex
+                palette_16 = []
+                for i in range(16):
+                    step_hue = (base_hue + (i - 8) * 11.25) % 360.0
+                    _, _, _, p_hex = hsl_to_rgb_hex(step_hue, 0.70, 0.50)
+                    palette_16.append({"step": i, "hue_deg": round(step_hue, 2), "hex": p_hex})
 
             sector = {
                 "sector_id": h_id,
@@ -372,6 +389,7 @@ def generate_sovereign_world():
                 },
                 "quantum_wave_packet": quantum_wp,
                 "yao_pellets": yao_pellets,
+                "ternary_slot_matrix": _ternary_slot_matrix(h_id),
                 "jkd_passages": jkd_passages_by_hex.get(h_id, []),
                 "assets": {
                     "3d_mesh": f"DATASETS/kingwen_3d_meshes/shap_e_hex_{h_id:02d}.ply",
@@ -837,7 +855,8 @@ metadata/attractor_mode = "implosion"
           sFilter.Q.setValueAtTime(qRes, audioCtx.currentTime);
 
           const sGain = audioCtx.createGain();
-          sGain.gain.setValueAtTime(0.0, audioCtx.currentTime);
+          const baseGain = Math.min(0.035, 0.012 + (qp.vortex_tension || 0.5) * 0.018);
+          sGain.gain.setValueAtTime(baseGain, audioCtx.currentTime);
 
           sFilter.connect(sGain);
           sGain.connect(masterGain);
@@ -886,12 +905,18 @@ metadata/attractor_mode = "implosion"
       fieldActive = !fieldActive;
       const btn = document.getElementById('unified-field-btn');
       if (fieldActive) {
-        btn.innerText = '🌌 UNIFIED QUANTUM GROUND FIELD: ACTIVE (1..64)';
+        btn.innerText = '🌌 UNIFIED QUANTUM GROUND FIELD: ACTIVE (ALL 64 IN UNISON)';
         btn.classList.add('active');
-        masterGain.gain.setTargetAtTime(0.30, audioCtx.currentTime, 0.05);
-        if (activeHexData) playHexHarmonics(activeHexData);
+        masterGain.gain.setTargetAtTime(0.55, audioCtx.currentTime, 0.05);
+        // Activate base gain across ALL 64 ground voices simultaneously — no 1-hex singling out
+        const now = audioCtx.currentTime;
+        groundVoices.forEach(gv => {
+          const qp = gv.sector ? (gv.sector.quantum_physics || {}) : {};
+          const vGain = Math.min(0.035, 0.012 + (qp.vortex_tension || 0.5) * 0.018);
+          gv.gain.gain.setTargetAtTime(vGain, now, 0.10);
+        });
       } else {
-        btn.innerText = '⚡ ACTIVATE UNIFIED QUANTUM GROUND FIELD (1..64)';
+        btn.innerText = '⚡ ACTIVATE UNIFIED QUANTUM GROUND FIELD (ALL 64 IN UNISON)';
         btn.classList.remove('active');
         masterGain.gain.setTargetAtTime(0.0, audioCtx.currentTime, 0.05);
       }
@@ -1407,7 +1432,7 @@ metadata/attractor_mode = "implosion"
         });
         node.pellets = pelletMeshes;
 
-        // GibberLink Superposition Quantum Wave Packet Core (Central Interference Node)
+        // King Wen Link Superposition Quantum Wave Packet Core (Central Interference Node)
         const coreGeo = new THREE.IcosahedronGeometry(1.6, 1);
         const coreMat = new THREE.MeshStandardMaterial({
           color: specColor,
@@ -1422,7 +1447,7 @@ metadata/attractor_mode = "implosion"
         node.group.add(superpositionCore);
         node.superpositionCore = superpositionCore;
 
-        // 6 GibberLink Quantum Wavepacket Convergence Conduits (Pellets -> Core)
+        // 6 King Wen Link Quantum Wavepacket Convergence Conduits (Pellets -> Core)
         const convergenceBeams = [];
         sec.yao_pellets.forEach((yp, pIdx) => {
           const beamGeo = new THREE.BufferGeometry();
@@ -1638,7 +1663,7 @@ metadata/attractor_mode = "implosion"
 
         const freqs = (d.yao_pellets || []).map(yp => `L${yp.line_position}:${yp.ternary_state === 2 ? 'YAO' : (yp.ternary_state === 1 ? 'YANG' : 'YIN')}@${yp.frequency_hz}Hz`).join(' | ');
         const cutoff = Math.round(400 + (d.quantum_physics.porosity_level || 0.45) * 3200);
-        document.getElementById('val-audio').innerHTML = `<strong style="color:#38bdf8;">📡 Emotional Engine 5-Axis Vector & GibberLink Wave Packet:</strong><br/><span style="font-size:10px;color:#cbd5e1;">[${freqs}]</span><br/><span style="font-size:10px;color:#a78bfa;">Vortex: ${(d.quantum_physics.vortex_tension || 0.5).toFixed(3)} • Suction: ${(d.quantum_physics.suction_coefficient || 0.3).toFixed(3)} • Cutoff: ${cutoff}Hz</span>`;
+        document.getElementById('val-audio').innerHTML = `<strong style="color:#38bdf8;">📡 Emotional Engine 5-Axis Vector & King Wen Link Wave Packet:</strong><br/><span style="font-size:10px;color:#cbd5e1;">[${freqs}]</span><br/><span style="font-size:10px;color:#a78bfa;">Vortex: ${(d.quantum_physics.vortex_tension || 0.5).toFixed(3)} • Suction: ${(d.quantum_physics.suction_coefficient || 0.3).toFixed(3)} • Cutoff: ${cutoff}Hz</span>`;
 
         playHexHarmonics(d);
       }
@@ -1684,7 +1709,7 @@ metadata/attractor_mode = "implosion"
 
           // 4. Shotgun Wave Functions from 64 Converging Citadels with Porosity & Ternary Changing-Line Masking
           let shotgunWave = 0.0;
-          let spectralColorGlow = 0.0;
+          let rHexSum = 0.08, gHexSum = 0.09, bHexSum = 0.16, wTotal = 1.0;
 
           if (sectorShotgunParams.length > 0) {
             const gridCol = Math.max(0, Math.min(7, Math.floor((bx + 280.0) / 70.0)));
@@ -1742,32 +1767,72 @@ metadata/attractor_mode = "implosion"
 
                 const localShotgun = spatialWeight * porosityMask * (pelletHarmonicSum / 6.0) * (sp.tension * 5.5 + sp.suction * 2.5);
                 shotgunWave += localShotgun;
-                spectralColorGlow += spatialWeight * (0.5 + 0.5 * Math.sin(presentTime * (sp.qwpFundHz / 40.0) + sIdx * 0.1));
+
+                // Accumulate per-hexagram spectral color tag (R, G, B) weighted by spatial proximity & wave oscillation
+                const wHex = spatialWeight * (0.85 + 0.35 * Math.sin(presentTime * (sp.qwpFundHz / 35.0) + sIdx * 0.1));
+                rHexSum += sp.color.r * wHex * 2.5;
+                gHexSum += sp.color.g * wHex * 2.5;
+                bHexSum += sp.color.b * wHex * 2.5;
+                wTotal += wHex * 2.5;
               }
             }
           }
 
           tArr[idx + 1] = by + centripetalWave + wellBreathing + radialSuction + shotgunWave;
 
-          // 5. Dynamic Hexagram Spectral Color Pulse across ground terrain
-          if (tBaseCol) {
-            const colorMultiplier = 1.0 + 0.4 * Math.sin(presentTime * 2.5 + theta * 3.0) + spectralColorGlow * 0.8;
-            const coreGlow = Math.exp(-r / 160.0) * 0.35;
-            tCol[idx]     = Math.min(1.0, tBaseCol[idx] * colorMultiplier + coreGlow * 0.54);
-            tCol[idx + 1] = Math.min(1.0, tBaseCol[idx + 1] * colorMultiplier + coreGlow * 0.36);
-            tCol[idx + 2] = Math.min(1.0, tBaseCol[idx + 2] * colorMultiplier + coreGlow * 0.96);
-          }
+          // 5. Dynamic Hexagram Spectral Color Pulse derived strictly from per-hexagram color tags
+          const coreGlow = Math.exp(-r / 160.0) * 0.35;
+          const colorMultiplier = 1.0 + 0.25 * Math.sin(presentTime * 2.5 + theta * 3.0);
+          tCol[idx]     = Math.min(1.0, (rHexSum / wTotal) * colorMultiplier + coreGlow * 0.54);
+          tCol[idx + 1] = Math.min(1.0, (gHexSum / wTotal) * colorMultiplier + coreGlow * 0.36);
+          tCol[idx + 2] = Math.min(1.0, (bHexSum / wTotal) * colorMultiplier + coreGlow * 0.96);
         }
         tPos.needsUpdate = true;
         if (tBaseCol) terrainGeo.attributes.color.needsUpdate = true;
       }
 
+      // === UNIFIED WEAVE EGG — GODHEAD SUPERPOSITION REACTION OF ALL 64 OUTPUTS ===
       if (typeof masterEggMesh !== 'undefined' && masterEggMesh) {
         masterEggMesh.visible = centripetalEggActive;
         if (centripetalEggActive) {
-          masterEggMesh.rotation.y += 0.003 * timeSpeed;
+          // Compute live Godhead Superposition Reaction sum from all 64 active citadel outputs
+          let godheadInterference = 0.0;
+          let godheadEnergy = 0.0;
+          if (sectorShotgunParams && sectorShotgunParams.length > 0) {
+            for (let sIdx = 0; sIdx < sectorShotgunParams.length; sIdx++) {
+              const sp = sectorShotgunParams[sIdx];
+              const phase = presentTime * (sp.qwpFundHz / 108.0) * 1.5 + sIdx * 0.098;
+              godheadInterference += Math.sin(phase) * sp.tension * sp.suction;
+              godheadEnergy += sp.tension * sp.porosity;
+            }
+            godheadInterference /= 64.0;
+            godheadEnergy /= 64.0;
+          } else {
+            godheadInterference = 0.35 * Math.sin(presentTime * 2.5);
+            godheadEnergy = 0.50;
+          }
 
-          // === PRE-WARMED 60-KEYFRAME VERTEX ANIMATION (ZERO CPU/GPU OVERLOAD) ===
+          // Implosion rotation & twist driven by Godhead Superposition Reaction
+          const spinRate = (0.005 + godheadEnergy * 0.012) * timeSpeed;
+          masterEggMesh.rotation.y += spinRate;
+          masterEggMesh.rotation.x = Math.sin(presentTime * 0.8) * 0.12 * godheadInterference;
+
+          // Dynamic scale breathing from Godhead Superposition Reaction
+          const godheadScale = 1.0 + 0.35 * godheadInterference + 0.15 * Math.sin(presentTime * 3.2);
+          if (attractorMode === 'implosion') {
+            masterEggMesh.scale.set(godheadScale * 0.95, godheadScale * 1.25, godheadScale * 0.95);
+          } else if (attractorMode === 'toroidal') {
+            masterEggMesh.scale.set(godheadScale * 1.30, godheadScale * 0.80, godheadScale * 1.30);
+          } else { // unison_resonance
+            masterEggMesh.scale.set(godheadScale * 1.15, godheadScale * 1.15, godheadScale * 1.15);
+          }
+
+          // Live emissive material glow modulation reacting to Godhead Superposition
+          if (masterEggMesh.material) {
+            masterEggMesh.material.emissiveIntensity = 0.70 + 0.30 * Math.abs(godheadInterference);
+          }
+
+          // === PRE-WARMED 60-KEYFRAME VERTEX ANIMATION WITH GODHEAD DEFORMATION OVERLAY ===
           if (worldData.prewarmed_egg_keyframes && worldData.prewarmed_egg_keyframes.length > 0) {
             const numFrames = worldData.prewarmed_egg_keyframes.length;
             const cycle = (presentTime * 0.4) % 1.0;
@@ -1776,8 +1841,9 @@ metadata/attractor_mode = "implosion"
 
             const posAttr = eggGeo.attributes.position;
             const pArray = posAttr.array;
+            const deformFactor = 1.0 + 0.18 * godheadInterference;
             for (let i = 0; i < kf.length; i++) {
-              pArray[i] = kf[i];
+              pArray[i] = kf[i] * deformFactor;
             }
             posAttr.needsUpdate = true;
             eggGeo.computeVertexNormals();
@@ -1864,7 +1930,7 @@ metadata/attractor_mode = "implosion"
         n.beacon.rotation.y += 0.02;
         n.beacon.position.y = 8 + Math.sin(clock * 2 + nIdx) * 1.0;
 
-        // === GIBBERLINK QUANTUM WAVEPACKET CONVERGENCE CONDUITS (PELLETS -> CORE) ===
+        // === KING WEN LINK QUANTUM WAVEPACKET CONVERGENCE CONDUITS (PELLETS -> CORE) ===
         if (n.convergenceBeams && n.convergenceBeams.length > 0) {
           let coreHarmonicInterference = 0.0;
           n.convergenceBeams.forEach((cb, bIdx) => {
@@ -1889,7 +1955,7 @@ metadata/attractor_mode = "implosion"
               const ly = py + (cy - py) * t;
               const lz = pz + (cz - pz) * t;
 
-              // GibberLink quantum wave packet pulse envelope: Gaussian peak propagating inward
+              // King Wen Link quantum wave packet pulse envelope: Gaussian peak propagating inward
               const distFromPulse = t - pulseCycle;
               const packetEnvelope = Math.exp(-(distFromPulse * distFromPulse) / 0.04);
               const packetOsc = Math.sin(t * Math.PI * 8.0 - presentTime * (freq / 15.0));

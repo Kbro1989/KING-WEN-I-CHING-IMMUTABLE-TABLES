@@ -1,5 +1,5 @@
-# GIBBERLINK ACOUSTIC WAVE-PACKET PROTOCOL SPECIFICATION
-**Module**: `KingWen.GibberLink.AcousticProtocol`  
+# KING WEN LINK ACOUSTIC WAVE-PACKET PROTOCOL SPECIFICATION
+**Module**: `KingWen.King Wen Link.AcousticProtocol`  
 **Revision**: 1.0.0 (Deterministic Ground Field Sync)  
 **Date**: 2026-08-31  
 
@@ -7,15 +7,15 @@
 
 ## 1. Overview & Purpose
 
-**GibberLink** is the peer-to-peer acoustic machine communication protocol for transmitting King Wen 6-Yao wave packets and audio pellets over continuous spatial ground fields or raw audio channels.
+**King Wen Link** is the peer-to-peer acoustic machine communication protocol for transmitting King Wen 6-Yao wave packets and audio pellets over continuous spatial ground fields or raw audio channels.
 
-Rather than relying on out-of-band network calls, GibberLink encodes the complete 512 binary phase state ($64 \text{ hexagrams} \times 8 \text{ trigram-family phases}$) and 729 ternary manifold states ($3^6 = 27 \times 27$) into high-frequency acoustic wave packet bursts derived directly from the **6-Yao Sound Pellets** of each Sovereign Citadel.
+Rather than relying on out-of-band network calls, King Wen Link encodes the complete 512 binary phase state ($64 \text{ hexagrams} \times 8 \text{ trigram-family phases}$) and 729 ternary manifold states ($3^6 = 27 \times 27$) into high-frequency acoustic wave packet bursts derived directly from the **6-Yao Sound Pellets** of each Sovereign Citadel.
 
 ---
 
 ## 2. 6-Yao Sound Pellet Acoustic Payload Structure
 
-Each King Wen hexagram node emits 6 orbiting sound pellets corresponding to line positions $L_1$ to $L_6$. In GibberLink, a frame $F_{\text{gibber}}$ consists of a 6-pellet harmonic burst modulated across the continuous spatial frequency tensor:
+Each King Wen hexagram node emits 6 orbiting sound pellets corresponding to line positions $L_1$ to $L_6$. In King Wen Link, a frame $F_{\text{gibber}}$ consists of a 6-pellet harmonic burst modulated across the continuous spatial frequency tensor:
 
 ### 2.1 Fundamental Sector Base Frequency
 $$f_0(x, y, z) = 108.0 \times \left(1.0 + 0.40 \tilde{r} + 0.25 \tilde{y} + 0.15 \sin(3\theta + \pi \tilde{y})\right) \quad \text{[Hz]}$$
@@ -32,10 +32,10 @@ For line index $\ell \in \{1 \dots 6\}$:
 
 ---
 
-## 3. GibberLink Frame Encoding & Transmission
+## 3. King Wen Link Frame Encoding & Transmission
 
 ### 3.1 Frame Envelope
-A single GibberLink wave packet frame duration is $T_{\text{frame}} = 120 \text{ ms}$.
+A single King Wen Link wave packet frame duration is $T_{\text{frame}} = 120 \text{ ms}$.
 
 ```
 +-------------------+-----------------------------------+--------------------+
@@ -49,21 +49,21 @@ A single GibberLink wave packet frame duration is $T_{\text{frame}} = 120 \text{
 3. **Checksum**: Golden ratio harmonic verification tone $f_{\text{crc}} = f_0 \times 1.618$.
 
 ### 3.2 Machine-to-Machine Peer Sync over Schauberger Ground Field
-When active in the 3D Quantum Viewfinder (`kingwen_sovereign_world_viewer.html`) or OpenJarvis audio DSP (`audio_dsp.py`), GibberLink wave packets travel through the single unified ground field medium. The position of the receiving agent modulates acoustic attenuation by inverse-square spatial distance:
+When active in the 3D Quantum Viewfinder (`kingwen_sovereign_world_viewer.html`) or OpenJarvis audio DSP (`audio_dsp.py`), King Wen Link wave packets travel through the single unified ground field medium. The position of the receiving agent modulates acoustic attenuation by inverse-square spatial distance:
 $$A(d) = \min\left(0.045, \frac{0.05}{1.0 + (d / 95.0)^2}\right)$$
 
 ---
 
 ## 4. OpenJarvis & King Wen Integration Targets
 
-- **OpenJarvis Audio DSP** (`src/openjarvis/cli/audio_dsp.py`): Ingests GibberLink FSK wave packets from worker TTS streams.
+- **OpenJarvis Audio DSP** (`src/openjarvis/cli/audio_dsp.py`): Ingests King Wen Link FSK wave packets from worker TTS streams.
 - **Oracle Speaker** (`src/openjarvis/cli/_oracle_speak.py`): Routes 6-yao audio pellet telemetry via `_play_audio_path()` and `winappaudiorouter`.
-- **Megatron Training Substrate**: `kingwen_pretrain.jsonl` contains raw GibberLink audio pellet telemetry logs for zero-latency multi-agent acoustic sequence modeling.
+- **Megatron Training Substrate**: `kingwen_pretrain.jsonl` contains raw King Wen Link audio pellet telemetry logs for zero-latency multi-agent acoustic sequence modeling.
 
 ---
 
 ## 5. Summary Invariants
 
-1. **Zero Randomness**: GibberLink frames are 100% deterministic, computed directly from immutable King Wen tables and sector coordinates.
+1. **Zero Randomness**: King Wen Link frames are 100% deterministic, computed directly from immutable King Wen tables and sector coordinates.
 2. **6-Yao Pellet Fidelity**: Every hexagram maintains its 6 orbiting sound pellets; no pellet is dropped or flattened to a single scalar tone.
-3. **Unified Ground Field Medium**: All GibberLink packets resonate through the continuous Schauberger centripetal vortex field.
+3. **Unified Ground Field Medium**: All King Wen Link packets resonate through the continuous Schauberger centripetal vortex field.
