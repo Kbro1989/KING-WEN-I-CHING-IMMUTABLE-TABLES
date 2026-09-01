@@ -1,5 +1,5 @@
 # King Wen Workspace Codebasemap
-Source of truth: `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES`
+Source of truth: `Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES`
 Canonical tables: `data/hexagram-registry.json`, `data/emotional-weights.json`, `data/temporal-reflections.json`
 
 ---
