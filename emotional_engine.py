@@ -982,112 +982,6 @@ def sample_resolve(
     }
 
 
-def collapse_full_128(emotional_input: int = 50, request_text: str = "") -> Dict[str, Any]:
-    """Full 64-hexagram expansion across all 8 phases.
-    
-    All hexagrams expand with maximum pooled states derived from
-    yin/yang/yao line states, trigram context, neighbor continuity,
-    and user intent. Pre-slider capture preserves full expansion.
-    """
-    expanded = [
-        expand_hexagram(h_id, request_text, phase_bits=0, emotional_input=0)
-        for h_id in range(1, 65)
-    ]
-    resolved = [
-        sample_resolve(h_id, phase_bits=p, request_text=request_text, emotional_input=emotional_input)
-        for h_id in range(1, 65)
-        for p in range(8)
-    ]
-    
-    consensus = _compute_consensus_from_resolved(resolved, emotional_input)
-    
-    expanded_hamiltonian_energy = []
-    for item in expanded:
-        expanded_vector = item.get("expanded_vector") or {}
-        vec = [float(expanded_vector.get(k, 0.0) or 0.0) for k in VEC_KEYS]
-        # Pre-slider: resolved == expanded, so q_dot = 0 and energy = -ℒ
-        expanded_hamiltonian_energy.append(
-            _hamiltonian_energy(vec, vec, item.get("line_balance", {}))
-        )
-
-    resolved_hamiltonian_energy = []
-    for item in resolved:
-        resolved_vector = item.get("resolved_vector") or {}
-        expanded_vector = item.get("expanded_vector") or {}
-        rv = [float(resolved_vector.get(k, 0.0) or 0.0) for k in VEC_KEYS]
-        ev = [float(expanded_vector.get(k, 0.0) or 0.0) for k in VEC_KEYS]
-        resolved_hamiltonian_energy.append(
-            _hamiltonian_energy(rv, ev, item.get("line_balance", {}))
-        )
-    
-    # Voice ensemble: summary of all 512 resolved states as simultaneous voices
-    # across past/present/future expansion. This is the voice field, not the prize.
-    temporal_groups = {}
-    for item in resolved:
-        phase_temporal = str(item.get("phase_temporal", "") or "")
-        temporal_groups.setdefault(phase_temporal, []).append(item)
-
-    dominant_voices = {}
-    for temporal, group in temporal_groups.items():
-        vec_sums = {k: 0.0 for k in VEC_KEYS}
-        for item in group:
-            rv = item.get("resolved_vector") or {}
-            for k in VEC_KEYS:
-                vec_sums[k] += float(rv.get(k, 0.0) or 0.0)
-        count = len(group)
-        if count:
-            for k in VEC_KEYS:
-                vec_sums[k] /= count
-        top_hex = sorted(
-            [(item.get("hexagram_id"), item.get("hexagram_symbols", {}).get("name", "")) for item in group],
-            key=lambda x: x[0] or 0
-        )[:5]
-        dominant_voices[temporal] = {
-            "count": count,
-            "vector": vec_sums,
-            "top_hexagrams": [{"hexagram_id": h, "name": n} for h, n in top_hex],
-        }
-
-    all_inject_sites = sorted(set(
-        (item.get("inject_site") or {}).get("primary_pool", "")
-        for item in resolved
-        if (item.get("inject_site") or {}).get("primary_pool")
-    ))
-
-    voice_ensemble = {
-        "total_voices": len(resolved),
-        "total_hexagrams": len(set(item.get("hexagram_id") for item in resolved if item.get("hexagram_id"))),
-        "temporal_voices": dominant_voices,
-        "inject_site_count": len(all_inject_sites),
-        "inject_sites": all_inject_sites,
-        "yao_vocabulary_coverage": len(set(
-            ls.get("yao_key")
-            for item in resolved
-            for ls in item.get("line_states", [])
-            if ls.get("yao_key")
-        )),
-    }
-
-    return {
-        "total_expanded": len(expanded),
-        "total_resolved": len(resolved),
-        "request_text": request_text,
-        "emotional_input": emotional_input,
-        "capture_point": "pre_slider",
-        "expanded": expanded,
-        "resolved": resolved,
-        "consensus": consensus,
-        "voice_ensemble": voice_ensemble,
-        "expanded_hamiltonian_energy": expanded_hamiltonian_energy,
-        "avg_expanded_hamiltonian_energy": sum(expanded_hamiltonian_energy) / max(1, len(expanded_hamiltonian_energy)),
-        "min_expanded_hamiltonian_energy": min(expanded_hamiltonian_energy) if expanded_hamiltonian_energy else 0.0,
-        "max_expanded_hamiltonian_energy": max(expanded_hamiltonian_energy) if expanded_hamiltonian_energy else 0.0,
-        "resolved_hamiltonian_energy": resolved_hamiltonian_energy,
-        "avg_resolved_hamiltonian_energy": sum(resolved_hamiltonian_energy) / max(1, len(resolved_hamiltonian_energy)),
-        "min_resolved_hamiltonian_energy": min(resolved_hamiltonian_energy) if resolved_hamiltonian_energy else 0.0,
-        "max_resolved_hamiltonian_energy": max(resolved_hamiltonian_energy) if resolved_hamiltonian_energy else 0.0,
-    }
-
 
 def capture_pre_slider(request_text: str = "") -> Dict[str, Any]:
     """Capture all expansion BEFORE slider modulation.
@@ -1095,7 +989,19 @@ def capture_pre_slider(request_text: str = "") -> Dict[str, Any]:
     Returns:
         dict with metadata plus full 64-hex expansion and 512 resolved states.
     """
-    result = collapse_full_128(emotional_input=0, request_text=request_text)
+    from full_hexagram_shotgun import shotgun_expand as _se
+    _shotgun_result = _se(request_text=request_text, emotional_input=0)
+    resolved = _shotgun_result.get("resolved", [])
+    _consensus = _compute_consensus_from_resolved(resolved, 0)
+    result = {"total_expanded": _shotgun_result.get("total_expanded", 0),
+              "total_resolved": _shotgun_result.get("total_resolved", 0),
+              "request_text": request_text,
+              "emotional_input": 0,
+              "capture_point": "pre_slider",
+              "expanded": _shotgun_result.get("expanded", []),
+              "resolved": resolved,
+              "consensus": _consensus,
+              "capture_metadata": {}}
     result["capture_metadata"] = {
         "request_text": request_text,
         "emotional_input": 0,

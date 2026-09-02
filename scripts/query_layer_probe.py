@@ -38,7 +38,7 @@ spec2.loader.exec_module(mod2)
 
 expand_hexagram = mod2.expand_hexagram
 sample_resolve = mod2.sample_resolve
-collapse_full_128 = mod2.collapse_full_128
+shotgun_expand = mod2.shotgun_expand  # alias for compatibility
 
 QUERIES = [
     "What is the optimal path forward for this session?",
@@ -61,6 +61,8 @@ def _vec_range(vec: dict) -> float:
 
 def analyze_hexagram_expansion(hid: int, request_text: str, emotional_input: int = 50) -> dict:
     """Expand one hexagram and return analysis metrics."""
+    # Full 512-state sweep: 64 hexagrams × 8 phases
+    # Full 512-state sweep: 64 hexagrams × 8 phases
     base = expand_hexagram(hid, request_text, phase_bits=0, emotional_input=emotional_input)
     resolved = sample_resolve(hid, phase_bits=0, request_text=request_text, emotional_input=emotional_input)
     

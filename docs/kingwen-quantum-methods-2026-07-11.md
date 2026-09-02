@@ -52,7 +52,7 @@ Date: 2026-07-11
 
 | Quantum Method | King Wen Usage Domain | Implementation |
 |---|---|---|
-| Baseline-stabilized iterative passes | `collapse_full_128()` / `superposition_capture.py` | `baseline_coherence`, `best_coherence`, `improving_passes` |
+| Baseline-stabilized iterative passes | `shotgun_expand()` / `superposition_capture.py` | `baseline_coherence`, `best_coherence`, `improving_passes` |
 | Self-guided adaptive selection | `kingwen_quantum_process.py` | next-pass query bias from top energy + coverage deficit |
 | Coherence trajectory | `kingwen_quantum_process.py` | coherence delta, trajectory array |
 | XOR-gate direct verification | `superposition_capture.py` / `kingwen_quantum_process.py` | coverage + spread gates before push |

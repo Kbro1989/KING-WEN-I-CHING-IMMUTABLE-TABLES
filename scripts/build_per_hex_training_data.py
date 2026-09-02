@@ -3,7 +3,7 @@
 Build per-hex training data for 64 specialized hexagram models.
 
 Source of truth:
-- collapse_full_128_output.json for expanded[]/inject_site/yao_vocabulary/expanded_vector
+- shotgun_expand() for expanded[]/inject_site/yao_vocabulary/expanded_vector
 - hexagram_coder_archetypes.csv for archetype metadata and opposition_pair annotations
 - hexagram_shotgun_matcher.py for paper-to-hex routing
 
@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional
 ROOT = Path(__file__).resolve().parent.parent
 TEXT_DIR = (Path.home() / "Desktop" / "zotero/learning-corpus/.text")
 OUT_DIR = ROOT / "output/per_hex_training"
-SHOTGUN = ROOT / "collapse_full_128_output.json"
+SHOTGUN = ROOT / "shotgun_expand_output.json"
 ARCHETYPES = ROOT / "output/hexagram_coder_archetypes.csv"
 
 VEC_KEYS = ["chaos", "whimsy", "darkTone", "coherence", "voiceWeight"]

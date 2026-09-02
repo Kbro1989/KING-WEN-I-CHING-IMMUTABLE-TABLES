@@ -65,10 +65,6 @@ def _pool_by_name(name: str) -> Tuple[float, float, float, float, float]:
     return _as_tuple5(vec)
 
 
-def _yao_vocabulary_map() -> Dict[str, str]:
-    return YAO_VOCABULARY[0]
-
-
 def _line_yao_key(ternary_state: int, temporal: str) -> str:
     if ternary_state == 0:
         if temporal == "past":
@@ -99,6 +95,12 @@ def _line_yao_key(ternary_state: int, temporal: str) -> str:
             return "stable_yao"
         return "old_yao"
     return "stable_yang" if ternary_state >= 1 else "stable_yin"
+
+
+def _yao_vocabulary_map() -> Dict[str, str]:
+    return YAO_VOCABULARY[0]
+
+
 
 
 PHASE_TEMPORAL_ORDER: Final[List[str]] = ["past", "present", "future"]
@@ -316,7 +318,6 @@ def sample_temporal_slider(hexagram_id: int, request_text: str = "") -> Dict[str
 
     temporal_consensus = _build_temporal_consensus(sampled)
     temporal_resolution = _resolve_temporal_meta(sampled)
-    temporal_resolution = _resolve_temporal_meta(sampled)
 
     return {
         "hexagram_id": hexagram_id,
@@ -377,7 +378,7 @@ def _build_temporal_consensus(sampled: Dict[str, Dict[str, Any]]) -> Dict[str, A
 
 def _temporal_agreement(sampled: Dict[str, Dict[str, Any]]) -> float:
     vectors = [tuple(sampled[t]["vector"][k] for k in VEC_KEYS) for t in PHASE_TEMPORAL_ORDER]
-    pairwise = []
+    pairwise: list[float] = []
     for i in range(len(vectors)):
         for j in range(i + 1, len(vectors)):
             pairwise.append(_vector_distance(vectors[i], vectors[j]))
@@ -480,14 +481,14 @@ def _run_temporal_slider_checklist(vec: Tuple[float, ...], temporal: str) -> Lis
     results: List[Dict[str, Any]] = []
     vec_map = dict(zip(VEC_KEYS, vec))
 
-    checks = [
+    checks: list[dict[str, Any]] = [
         {"axis": "chaos", "shift": 0.05, "expect_temporal": "present"},
         {"axis": "whimsy", "shift": 0.1, "expect_temporal": "future"},
         {"axis": "darkTone", "shift": 0.05, "expect_temporal": "past"},
         {"axis": "coherence", "shift": 0.05, "expect_temporal": "resolution"},
         {"axis": "voiceWeight", "shift": 0.05, "expect_temporal": "void"},
     ]
-    mix_checks = [
+    mix_checks: list[dict[str, Any]] = [
         {"axis": "pool_mix", "expect_temporal": ["dissolution", "crystallization"], "expected": "pool swap at dispersal/forming"},
         {"axis": "collapse", "expect_temporal": ["void"], "expected": "full 512 state collapse resets to origin"},
     ]
@@ -540,15 +541,15 @@ def _vector_distance(a: Tuple[float, ...], b: Tuple[float, ...]) -> float:
 
 
 def _global_hexagram_consensus(sampled: List[Dict[str, Any]]) -> Dict[str, Any]:
-    winners = [s["temporal_consensus"]["agree_temporal"] for s in sampled]
-    agreements = [s["temporal_consensus"]["agreement"] for s in sampled]
-    counts = {t: winners.count(t) for t in PHASE_TEMPORAL_ORDER}
+    winners: list[str] = [s["temporal_consensus"]["agree_temporal"] for s in sampled]
+    agreements: list[float] = [s["temporal_consensus"]["agreement"] for s in sampled]
+    counts: dict[str, int] = {t: winners.count(t) for t in PHASE_TEMPORAL_ORDER}
     return {
         "winner_counts": counts,
         "mean_agreement": sum(agreements) / len(agreements),
         "min_agreement": min(agreements),
         "max_agreement": max(agreements),
-        "dominant_temporal": max(counts, key=counts.get),
+        "dominant_temporal": max(counts.keys(), key=counts.get),
         "trajectory_distribution": dict(zip(PHASE_TEMPORAL_ORDER, [counts[t] / max(1, len(sampled)) for t in PHASE_TEMPORAL_ORDER])),
     }
 

@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
-from emotional_engine import collapse_full_128  # noqa: E402
+  # noqa: E402
 
 
 def describe(collapse):
@@ -40,7 +40,7 @@ def inject_summary(resolved):
 def rollout():
     rows = {}
     for value in [0, 10, 20, 30, 40, 50, 100]:
-        collapse = collapse_full_128(emotional_input=value)
+        collapse = shotgun_expand(emotional_input=value)
         rows[str(value)] = {
             "describe": describe(collapse),
             "top_hex": top_n(collapse.get("resolved", []), [1.0 / 512] * 512, 12),

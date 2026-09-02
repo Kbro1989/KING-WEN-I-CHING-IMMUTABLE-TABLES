@@ -13,7 +13,7 @@ REFLECTIONS_PATH = ROOT / "data" / "temporal-reflections.json"
 OUTPUT_PATH = ROOT / "scripts" / "hexagram_full_expansion.json"
 
 # Load base registry
-registry = json.loads(REGISTRY_PATH.read_text())
+registry = json.loads(REGISTRY_PATH.read_text(encoding='utf-8'))
 
 # Personality/codename mapping by hexagram_id
 PERSONALITIES = {
@@ -194,16 +194,16 @@ reflections = {}
 inject = {}
 
 try:
-    weights = json.loads(WEIGHTS_PATH.read_text())
+    weights = json.loads(WEIGHTS_PATH.read_text(encoding='utf-8'))
 except Exception:
     pass
 try:
-    reflections = json.loads(REFLECTIONS_PATH.read_text())
+    reflections = json.loads(REFLECTIONS_PATH.read_text(encoding='utf-8'))
 except Exception:
     pass
 try:
     if INJECT_PATH and INJECT_PATH.exists():
-        inject = json.loads(INJECT_PATH.read_text())
+        inject = json.loads(INJECT_PATH.read_text(encoding='utf-8'))
 except Exception:
     pass
 

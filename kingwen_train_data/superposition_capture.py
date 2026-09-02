@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 try:
-    from emotional_engine import collapse_full_128, _compute_consensus_from_resolved
+    from emotional_engine import _compute_consensus_from_resolved
+    from full_hexagram_shotgun import shotgun_expand
 except Exception as exc:  # pragma: no cover - runtime dependency guard
     raise RuntimeError(f"emotional_engine is required: {exc}")
 
@@ -134,7 +135,11 @@ def _anchors(resolved: List[Dict[str, Any]], limit: int = 5) -> List[Dict[str, A
 
 
 def capture_superposition(query: str, *, emotional_input: int = 50, record_math: bool = True) -> Dict[str, Any]:
-    result = collapse_full_128(emotional_input=emotional_input, request_text=query)
+    _shotgun_result = shotgun_expand(emotional_input=emotional_input, request_text=query)
+    resolved_list = _shotgun_result.get("resolved", [])
+    _consensus = _compute_consensus_from_resolved(resolved_list, emotional_input)
+    result = {"resolved": resolved_list, "expanded": _shotgun_result.get("expanded", []),
+              "consensus": _consensus}
     resolved = result.get("resolved", [])
     expanded = result.get("expanded", [])
     domain_signature = _domain_signature(query)

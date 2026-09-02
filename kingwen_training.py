@@ -7,7 +7,7 @@ and generates Megatron-compatible batch training data.
 
 WEIGHTS ARE NOT HARDCODED.
 - Base identity comes from immutable tables: id, name, trigrams, category, action, binary
-- Emotional vectors are pooled from live collapse_full_128(emotional_input) output
+- Emotional vectors are pooled from live shotgun_expand(emotional_input) output
 - Pooled mean/std computed across matching resolved states for each hexagram/phase
 - Intent enters via emotional_input, which changes the 512-state expansion
 - Domain-agnostic: same math works for wiki, scribunto, coordinates, weirdgloop
@@ -188,15 +188,15 @@ class MegatronTrainingRecord:
 class LivePoolEngine:
     """Computes emotional vectors from live 512-state expansion.
 
-    No hardcoded weights. All 5-axis vectors come from collapse_full_128()
+    No hardcoded weights. All 5-axis vectors come from shotgun_expand()
     resolved states, pooled by hexagram_id and phase.
     """
 
     def __init__(self, kingwen_root: Optional[Path] = None):
         self.kingwen_root = kingwen_root or Path(__file__).resolve().parent
         sys.path.insert(0, str(self.kingwen_root))
-        from emotional_engine import collapse_full_128  # noqa: E402
-        self._collapse = collapse_full_128
+          # noqa: E402
+        self._collapse = shotgun_expand
 
     def pool_all(self, emotional_input: float = 0.5) -> Dict[str, Any]:
         """Return pooled consensus from all 512 resolved states."""

@@ -10,7 +10,8 @@ ROOT = Path(r"c:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES")
 sys.path.insert(0, str(ROOT))
 
 from kingwen_ternary_tables_complete import HEXAGRAM_BASE
-from emotional_engine import EMOTIONAL_WEIGHTS, collapse_full_128, _compute_consensus_from_resolved
+from emotional_engine import EMOTIONAL_WEIGHTS, _compute_consensus_from_resolved
+from full_hexagram_shotgun import shotgun_expand
 from scripts.generate_deterministic_64_color_spectrum import TRIGRAM_TEMP, hsl_to_rgb_hex
 from scripts.full_hexagram_shotgun import _ternary_slot_matrix
 
@@ -409,10 +410,10 @@ def generate_sovereign_world():
     audio_wav_b64 = prewarm_unison_audio_wav_b64(sectors, duration_sec=4.0)
 
     # Compute 512 Resolved Phase States and Gaussian Consensus from emotional_engine.py
-    collapse_res = collapse_full_128(50.0)
-    resolved_512 = collapse_res.get("resolved", [])
-    consensus_info = collapse_res.get("consensus", {})
-    consensus_vec = consensus_info.get("consensus_vector", [0.2, 0.15, 0.15, 0.5, 0.6])
+    _shotgun_result = shotgun_expand(emotional_input=50.0, request_text="")
+    resolved_512 = _shotgun_result.get("resolved", [])
+    _consensus = _compute_consensus_from_resolved(resolved_512, 50.0)
+    consensus_vec = _consensus.get("consensus_vector", [0.2, 0.15, 0.15, 0.5, 0.6])
 
     # 3. Master World Topology Manifest
     world_topology = {

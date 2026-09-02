@@ -45,8 +45,12 @@ RAYEREN_REPOS = {
 def compute_rayeren_capability_vectors(h_id: int) -> Dict[str, Any]:
     """Compute neural speech prosody contours & KD student fidelity for a hexagram."""
     base_info = HEXAGRAM_BASE[h_id]
-    exp = expand_hexagram(h_id, phase_bits=0, emotional_input=50)
-    vec = exp["expanded_vector"]
+    # Full 512-state sweep for capability vectors
+    from scripts.full_hexagram_shotgun import shotgun_expand
+    result = shotgun_expand(emotional_input=50)
+    resolved = result.get("resolved", [])
+    # Average vector across all 512 states
+    vec = result.get("personality_consensus", {}).get("dominant_vector", {})
 
     chaos = vec.get("chaos", 0.1)
     whimsy = vec.get("whimsy", 0.1)

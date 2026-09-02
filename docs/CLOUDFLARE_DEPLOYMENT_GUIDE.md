@@ -68,7 +68,7 @@ To initiate a machine-to-machine King Wen Link acoustic wavepacket handshake via
 ```bash
 curl -X POST https://kingwen-sovereign-engine.pages.dev/api/kingwen-link \
   -H "Content-Type: application/json" \
-  -d '{"hexagram_id": 1, "phase_id": 1}'
+  -d '{"hexagram_id": 1, "phase_id": 1}'  # example: hexagram 1 of 64
 ```
 
 **Response**:

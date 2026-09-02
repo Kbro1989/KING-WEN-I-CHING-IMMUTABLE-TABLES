@@ -159,7 +159,7 @@ hermes log --skill kingwen-jspace --version 1.0.0 --status deployed
 
 ### Data Refresh
 The widget embeds data statically. To refresh with new resolved states:
-1. Regenerate `kingwen-512-full.json` via `collapse_full_128()`
+1. Regenerate `kingwen-512-full.json` via `shotgun_expand()`
 2. Re-run the widget generator (Python script replaces `KINGWEN_DATA` constant)
 3. No runtime API calls — deterministic, offline-capable, Ghost Limb ready
 

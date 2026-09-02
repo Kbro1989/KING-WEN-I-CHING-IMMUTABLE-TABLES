@@ -11,14 +11,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
+from scripts.full_hexagram_shotgun import shotgun_expand
 
-from emotional_engine import collapse_full_128  # noqa: E402
 
 
 def main() -> int:
-    first = collapse_full_128(emotional_input=42)
-    second = collapse_full_128(emotional_input=42)
-    assert first == second, "collapse_full_128 is not deterministic"
+    first = shotgun_expand(emotional_input=42)
+    second = shotgun_expand(emotional_input=42)
+    assert first == second, "shotgun_expand is not deterministic"
     print("deterministic_replay: PASS")
     return 0
 

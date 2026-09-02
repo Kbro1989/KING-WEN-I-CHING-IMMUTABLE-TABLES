@@ -19,7 +19,7 @@ Date: 2026-07-11
 | Broadcast hub | "J-lens vectors compose with the model's weights, both upstream and downstream, more broadly than other representational vectors." | Headmodel anchor + domain slot routing | `headmodel` field + slot-eligibility binding |
 | Jacobian linearized effect | `J(a; v) ≈ E_{contexts}[ ∂y_v / ∂a ] · Δa` | Hamiltonian energy slope × Gaussian-smoothed state delta | `_hamiltonian_energy()` + `_gaussian_kernel()` |
 | Layer correction | J-lens corrects for representational changes across layers | Phase-temporal shift as layer-proxy | `phase_temporal` + `PHASE_INFO` modulation |
-| Sparse subframe | J-space is a sparse subframe of activation space | 64-hex shotgun subset of full 512 resolved space | `expand_hexagram()` 64-expanded / `collapse_full_128()` 512-resolved |
+| Sparse subframe | J-space is a sparse subframe of activation space | 64-hex shotgun subset of full 512 resolved space | `expand_hexagram()` 64-expanded / `shotgun_expand()` 512-resolved |
 | Causal swap | Swapping J-lens vector changes output | Pass-query bias replacing previous selection | `run_quantum_process()` pass-indexed query mutation |
 
 ## Binding Method: Injection-Site → J-Space Domain Layer
@@ -34,7 +34,7 @@ Date: 2026-07-11
 - This is the discrete analog of `∂y_v / ∂a` — how much this state pushes toward a domain outcome.
 
 ### Step 3: Corpus averaging
-- Baseline is the full 512 resolved-state distribution from `collapse_full_128()`.
+- Baseline is the full 512 resolved-state distribution from `shotgun_expand()`.
 - Average the Hamiltonian energy slope across all 512 states to get the baseline `E[∂y_v/∂a]`.
 
 ### Step 4: Gaussian smoothing

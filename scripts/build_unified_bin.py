@@ -20,7 +20,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # Dumps to analyze
 DUMP_PATTERNS = [
-    "collapse_full_128_output.json",
+    "shotgun_expand_output.json",
     "DATASETS/kingwen_save_strings.csv",
     "DATASETS/kingwen_oracle_master.json",
     "DATASETS/kingwen_consultation_record.json",

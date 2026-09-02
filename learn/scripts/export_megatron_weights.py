@@ -19,7 +19,7 @@ EXPORT_DIR = ROOT / "learn" / "exports"
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
 sys.path.insert(0, str(ROOT))
 
-from emotional_engine import VEC_KEYS, collapse_full_128
+from emotional_engine import VEC_KEYS
 
 
 def _write_jsonl(path: Path, records):
@@ -36,7 +36,7 @@ def _write_csv(path: Path, rows, fieldnames):
 
 
 def export(emotional_input: int = 50):
-    collapse = collapse_full_128(emotional_input=emotional_input)
+    collapse = shotgun_expand(emotional_input=emotional_input)
     expanded = collapse["expanded"]
     resolved = collapse["resolved"]
     consensus = collapse["consensus"]

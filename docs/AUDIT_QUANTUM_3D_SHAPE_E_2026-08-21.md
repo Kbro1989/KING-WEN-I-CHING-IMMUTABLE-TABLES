@@ -29,9 +29,9 @@
 - **Action pending**: confirm no consumer uses `consensus_hexagram_id` exclusively; reframe as "primary anchor label"; `ConsensusAccumulator.vhd` is unverified against no-collapse and currently enforces single output — needs review/relabel.
 
 ### [B3 · MED · 13:32] Stale source feeding 3D backends
-- `kingwen_mobius_sphere.py:50` + `kingwen_state_transition.py:59` load `inject_site` from **root `collapse_full_128_output.json` (Jul 5, 3.16MB, pre-porosity-correction)**.
+- `kingwen_mobius_sphere.py:50` + `kingwen_state_transition.py:59` load `inject_site` from **root `shotgun_expand_output.json` (Jul 5, 3.16MB, pre-porosity-correction)**.
 - 3D nodes get pre-correction porosity/inject data.
-- **Action pending**: point at live engine (`expand_hexagram`/`collapse_full_128()`) or corrected corpus.
+- **Action pending**: point at live engine (`expand_hexagram`/`shotgun_expand()`) or corrected corpus.
 
 ### [B4 · MED · 13:32] `kingwen_quantum_expand.py` uses RANDOM params
 - `run_quantum_expansion()` seeds `np.random.seed(0x47524541)`; `params = np.random.uniform(-π, π, …)` (lines 246-248).
@@ -89,7 +89,7 @@
 | `Desktop/quantum-simulation-main` | bridge_quantumlab:22, bridge_64_grid:25 | External; inserted to path, never actually used |
 | `Desktop/rsmv/generated/*.d.ts` | bridge_rsmv:17 | External; **never read** (B5) |
 | `Desktop/rsmv/indexoverview.json` | integrate_assets:88 | External; loaded if exists (graceful) |
-| root `collapse_full_128_output.json` (stale Jul 5) | mobius_sphere:50, state_transition:59 | **Stale source** (B3) |
+| root `shotgun_expand_output.json` (stale Jul 5) | mobius_sphere:50, state_transition:59 | **Stale source** (B3) |
 | `DATASETS/quantum_masking_hexagram_integration.json` | kingwen_quantum_expand.py:27 | EXISTS (13KB) |
 | `output/per_hex_training/manifest.json` | kingwen_quantum_expand.py:30 | EXISTS (7.9KB) |
 | `scripts/ternary_full_expansion.json` | kingwen_quantum_expand.py:26 | EXISTS (2.9MB) |

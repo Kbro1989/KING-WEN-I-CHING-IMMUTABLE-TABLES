@@ -23,7 +23,6 @@ from typing import Any, Dict, List, Tuple
 
 from emotional_engine import (
     VEC_KEYS,
-    collapse_full_128,
     expand_hexagram,
     sample_resolve,
     _clamp,
@@ -239,7 +238,7 @@ def expand_with_personality(emotional_input: int = 50, request_text: str = "") -
 
     Adds per-slot binary tags from immutable tables, repeated baseline.
     """
-    base = collapse_full_128(emotional_input=emotional_input, request_text=request_text)
+    base = shotgun_expand(emotional_input=emotional_input, request_text=request_text)
     resolved = base.get("resolved", [])
     consensus = base.get("consensus", {})
 

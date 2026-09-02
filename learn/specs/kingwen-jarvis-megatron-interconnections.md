@@ -17,7 +17,7 @@ Scope: read-only audit of canonical live surfaces from immutable tables, OpenJar
 
 ## King Wen local surfaces
 - `emotional_engine.py`
-  - `collapse_full_128(emotional_input, request_text)` expands all 64 hexagrams × 8 phases → 512 resolved states
+  - `shotgun_expand(emotional_input, request_text)` expands all 64 hexagrams × 8 phases → 512 resolved states
   - `_tau_for_resolved(...)` uses vector base + inject-site porosity + line balance + slider factor + hex weight
   - `_compute_consensus_from_resolved(...)` returns consensus block with `consensus_hexagram_id`, `consensus_temporal`, `consensus_yao`, `consensus_vector`, `consensus_intent`, `consensus_explanation`
   - `capture_pre_slider(request_text)` returns full pre-slider expansion + resolved + consensus metadata
@@ -25,14 +25,14 @@ Scope: read-only audit of canonical live surfaces from immutable tables, OpenJar
   - `POST /expand` accepts `emotional_input` and `session_id`
   - Response includes `total`, `emotional_input`, `session_id`, `source`, `expanded_count`, `resolved_count`, `resolved[]`, `consensus`
 - `/learn` scripts:
-  - `learn/scripts/test_collapse_full_128.py` — verified PASS at emotional_input=50
+  - `learn/scripts/test_collapse_full_512.py` — verified PASS at emotional_input=50
   - `learn/scripts/test_deterministic_replay.py` — verified PASS
   - `learn/scripts/test_porosity_sweep.py` — verified PASS
   - `learn/scripts/test_progressive_intents.py` — exits 0, currently DIAGNOSTIC because consensus is not slider-sensitive; known upstream lock, not test failure
   - `learn/scripts/audit_surfaces.py` — verified PASS; integration surface files exist and are nonzero
   - `learn/scripts/export_megatron_weights.py` — exports expanded/resolved/weights/consensus artifacts
 - `/learn` artifacts:
-  - `collapse_full_128_output.json` — canonical batch artifact with `expanded=64`, `resolved=512`
+  - `shotgun_expand_output.json` — canonical batch artifact with `expanded=64`, `resolved=512`
   - `kingwen_sections.jsonl` — section-level batch corpus
   - `DATASETS/` — dataset drift files including schema drift between immutable tables and master JSON
 

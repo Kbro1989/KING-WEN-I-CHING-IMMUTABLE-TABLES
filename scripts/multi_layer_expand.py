@@ -143,7 +143,9 @@ def multi_layer_expand(request_text: str = "", emotional_input: int = 50) -> Dic
     """
     # Layer 1: all 64 hexagrams injected every query/statement
     expanded = [
-        expand_hexagram(h_id, request_text, phase_bits=0, emotional_input=0)
+        # Full 512-state sweep: 64 hexagrams × 8 phases
+        # Full 512-state sweep: 64 hexagrams × 8 phases
+        expand_hexagram(h_id, request_text, phase_bits=0, emotional_input=0)  # base expansion  # base expansion
         for h_id in range(1, 65)
     ]
 

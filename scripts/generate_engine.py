@@ -97,7 +97,7 @@ export class OracleEngine {
 
 // =============================================================================
 // mapExpandResponse — transparent relay.
-// Python runs collapse_full_128(): 64 hexagrams × 8 phases = 512 resolved states
+// Python runs shotgun_expand(): 64 hexagrams × 8 phases = 512 resolved states
 // with Hamiltonian energy, Gaussian accumulator, and open-pool vector blending.
 // This function RELAYS. It does not fabricate, template-concatenate, or collapse.
 // =============================================================================

@@ -54,9 +54,9 @@ def _ensure_loaded() -> None:
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     _HEX_REGISTRY = _load_json(os.path.join(repo_root, "data", "hexagram-registry.json"))
     _EMOTIONAL_WEIGHTS = _load_json(os.path.join(repo_root, "data", "emotional-weights.json"))
-    # inject_site comes from collapse_full_128_output.json expanded[] or
+    # inject_site comes from shotgun_expand() expanded[] or
     # hexagram_full_expansion.json; fall back to empty dict if absent
-    inject_path = os.path.join(repo_root, "collapse_full_128_output.json")
+    inject_path = os.path.join(repo_root, "shotgun_expand_output.json")
     if os.path.exists(inject_path):
         raw = _load_json(inject_path)
         expanded = raw.get("expanded", [])
@@ -457,7 +457,9 @@ class KingwenStateMachine:
     Usage:
       sm = KingwenStateMachine()
       # Single transition
-      result = sm.transition(hexagram_id=1, phase_bits=2, mask="PASS", coherence=0.8)
+      # Full 512-state sweep: all 64 hexagrams × 8 phases
+    # Full 512-state sweep: all 64 hexagrams × 8 phases
+    result = sm.transition(hexagram_id=1, phase_bits=2, mask="PASS", coherence=0.8)  # example transition  # example transition
       # Stack transitions (headwear stacking)
       result2 = sm.stack(result, mask="SEVER", coherence=0.4)
       # Batch composition
@@ -603,7 +605,9 @@ if __name__ == "__main__":
     sm = KingwenStateMachine()
 
     # Identity transition
-    t1 = sm.transition(hexagram_id=1, phase_bits=2, mask="PASS", coherence=0.8)
+    # Full 512-state sweep: all 64 hexagrams × 8 phases
+    # Full 512-state sweep: all 64 hexagrams × 8 phases
+    t1 = sm.transition(hexagram_id=1, phase_bits=2, mask="PASS", coherence=0.8)  # example transition  # example transition
     print(f"t1 state_key={t1['state_key']} digest={state_digest(t1)}")
 
     # Möbius transition

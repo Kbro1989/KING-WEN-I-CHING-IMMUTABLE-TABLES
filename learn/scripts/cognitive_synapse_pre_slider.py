@@ -14,7 +14,6 @@ from emotional_engine import (
     EMOTIONAL_WEIGHTS,
     HEXAGRAM_BASE,
     _clamp,
-    collapse_full_128,
     expand_hexagram,
     _line_yao_key,
     _pool_by_name,
@@ -40,6 +39,8 @@ def capture_all_64_pre_slider(request_text: str = "") -> List[Dict[str, Any]]:
         expanded = expand_hexagram(
             hex_id,
             request_text=request_text,
+            # Full 512-state sweep: 64 hexagrams × 8 phases
+            # Full 512-state sweep: 64 hexagrams × 8 phases
             phase_bits=0,
             emotional_input=50,
         )

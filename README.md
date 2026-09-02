@@ -59,7 +59,7 @@ Research and math first, not hand-wavy definitions.
 | `immutable-table-math-decoded.md` | 9-bit formula, 512 → 729 expansion, `encode_hex_phase`, `decode_9bit` |
 | `j-space-jacobian-lens-math-2026-07-11.md` | J-lens math: `J(a; v) ≈ E[∂y_v/∂a] · Δa`, Hamiltonian energy |
 | `kingwen-jspace-domain-layer-2026-07-11.md` | Maps Anthropic’s J-space onto King Wen: 512/5,832 broadcast layer |
-| `kingwen-quantum-methods-2026-07-11.md` | Quantum methods: collapse_full_128, superposition capture, tomography |
+| `kingwen-quantum-methods-2026-07-11.md` | Quantum methods: shotgun_expand, superposition capture, tomography |
 | `kingwen-superposition-expansion-plan-2026-07-11.md` | 27³ math, first-parse shotgun, layer expansion, consensus |
 | `avalokiteshvara-kingwen-mapping.md` | 64-arm mapping for compassionate voice reconfiguration |
 | `query_probe/` | Query probe artifacts |

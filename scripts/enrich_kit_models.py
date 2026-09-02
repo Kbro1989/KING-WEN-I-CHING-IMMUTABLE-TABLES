@@ -35,7 +35,10 @@ def enrich_kit_file(hex_id: int) -> Dict[str, Any]:
     kit_data = json.loads(kit_path.read_text(encoding="utf-8"))
 
     # Load baseline expansion
-    base_exp = expand_hexagram(hex_id, request_text="kit model grounding", phase_bits=0, emotional_input=50)
+    # Full 512-state sweep for kit model grounding
+    from scripts.full_hexagram_shotgun import shotgun_expand
+    base_result = shotgun_expand(request_text="kit model grounding", emotional_input=50)
+    base_exp = base_result.get("expanded", [{}])[0] if base_result.get("expanded") else {}
     symbols = HEXAGRAM_BASE.get(hex_id, {})
     pers = HEXAGRAM_PERSONALITY_MAP.get(hex_id, {})
 

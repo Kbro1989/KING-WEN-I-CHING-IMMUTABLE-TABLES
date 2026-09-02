@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from emotional_engine import (
-    collapse_full_128,
     _hamiltonian_energy,
     _gaussian_kernel,
     _trigram_frequency_weight,
