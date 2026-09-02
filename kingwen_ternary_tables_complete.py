@@ -14460,7 +14460,7 @@ def get_transformed_binary(hexagram_id: int, phase_bits: int) -> str:
     encoding = encode_hex_phase(hexagram_id, phase_bits)
     entry = ENCODING_TABLE[encoding]
     ternary = entry["ternary_str"]
-    transformed = []
+    transformed: list[str] = []
     for t in ternary:
         if t == "2":
             transformed.append("0")

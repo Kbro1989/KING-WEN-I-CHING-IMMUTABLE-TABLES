@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """King Wen -> Voicebox training-data exporter.
 
-Reads collapse_full_128() output or live engine state and emits:
+Reads shotgun_expand() output or live engine state and emits:
 - voicebox_training_vector.json   : 5-axis vector metadata for all 512 states
 - voicebox_profile_payload.json   : profile-like payloads keyed by hexagram+phase
 - voicebox_export_bundle.zip      : optional Voicebox-compatible ZIP with samples/manifest
@@ -22,7 +22,9 @@ ROOT_KINGWEN = Path(__file__).resolve().parent.parent
 ROOT_VOICEBOX = (Path.home() / "Desktop" / "voicebox")
 sys.path.insert(0, str(ROOT_KINGWEN))
 
-from emotional_engine import collapse_full_128, EMOTIONAL_POOL  # noqa: E402
+from emotional_engine import EMOTIONAL_POOL  # noqa: E402
+from full_hexagram_shotgun import shotgun_expand
+from emotional_engine import _compute_consensus_from_resolved
 
 
 def _vector_mean(resolved: list[dict[str, Any]]) -> dict[str, float]:
@@ -36,10 +38,11 @@ def _vector_mean(resolved: list[dict[str, Any]]) -> dict[str, float]:
 
 
 def build_training_vector(emotional_input: int = 50) -> dict:
-    collapse = collapse_full_128(emotional_input=emotional_input)
-    resolved = collapse.get("resolved") or []
-    expanded = collapse.get("expanded") or []
-    consensus = collapse.get("consensus") or {}
+    _shotgun_result = shotgun_expand(emotional_input=emotional_input)
+    resolved = _shotgun_result.get("resolved") or []
+    expanded = _shotgun_result.get("expanded") or []
+    _consensus = _compute_consensus_from_resolved(resolved, emotional_input)
+    consensus = _consensus
 
     by_hex: dict[int, list[dict]] = {}
     for item in resolved:
@@ -72,7 +75,7 @@ def build_training_vector(emotional_input: int = 50) -> dict:
             "preset_engine": _select_preset_engine(inject, vec_mean),
             "preset_voice_id": _select_preset_voice_id(inject, vec_mean),
             "personality": _build_personality(item, inject, vec_mean),
-            "source": "kingwen-collapse-full-128",
+            "source": "kingwen-shotgun-expand",
             "consensus_vector": vec_mean,
         })
 

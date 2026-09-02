@@ -17,7 +17,7 @@ Source of truth: `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\`
   - 8 temporal phases (past, present, future, transition, resolution, dissolution, crystallization, void) `[Updated 2026-08-29]`
   - yin/yang/yao line states per position
   - 5-axis resolved vectors
-- `collapse_full_128_output.json` *(legacy reference run; `collapse_full_128()` deprecated in favor of full multi-layer expansion)* confirms:
+- `shotgun_expand_output.json` *(legacy reference run; `shotgun_expand()` deprecated in favor of full multi-layer expansion)* confirms:
   - 65 distinct pools
   - 512 unique resolved vectors
   - all 64 hexagram ids represented
@@ -133,7 +133,7 @@ Source of truth: `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\`
 ## Data Sources
 - Local expand server: `http://127.0.0.1:8765/expand`
 - Engine: `emotional_engine.py`
-- `/learn` suite: `audit_surfaces.py`, `test_collapse_full_128.py`, `test_deterministic_replay.py`, `test_porosity_sweep.py`, `test_progressive_intents.py`
+- `/learn` suite: `audit_surfaces.py`, `test_shotgun_expand.py`, `test_deterministic_replay.py`, `test_porosity_sweep.py`, `test_progressive_intents.py`
 - Wiki/math corpus: `kingwen_train_data/wiki_math_corpus.jsonl`
 - Parser API: `mwparserfromhell_local/wiki_math_api.py`
 - Voicebox: `C:\Users\krist\Desktop\voicebox\`
@@ -142,7 +142,7 @@ Source of truth: `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\`
 ## Implementation Targets
 - `emotional_engine.py`
   - add `expand_quantum_superposition(query, porosity_levels, domain_signature)` path
-  - keep `collapse_full_128` as fallback evidence harness
+  - keep `shotgun_expand` as fallback evidence harness
 - New module:
   - `kingwen_train_data/superposition_capture.py`
   - captures full 64-hex resolution with screen layers 2..7

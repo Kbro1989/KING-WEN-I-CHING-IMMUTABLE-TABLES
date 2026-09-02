@@ -23,7 +23,8 @@ _ENGINE_PATH = Path(__file__).resolve().parent.parent / "emotional_engine.py"
 _EE_SPEC = importlib.util.spec_from_file_location("emotional_engine_runtime", _ENGINE_PATH)
 _EE_MOD = importlib.util.module_from_spec(_EE_SPEC)
 _EE_SPEC.loader.exec_module(_EE_MOD)
-collapse_full_128 = _EE_MOD.collapse_full_128
+shotgun_expand = _EE_MOD.shotgun_expand
+_compute_consensus_from_resolved = _EE_MOD._compute_consensus_from_resolved
 
 _DOMAIN_TABLE = [
     "voice",
@@ -99,8 +100,8 @@ def expand_state(state: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def run_multi_pass(query: str, emotional_input: int = 50, max_passes: int = 3) -> Dict[str, Any]:
-    base = collapse_full_128(emotional_input=emotional_input, request_text=query)
-    resolved = list(base.get("resolved", []) or [])
+    _shotgun_result = shotgun_expand(emotional_input=emotional_input, request_text=query)
+    resolved = list(_shotgun_result.get("resolved", []) or [])
     if not resolved:
         return {"query": query, "emotional_input": emotional_input, "passes": [], "status": "no_resolved"}
 

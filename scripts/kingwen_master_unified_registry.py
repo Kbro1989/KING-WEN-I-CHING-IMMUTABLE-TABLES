@@ -6,7 +6,7 @@ Integrates & Indexes All Workspace Modules:
 1. Immutable Ternary Tables (kingwen_ternary_tables_complete.py, KING_WEN_TABLES.py, emotional_engine.py)
 2. Training & Quantum Superposition Data (kingwen_train_data/, kingwen_quantum_process.py, superposition_capture.py)
 3. RSMV Cache & 3D Agency Kit (rsmv_live_cache_tables.json, rsmv_kit_version_manifest.json, rsmv_cache_formats.jsonl)
-4. Learning & Collapse Resolution (learn/scripts/, test_collapse_full_128.py, test_collapse_full_1024.py, cognitive_synapse_pre_slider.py)
+4. Learning & Collapse Resolution (learn/scripts/, test_collapse_full_512.py, test_collapse_full_1024.py, cognitive_synapse_pre_slider.py)
 5. JKD Pedagogy & Gutenberg Ingestion (DATASETS/jkd_ingestion_binary.jsonl, jkd_ingestion_ternary.jsonl)
 6. Avalokiteshvara & Schauberger Implosion Layers (scripts/schauberger_parsing_layers.py, scripts/avalokiteshvara_arms_full.json)
 7. VHDL Hardware State Machine (hexagram_state_machine.vhd, decision_matrix.py)
@@ -52,7 +52,7 @@ SUBSYSTEM_CATALOG = {
         "kingwen_train_data/rsmv_cache_formats.jsonl"
     ],
     "learn_harnesses": [
-        "learn/scripts/test_collapse_full_128.py",
+        "learn/scripts/test_collapse_full_512.py",
         "learn/scripts/test_collapse_full_1024.py",
         "learn/scripts/cognitive_synapse_pre_slider.py",
         "learn/scripts/binary_injection_harness.py",

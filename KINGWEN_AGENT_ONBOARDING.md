@@ -74,7 +74,7 @@ for Layer N. The gates are not optional. They are load-bearing.
 LAYER 0: MATH FOUNDATION
 ─────────────────────────────────────────────────────────────────────────────
 FILES (read ALL before proceeding):
-  • emotional_engine.py — collapse_full_128(), the core expansion function
+  • emotional_engine.py — shotgun_expand() (via scripts/full_hexagram_shotgun.py), the core expansion function (64 hexagrams × 8 phases = 512 states)
   • kingwen_ternary_tables_complete.py — 9-bit encoding
   • decision_matrix.py — interference computation
   • temporal_emotional_engine.py — phase-aware delta scoring

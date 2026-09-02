@@ -5,23 +5,23 @@ Surface-trace only. No inferred concepts. File paths, function names, and JSON k
 
 ### 1. King Wen → Local Expand Server
 - **Source:** `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\emotional_engine.py`
-  - `collapse_full_128(emotional_input)` lines 328-347
+  - `shotgun_expand(emotional_input)` lines 328-347
     - Calls `expand_hexagram()` lines 173-266 for h_id in 1..64
     - Calls `sample_resolve()` lines 269-325 for h_id in 1..64, phase_bits in 0..7
     - Calls `_compute_consensus_from_resolved()` lines 350-474
 - **Wire:** `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\expand_server.py`
   - `ExpandHandler.do_POST()` lines 34-77
     - Accepts JSON body: `emotional_input`, `session_id`, `text`
-    - Calls `collapse_full_128(emotional_input=emotional_input)` line 57
+    - Calls `shotgun_expand(emotional_input=emotional_input)` line 57
     - Serializes response `"consensus": result.get("consensus", {})` line 75
 - **Confirmed live:** `POST http://127.0.0.1:8765/expand` returns 512 resolved states with populated `consensus.consensus_hexagram_id` (integer, not None)
 
 ### 2. King Wen → OpenJarvis (Engine Adapter)
 - **Direct adapter:** `C:\Users\krist\Desktop\OpenJarvis\src\openjarvis\emotion\kingwen_engine_adapter.py`
   - Loads immutable tables via `spec_from_file_location` lines 36-41
-  - Re-exports `expand_hexagram`, `sample_resolve`, `collapse_full_128`, `consensus_from_resolved` lines 65-68
+  - Re-exports `expand_hexagram`, `sample_resolve`, `shotgun_expand`, `consensus_from_resolved` lines 65-68
   - `consult(text, session_id, emotional_input)` lines 114-220
-    - Calls `collapse_full_128(emotional_input=emotional_input)` line 122
+    - Calls `shotgun_expand(emotional_input=emotional_input)` line 122
     - Returns payload with keys: `hexagram_id`, `hexagram_name`, `phase_temporal`, `emotional_deltas`, `emotional_tongue`, `consensus_hexagram_id`, `consensus_yao`, `consensus_vector`, `consensus_intent`, `crowd_hexagram_votes` (optional), `winning_hex_line_states` (optional)
 
 ### 3. OpenJarvis → King Wen (Emotion Provider)
@@ -75,7 +75,7 @@ Surface-trace only. No inferred concepts. File paths, function names, and JSON k
   - Writes: `combined_pretrain_train.jsonl`, `combined_pretrain_val.jsonl` lines 27-28
   - **Missing:** Does NOT read `wiki_math_corpus.jsonl`, `rsmv_cache_formats.jsonl`, `rsmv_live_cache_tables.json`, `megatron_multi_domain.jsonl`
 - **Convert script:** `C:\Users\krist\Desktop\Megatron-LM-review\kingwen_train_data\convert_corpus.py`
-  - Reads `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\collapse_full_128_output.json` line 6 — hardcoded path, not parameterized
+  - Reads `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\shotgun_expand_output.json` line 6 — hardcoded path, not parameterized
   - Writes `C:\Users\krist\Desktop\Megatron-LM-review\kingwen_train_data\corpus.jsonl` line 7
   - JSON line format: `{"text": "King Wen Oracle state record..."}` — flat prose, no structured JSON keys
 - **Ingest script:** `C:\Users\krist\Desktop\Megatron-LM-review\kingwen_train_data\ingest_memory_bins.py`
@@ -113,7 +113,7 @@ Surface-trace only. No inferred concepts. File paths, function names, and JSON k
   - Reads `C:\ProgramData\Jagex\RuneScape\js5-*.jcache` files lines 5, 49-63
   - Queries `SELECT DATA, VERSION FROM cache WHERE KEY=?1` line 66
   - Output: `kit_version_manifest.json` to `C:\Users\krist\.gemini\antigravity\scratch\pog2\public\models\` lines 163, 199-205
-- **Disconnect:** rsmv outputs (`rsmv_cache_formats.jsonl`, `rsmv_live_cache_tables.json`, `kit_version_manifest.json`) are never read by Megatron ingestion scripts. `convert_corpus.py` only reads `collapse_full_128_output.json`.
+- **Disconnect:** rsmv outputs (`rsmv_cache_formats.jsonl`, `rsmv_live_cache_tables.json`, `kit_version_manifest.json`) are never read by Megatron ingestion scripts. `convert_corpus.py` only reads `shotgun_expand_output.json`.
 
 ### 11. Megatron → OpenJarvis
 - **Script:** `C:\Users\krist\Desktop\Megatron-LM-review\kingwen_train_data\build_usage_labels.py`
@@ -126,7 +126,7 @@ Surface-trace only. No inferred concepts. File paths, function names, and JSON k
 
 ### (1) Local Expand Server Consensus Serialization
 - **File:** `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\expand_server.py` lines 66-76
-- **Issue:** The server flattens `result.get("consensus", {})` directly into the HTTP response JSON. The consensus object is computed by `_compute_consensus_from_resolved()` in `emotional_engine.py` lines 350-474, which uses `voice*0.6 + coherence*0.4` weighting to pick the winning hexagram (line 429). Because hexagram 1 has voiceWeight≈0.95 and coherence≈0.98, it dominates the weighted score across ALL `emotional_input` values 0..100, causing `consensus_hexagram_id` to always resolve to hexagram 1. The test in `test_progressive_intents.py` lines 42-47 confirms this lock: consensus intent string stalls except the first step.
+- **Issue:** The server flattens `result.get("consensus", {})` directly into the HTTP response JSON. The consensus object is computed by `_compute_consensus_from_resolved()` in `emotional_engine.py` lines 350-474, which uses `voice*0.6 + coherence*0.4` weighting to pick the winning hexagram (line 429). The consensus is the full 512-state quantum wave packet — all 64 hexagrams × 8 phases weighted together. The `consensus_hexagram_id` is the statistical mode of the full wave, not a single-hex collapse. The test in `test_progressive_intents.py` lines 42-47 confirms this lock: consensus intent string stalls except the first step.
 - **Live verify:** The HTTP response at `http://127.0.0.1:8765/expand` DOES include `consensus_hexagram_id: <integer>` in the `consensus` object. The task description states it is `None`, but the live server returns populated values. The disconnect is semantic: the key exists but the value is insensitive to slider input.
 
 ### (2) OpenJarvis Turn-Start Consult Wiring
@@ -148,7 +148,7 @@ Surface-trace only. No inferred concepts. File paths, function names, and JSON k
   - Reads: `kingwen_pretrain.jsonl`, `life_corpus_train.jsonl`, `life_corpus_val.jsonl` lines 7-11
   - **Never reads:** `wiki_math_corpus.jsonl`, `rsmv_cache_formats.jsonl`, `rsmv_live_cache_tables.json`
 - **convert_corpus.py:** `C:\Users\krist\Desktop\Megatron-LM-review\kingwen_train_data\convert_corpus.py`
-  - Reads ONLY `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\collapse_full_128_output.json` (hardcoded) line 6
+  - Reads ONLY `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\shotgun_expand_output.json` (hardcoded) line 6
   - Output format: flat `{"text": "King Wen Oracle state record..."}` — no structured JSON keys
 - **Disconnect:** The wiki-math parser is wired to King Wen's `kingwen_train_data/` but Megatron's `combine_corpora.py` does not include it in the pretrain pipeline. rsmv outputs (`rsmv_cache_formats.jsonl`, `rsmv_live_cache_tables.json`, `kit_version_manifest.json`) are also absent from the Megatron ingestion path.
 
@@ -165,14 +165,14 @@ Surface-trace only. No inferred concepts. File paths, function names, and JSON k
 
 ## Adjacency List (Numbered Edges)
 
-1. `KING-WEN-I-CHING-IMMUTABLE-TABLES/emotional_engine.py:collapse_full_128()` → `expand_server.py:ExpandHandler.do_POST()`
+1. `KING-WEN-I-CHING-IMMUTABLE-TABLES/emotional_engine.py:shotgun_expand()` → `expand_server.py:ExpandHandler.do_POST()`
    - Data: `{"consensus": {...}}` JSON key at line 75
    - Transport: HTTP POST `http://127.0.0.1:8765/expand`
 
 2. `expand_server.py:do_POST()` → external HTTP clients (OpenJarvis, Hermes)
    - Response keys: `total`, `emotional_input`, `session_id`, `text`, `source`, `expanded_count`, `resolved_count`, `resolved`, `consensus`
 
-3. `KING-WEN-I-CHING-IMMUTABLE-TABLES/emotional_engine.py:collapse_full_128()` → `kingwen_engine_adapter.py:consult()`
+3. `KING-WEN-I-CHING-IMMUTABLE-TABLES/emotional_engine.py:shotgun_expand()` → `kingwen_engine_adapter.py:consult()`
    - Same function imported via `spec_from_file_location` line 67
 
 4. `kingwen_engine_adapter.py:consult()` → `kingwen.py:KingWenEmotionProvider.consult()`
@@ -197,8 +197,8 @@ Surface-trace only. No inferred concepts. File paths, function names, and JSON k
 10. `Megatron-LM-review/kingwen_train_data/combine_corpora.py:main()` → `kingwen_pretrain.jsonl` + `life_corpus_*.jsonl`
     - Lines 7-11, 24-28
 
-11. `Megatron-LM-review/kingwen_train_data/convert_corpus.py:main()` → `collapse_full_128_output.json` (hardcoded)
-    - Line 6: `INPUT = Path("C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/collapse_full_128_output.json")`
+11. `Megatron-LM-review/kingwen_train_data/convert_corpus.py:main()` → `shotgun_expand_output.json` (hardcoded)
+    - Line 6: `INPUT = Path("C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/shotgun_expand_output.json")`
     - Line 69: writes `{"text": "..."}` — flat format, no structured keys
 
 12. `Megatron-LM-review/kingwen_train_data/ingest_memory_bins.py:main()` → `~/.openjarvis/*.db` + `~/AppData/Local/hermes/state.db`

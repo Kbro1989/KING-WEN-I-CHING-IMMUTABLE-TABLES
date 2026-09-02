@@ -6,8 +6,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
+from scripts.full_hexagram_shotgun import shotgun_expand
 
-from emotional_engine import collapse_full_128  # noqa: E402
+  # noqa: E402
 
 
 def describe(collapse: dict) -> str:
@@ -28,8 +29,8 @@ def describe(collapse: dict) -> str:
 def main() -> int:
     last = None
     for value in [0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100]:
-        collapse = collapse_full_128(emotional_input=value)
-        current = describe(collapse)
+        _shotgun_result = shotgun_expand(emotional_input=value)
+        current = describe(_shotgun_result)
         changed = current != last
         print(f"emotional_input={value:03d} changed={changed} -> {current}")
         last = current

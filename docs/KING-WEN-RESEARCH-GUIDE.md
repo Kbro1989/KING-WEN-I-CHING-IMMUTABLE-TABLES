@@ -20,9 +20,9 @@
 ### 1.1 Source-of-Truth Map
 ```
 KING-WEN-I-CHING-IMMUTABLE-TABLES/
-  emotional_engine.py      -> expand_hexagram(), collapse_full_128()
+  emotional_engine.py      -> expand_hexagram(), shotgun_expand()
   expand_server.py         -> /expand (POST), /capture (POST JSONL)
-  collapse_full_128_output.json  -> 3.1MB canonical snapshot
+  shotgun_expand_output.json  -> live shotgun expansion output
   hexagram_full_expansion.json   -> 64 expanded, 512 resolved
   scripts/
     full_hexagram_shotgun.py     -> 64/512/729/46656 canonical counts
@@ -30,7 +30,7 @@ KING-WEN-I-CHING-IMMUTABLE-TABLES/
 
 kingwen-oracle-worker/
   src/index.ts             -> Worker consult(), buildReasonedOutput()
-  src/data/                -> voicebox exports, collapse_full_128_output.json
+  src/data/                -> voicebox exports, shotgun_expand_output.json
   tests/                   -> 4/4 passing
 
 OpenJarvis/
@@ -47,23 +47,23 @@ OpenJarvis/
 **Objective:** Full 64-hex expansion before slider. Slider is post-hoc rank-axis.
 
 **Key files:**
-- `emotional_engine.py`: `expand_hexagram()`, `sample_resolve()`, `collapse_full_128()`
+- `emotional_engine.py`: `expand_hexagram()`, `sample_resolve()`, `shotgun_expand()`
 - `full_hexagram_shotgun.py`: `shotgun_expand()`
 - `hexagram_full_expansion.json`: 64 expanded, 512 resolved
 
 **Steps:**
-1. Verify `collapse_full_128(emotional_input=50)` returns `expanded_count=64`, `resolved_count=512`
+1. Verify `shotgun_expand(emotional_input=50)` returns `total_expanded=64`, `total_resolved=512`
 2. Verify phase_bits distribution: 64 states per phase 0..7
 3. Verify porosity normalization: source integer 0-4 → float 0.0-1.0
 4. Verify `hexagram_full_expansion.json` inject_site fields: `yao_vocabulary`, `line_states`, `sample_paths`, `expanded_vector`, `resolved_vector`
-5. Fallback order when inject_site empty: `collapse_full_128_output.json` → `emotional-weights.json` → `hexagram-registry.json`
+5. Fallback order when inject_site empty: `shotgun_expand_output.json` → `emotional-weights.json` → `hexagram-registry.json`
 6. Do NOT trim VOICEBOX_VOICE_POOL (66 pools canonical)
 7. Do NOT collapse to single dominant in `_build_batch()`
 8. All 64 hexagram slots in order 1-64 inclusive, no winner removal
 
 **Pitfalls:**
 - `hexagram_full_expansion.json` is stale: phase-level inject_site empty, porosity fixed 0.5
-- `collapse_full_128_output.json` is the live snapshot
+- `shotgun_expand_output.json` is the live snapshot
 - `YAO_VOCABULARY[phase_temporal]` is keyed by integer `0` only — use `base.get("yao_vocabulary", {})` from `expand_hexagram()`
 
 ### 2.2 Worker Consult Rewrite [CHECKLIST B1-B10]
@@ -143,7 +143,7 @@ OpenJarvis/
 
 **Pitfalls:**
 - `hexagram_full_expansion.json` inject_site is empty at phase level — do not use as inject-site source
-- Stale `collapse_full_128_output.json` drift: verify timestamp before using
+- Stale `shotgun_expand_output.json` drift: verify timestamp before using
 
 ### 2.6 Save-String & Batch Protocol [CHECKLIST F1-F7]
 
@@ -316,6 +316,6 @@ Phase 11: Alignment Theory (3.3)        -> Gate H + reasoning integration
 | Checklist | `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\docs\KING-WEN-RESEARCH-CHECKLIST.md` | Companion |
 | Worker source | `C:\Users\krist\Desktop\kingwen-oracle-worker\kingwen-oracle\src\index.ts` | Live |
 | Expand server | `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\expand_server.py` | Running |
-| Collapse output | `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\collapse_full_128_output.json` | 3.1MB canonical |
+| Collapse output | `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\shotgun_expand_output.json` | live shotgun expansion |
 | Zotero corpus | `C:\Users\krist\Desktop\zotero\learning-corpus\.text\` | 490 files |
 | Voice exports | `C:\Users\krist\Desktop\kingwen-oracle-worker\kingwen-oracle\src\data\` | Copied |

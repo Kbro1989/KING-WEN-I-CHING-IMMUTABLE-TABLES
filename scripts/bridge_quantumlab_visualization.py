@@ -37,9 +37,13 @@ def generate_synthetic_space_time_surface(hex_id: int, name: str) -> Dict[str, A
     l_idx = hex_info.get("lower_idx", 1)
 
     # Hamiltonian energy calculation
-    exp = expand_hexagram(hex_id, phase_bits=0, emotional_input=50)
-    vec = [exp["expanded_vector"][k] for k in ["chaos", "whimsy", "darkTone", "coherence", "voiceWeight"]]
-    e_val = float(_hamiltonian_energy(vec, vec, exp["line_balance"]))
+    # Full 512-state sweep: 64 hexagrams × 8 phases
+    from scripts.full_hexagram_shotgun import shotgun_expand
+    result = shotgun_expand(emotional_input=50)
+    resolved = result.get("resolved", [])
+    # Use the full wave packet consensus for observables
+    vec = result.get("personality_consensus", {}).get("dominant_vector", {})
+    e_val = result.get("avg_hamiltonian_energy", 0.0)
 
     x_mean = round(math.sin(hex_id * 0.1) * 2.0, 4)
     x_var = round(0.5 + (u_idx * 0.1), 4)

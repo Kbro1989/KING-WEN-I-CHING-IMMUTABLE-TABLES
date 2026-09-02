@@ -10,14 +10,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
+from scripts.full_hexagram_shotgun import shotgun_expand
 
-from emotional_engine import collapse_full_128  # noqa: E402
+  # noqa: E402
 
 
 def main() -> int:
     for value in (0, 25, 50, 75, 100):
-        collapse = collapse_full_128(emotional_input=value)
-        resolved = collapse.get("resolved") or []
+        _shotgun_result = shotgun_expand(emotional_input=value)
+        resolved = _shotgun_result.get("resolved") or []
         changing = 0
         for item in resolved:
             changing += len(item.get("line_states") or []) + len(item.get("phase_changing_lines") or [])

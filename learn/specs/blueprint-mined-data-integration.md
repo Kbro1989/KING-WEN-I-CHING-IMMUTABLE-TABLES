@@ -184,7 +184,7 @@ Paper: "Verbalizable Representations Form a Global Workspace in Language Models"
 
 | Target file | Exact change | What it enables | Priority |
 |---|---|---|---|
-| `emotional_engine.py: collapse_full_128()` | Add J-space pruning: only top-k=25 resolved states carry into consensus, matching J-lens sparsity | Reduce 512-state consensus to privileged subset matching LLM global workspace | P1 |
+| `emotional_engine.py: shotgun_expand()` | Add J-space pruning: only top-k=25 resolved states carry into consensus, matching J-lens sparsity | Reduce 512-state consensus to privileged subset matching LLM global workspace | P1 |
 | `emotional_engine.py: _compute_consensus_from_resolved()` | Apply J-lens-style sparse decomposition: solve for sparse non-negative combination of top-k emotional vectors | Consensus derived from verbalizable emotional directions, not average | P1 |
 | `kingwen_train_data/runtime/kingwen_dataset.py` | Add `j_space_component` field to `SampleMeta` | Track which training samples map to privileged emotional vectors | P2 |
 | `src/openjarvis/emotion/kingwen_engine_adapter.py` | Expose `j_space_top_tokens` from consult payload | Surface verbalizable emotional concepts to Jarvis prompt builder | P2 |
@@ -224,10 +224,10 @@ Phase 1 (unblock):
   2. Wire emotional_input through prompt/builder.py
   3. Map Step-Audio2 SamplingParams to Option B speed formula
   4. Train speaker projection from xVA-Synth speaker_rep.pt
-  5. Add J-space pruning to collapse_full_128()
+  5. Add J-space pruning to shotgun_expand()
 
 Phase 2 (high value):
-  6. Extend collapse_full_128 to 16 phases
+  6. Extend shotgun_expand to 16 phases
   7. Wire /journey to King Wen consult
   8. Add xVA-Synth phoneme data to audio_dsp.py
   9. Add ChatRWKV tokenizer as offline fallback

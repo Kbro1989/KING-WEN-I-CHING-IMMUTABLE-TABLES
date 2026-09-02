@@ -18,7 +18,7 @@ renderable geometry.
 
 Usage:
     PYTHONPATH=. python3 scripts/generate_avatar_meshes.py --all
-    PYTHONPATH=. python3 scripts/generate_avatar_meshes.py --hex 1 --phase 3
+    PYTHONPATH=. python3 scripts/generate_avatar_meshes.py --all  # 512 avatars (64 hex × 8 phases)
     PYTHONPATH=. python3 scripts/generate_avatar_meshes.py --query-url http://127.0.0.1:8765/expand --emotional-input 50
 """
 
@@ -58,7 +58,6 @@ META_PATH = DATASETS / "kingwen_avatar_mesh_manifest.json"
 # Import King Wen engine for live expansion
 sys.path.insert(0, str(ROOT))
 from emotional_engine import (
-    collapse_full_128,
     expand_hexagram,
     _quantum_avatar_modulation,
     VEC_KEYS,
@@ -712,7 +711,7 @@ def main():
     else:
         print("Error: specify --all or --hex <id> --phase <bits>")
         print("Example: python3 scripts/generate_avatar_meshes.py --all")
-        print("         python3 scripts/generate_avatar_meshes.py --hex 1 --phase 3")
+        print("         python3 scripts/generate_avatar_meshes.py --all  # 512 avatars")
         sys.exit(1)
 
 

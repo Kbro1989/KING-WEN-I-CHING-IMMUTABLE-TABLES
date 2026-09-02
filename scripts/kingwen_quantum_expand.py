@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-import pennylane as qml
-import numpy as np
 """
 King Wen Quantum Expansion Engine v2.0
 Full ternary expansion: 729 hexagrams × 8 phases = 5,832 resolved states
@@ -8,7 +6,7 @@ Full ternary expansion: 729 hexagrams × 8 phases = 5,832 resolved states
 Inputs:
   - scripts/ternary_full_expansion.json (canonical source of truth)
   - DATASETS/quantum_masking_hexagram_integration.json (64-entry mask map)
-  - collapse_full_128_output.json (coherence C values for canonical 64)
+  - shotgun_expand_output.json (coherence C values for canonical 64)
   - output/per_hex_training/manifest.json (corpus index)
 
 Outputs:
@@ -17,19 +15,35 @@ Outputs:
 """
 
 import json
+import math
 from pathlib import Path
 from typing import Dict, List, Literal, Optional, Tuple
 
 import numpy as np
 
-PROJECT_ROOT = Path(__file__).parent
+_PENNYLANE_AVAILABLE = False
+try:
+    import pennylane as qml  # noqa: F401
+
+    _PENNYLANE_AVAILABLE = True
+except ImportError:
+    qml = None  # type: ignore
+
+
+def _gaussian_kernel(value: float, center: float, fwhm: float) -> float:
+    sigma = fwhm / 2.354820045
+    diff = value - center
+    return np.exp(-(diff * diff) / (2.0 * sigma * sigma))
+
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 TERNARY_EXPANSION = PROJECT_ROOT / "scripts" / "ternary_full_expansion.json"
 MASK_MAP_PATH = PROJECT_ROOT / "DATASETS" / "quantum_masking_hexagram_integration.json"
 REGISTRY_PATH = PROJECT_ROOT / "data" / "hexagram-registry.json"
 PER_HEX_DIR = PROJECT_ROOT / "output" / "per_hex_training"
 MANIFEST_PATH = PER_HEX_DIR / "manifest.json"
 OUTPUT_CORPUS = PROJECT_ROOT / "kingwen_train_data" / "quantum_enriched_corpus.jsonl"
-ORACLE_MASTER = PROJECT_ROOT / "collapse_full_128_output.json"
+ORACLE_MASTER = PROJECT_ROOT / "shotgun_expand_output.json"
 
 MaskMode = Literal["MEASURE", "SEVER", "ZERO_ROT", "ATTENTION", "PASS"]
 
@@ -48,7 +62,7 @@ RESOLVED = TERNARY_DATA.get("resolved", {})
 MASK_MAP = {int(e["hexagram_id"]): e for e in MASK_DATA.get("full_64_masking_map", [])}
 HEX_COUNTS = {int(k): v for k, v in MANIFEST.get("hex_counts", {}).items()}
 
-# Coherence lookup: canonical 64 only, from collapse_full_128 expanded[]
+# Coherence lookup: canonical 64 only, from shotgun_expand expanded[]
 COHERENCE: Dict[str, float] = {}
 for entry in ORACLE.get("expanded", []):
     hid = entry.get("hexagram_id")
@@ -87,7 +101,7 @@ def apply_mask_gate(wire_a: int, wire_b: int, mask: MaskMode):
     if mask == "MEASURE":
         qml.PauliX(wire_a)
         qml.PauliX(wire_b)
-        qml.Toffoli(wires=[wire_a, wire_b, wire_b])
+        qml.CNOT(wires=[wire_a, wire_b])
         qml.PauliX(wire_a)
         qml.PauliX(wire_b)
     elif mask == "SEVER":
@@ -120,26 +134,36 @@ def build_circuit(
     params: np.ndarray,
     n_layers: int = 4,
 ):
-    upper_vector = TRIGRAMS[str(upper_trigram_id)]["vector"]
-    lower_vector = TRIGRAMS[str(lower_trigram_id)]["vector"]
-    ternary_vector = upper_vector + lower_vector
+    dev = qml.device("default.qubit", wires=12)
 
-    for i, state in enumerate(ternary_vector):
-        wa, wb = i * 2, i * 2 + 1
-        encode_ternary_position(wa, wb, state)
-        apply_mask_gate(wa, wb, mask)
+    @qml.qnode(dev)
+    def circuit():
+        upper_vector = TRIGRAMS[str(upper_trigram_id)]["vector"]
+        lower_vector = TRIGRAMS[str(lower_trigram_id)]["vector"]
+        ternary_vector = upper_vector + lower_vector
 
-    for layer_idx in range(n_layers):
-        variational_layer(params, layer_idx)
-        for i in range(6):
+        for i, state in enumerate(ternary_vector):
             wa, wb = i * 2, i * 2 + 1
+            encode_ternary_position(wa, wb, state)
             apply_mask_gate(wa, wb, mask)
 
-    if coherence < 0.5:
-        for q in range(12):
-            qml.DepolarizingChannel(p=(0.5 - coherence), wires=q)
+        for layer_idx in range(n_layers):
+            variational_layer(params, layer_idx)
+            for i in range(6):
+                wa, wb = i * 2, i * 2 + 1
+                apply_mask_gate(wa, wb, mask)
 
-    return qml.probs(wires=list(range(12)))
+        if coherence < 0.5:
+            strength = float(0.5 - coherence)
+            for q in range(12):
+                if _PENNYLANE_AVAILABLE:
+                    qml.DepolarizingChannel(p=strength, wires=q)
+                else:
+                    qml.BitFlip(p=strength, wires=q)
+                    qml.PhaseFlip(p=strength, wires=q)
+        return qml.probs(wires=list(range(12)))
+
+    return np.array(circuit())
 
 
 def marginalize_to_5832(raw_probs: np.ndarray) -> np.ndarray:
@@ -211,7 +235,7 @@ def compute_semantic_weights(
 
     upper_id = hex_data.get("upper_trigram_id", 0)
     lower_id = hex_data.get("lower_trigram_id", 0)
-    raw_probs = build_circuit(upper_id, lower_id, mask, coherence, params)
+    raw_probs = np.array(build_circuit(upper_id, lower_id, mask, coherence, params))
     expansion = marginalize_to_5832(raw_probs)
 
     # Apply future-phase Gaussian bias across 8-phase blocks

@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 
 BASE = Path(__file__).resolve().parent.parent
-DATA_PATH = BASE / 'collapse_full_128_output.json'
+DATA_PATH = BASE / 'shotgun_expand_output.json'
 OUT_PATH = BASE / 'DATASETS' / 'kingwen_512_oracle_widget.html'
 
 d = json.loads(DATA_PATH.read_text(encoding='utf-8'))
@@ -380,7 +380,7 @@ function exportCurrentState() {{
   if(!state) return;
   const raw = rawExpanded.find(x => x.hexagram_id === state.hexagram_id) || {{}};
   const payload = {{
-    source: 'collapse_full_128_output',
+    source: 'shotgun_expand_output',
     hexagram_id: state.hexagram_id,
     phase_bits: state.phase_bits,
     selected_state: state,
@@ -391,7 +391,7 @@ function exportCurrentState() {{
 
 function exportAll() {{
   const payload = {{
-    source: 'collapse_full_128_output',
+    source: 'shotgun_expand_output',
     total_expanded: rawExpanded.length,
     total_resolved: resolved.length,
     expanded: rawExpanded,

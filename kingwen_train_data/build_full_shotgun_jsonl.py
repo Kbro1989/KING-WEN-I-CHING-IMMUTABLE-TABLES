@@ -8,7 +8,7 @@ Output schema per row:
   {
     "text": "",
     "label_payload": {
-      ...collapse_full_128 resolved state fields,
+      ...expanded state fields,
       ...shotgun expanded fields,
       ...multi_layer_expand fields,
       ...skill cards,
@@ -30,7 +30,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from emotional_engine import collapse_full_128, expand_hexagram  # noqa: E402
+from emotional_engine import expand_hexagram  # noqa: E402
 from scripts.full_hexagram_shotgun import (  # noqa: E402
     shotgun_expand,
     _ternary_slot_matrix,
@@ -47,8 +47,6 @@ from scripts.build_hexagram_skill_cards import skill_cards_for_binary, TOOL_NATI
 from kingwen_ternary_tables_complete import (  # noqa: E402
     HEXAGRAM_BASE,
     PHASE_INFO,
-    PHASE_LINE_MAP,
-    YAO_VOCABULARY,
     EMOTIONAL_WEIGHTS,
     VOICEBOX_VOICE_POOL,
 )

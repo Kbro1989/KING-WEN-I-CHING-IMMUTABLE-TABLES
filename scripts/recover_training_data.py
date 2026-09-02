@@ -92,7 +92,9 @@ def load_corpus() -> List[Dict[str, Any]]:
 
 def expand_paper(paper: Dict[str, Any], emotional_inputs: List[int] = [0, 50, 100]) -> List[Dict]:
     """Run King Wen expansion for a single paper across emotional inputs."""
-    from emotional_engine import collapse_full_128, extract_intent
+    from emotional_engine import extract_intent
+    from full_hexagram_shotgun import shotgun_expand
+    from emotional_engine import _compute_consensus_from_resolved
     
     paper_id = paper["paper_id"]
     text = paper["text"]
@@ -100,7 +102,11 @@ def expand_paper(paper: Dict[str, Any], emotional_inputs: List[int] = [0, 50, 10
     
     results = []
     for emotional_input in emotional_inputs:
-        expansion = collapse_full_128(emotional_input=emotional_input, request_text=text)
+        _shotgun_result = shotgun_expand(emotional_input=emotional_input, request_text=text)
+        resolved_list = _shotgun_result.get("resolved", [])
+        _consensus = _compute_consensus_from_resolved(resolved_list, emotional_input)
+        expansion = {"resolved": resolved_list, "consensus": _consensus,
+                      "expanded": _shotgun_result.get("expanded", [])}
         
         for resolved in expansion.get("resolved", []):
             # Only keep entries with actual text trace

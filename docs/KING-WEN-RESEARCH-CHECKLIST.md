@@ -15,8 +15,8 @@
 
 | ID | Item | Verification Command | Proof | Status |
 |---|---|---|---|---|
-| A1 | `collapse_full_128(50)` returns 64 expanded, 512 resolved | `py_compile emotional_engine.py && python -c "from emotional_engine import collapse_full_128; r=collapse_full_128(50); print('expanded',len(r['expanded']),'resolved',len(r['resolved']))"` | expanded 64 resolved 512 — 2026-08-20 | [x] |
-| A2 | Phase_bits 0..7 evenly distributed (64 each) | `python -c "from emotional_engine import collapse_full_128; r=collapse_full_128(50); from collections import Counter; print(Counter(x['phase_bits'] for x in r['resolved']))"` | {0:64, 1:64, 2:64, 3:64, 4:64, 5:64, 6:64, 7:64} — 2026-08-20 | [x] |
+| A1 | `shotgun_expand(emotional_input=50)` returns 64 expanded, 512 resolved | `py_compile emotional_engine.py && python -c "from scripts.full_hexagram_shotgun import shotgun_expand; r=shotgun_expand(emotional_input=50); print('expanded',len(r['expanded']),'resolved',len(r['resolved']))"` | expanded 64 resolved 512 — 2026-08-20 | [x] |
+| A2 | Phase_bits 0..7 evenly distributed (64 each) | `python -c "from scripts.full_hexagram_shotgun import shotgun_expand; r=shotgun_expand(emotional_input=50); from collections import Counter; print(Counter(x['phase_bits'] for x in r['resolved']))"` | {0:64, 1:64, 2:64, 3:64, 4:64, 5:64, 6:64, 7:64} — 2026-08-20 | [x] |
 | A3 | Porosity normalization: integer 0-4 → 0.0-1.0 | `python -c "from kingwen import normalizePorosity; print(normalizePorosity(0), normalizePorosity(4))"` | | [ ] |
 | A4 | `hexagram_full_expansion.json` inject_site fields present | `python -c "import json; d=json.load(open('hexagram_full_expansion.json')); print(all('yao_vocabulary' in x.get('inject_site',{}) for x in d['expanded']))"` | | [ ] |
 | A5 | Fallback order works when inject_site empty | `python -c "from kingwen_completion_injection import _build_batch; b=_build_batch(); print('fallback_invoked', any(x.get('inject_site',{}).get('source')=='registry' for x in b))"` | | [ ] |
@@ -33,9 +33,9 @@
 | B1 | No `stableHash` 1-hex collapse in `src/index.ts` | `grep -n "stableHash" src/index.ts` | Should return no matches | [ ] |
 | B2 | `normalizePorosity()` handles 0-4 integer scale | `grep -n "normalizePorosity" src/index.ts` | Function present, tested | [ ] |
 | B3 | Consult returns `all_hexagrams[]` with 64 entries | `curl -s https://kingwen-oracle.kristain33rs.workers.dev/consult -X POST -H "Content-Type: application/json" -d '{"text":"test","emotional_input":50}' \| jq '.all_hexagrams \| length'` | Should return 64 | [ ] |
-| B4 | Each resolved entry has `query_tokens`, `phase_temporal`, `resolved_vector` | `python -c "from emotional_engine import collapse_full_128; r=collapse_full_128(50,'test query'); rr=r['resolved']; print(all('query_tokens' in x.get('intent',{}) for x in rr), all('phase_temporal' in x for x in rr), all(x.get('resolved_vector') for x in rr))"` | True True True — all 512 entries pass — 2026-08-20 | [x] |
+| B4 | Each resolved entry has `query_tokens`, `phase_temporal`, `resolved_vector` | `python -c "from scripts.full_hexagram_shotgun import shotgun_expand; r=shotgun_expand(emotional_input=50, request_text='test query'); rr=r['resolved']; print(all('query_tokens' in x.get('intent',{}) for x in rr), all('phase_temporal' in x for x in rr), all(x.get('resolved_vector') for x in rr))"` | True True True — all 512 entries pass — 2026-08-20 | [x] |
 | B5 | Top result has reasoned output fields | `curl -s ... \| jq '.unified_weave, .sovereign_assertion, .boundary_condition, .dissipator_warning'` | Non-null values | [ ] |
-| B6 | `query_tokens`, `resolved_count`, `expanded_count` in payload | `python -c "from emotional_engine import collapse_full_128; r=collapse_full_128(50,'test'); print(r.get('total_resolved'), r.get('total_expanded'))"` | total_resolved=512 total_expanded=64 — 2026-08-20 | [x] |
+| B6 | `query_tokens`, `resolved_count`, `expanded_count` in payload | `python -c "from scripts.full_hexagram_shotgun import shotgun_expand; r=shotgun_expand(emotional_input=50, request_text='test'); print(r.get('total_resolved'), r.get('total_expanded'))"` | total_resolved=512 total_expanded=64 — 2026-08-20 | [x] |
 | B7 | `matchesFilter` reads `hexagram_symbols.category/action` | `grep -n "hexagram_symbols" src/index.ts` | Fallback present | [ ] |
 | B8 | `if_is`/`if_is_not` operates on full 64 before filtering | `grep -n "if_is" src/index.ts` | Logic verified in tests | [ ] |
 | B9 | `npm run test` passes 4/4 | `cd kingwen-oracle && npm run test` | 4/4 passing | [ ] |

@@ -13,7 +13,7 @@ python scripts/run_all_unified_pipeline.py
 
 ## Legacy / Individual Scripts
 
-- `learn/scripts/test_collapse_full_128.py` (legacy 512-state runner)
+- `learn/scripts/test_collapse_full_512.py` (legacy 512-state runner)
 - `learn/scripts/test_progressive_intents.py`
 - `learn/scripts/test_porosity_sweep.py`
 - `learn/scripts/test_deterministic_replay.py`

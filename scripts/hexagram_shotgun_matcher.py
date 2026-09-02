@@ -2,7 +2,7 @@
 """
 1-by-1 shotgun matcher v2: text-first scoring against actual expansion output.
 
-Source of truth: collapse_full_128_output.json
+Source of truth: shotgun_expand()
 - expanded[].expanded_vector: 5-axis voice vector (modulator, not matcher)
 - expanded[].inject_site.reason: hex-specific human-readable descriptor
 - expanded[].yao_vocabulary: 9-item yao labels
@@ -25,7 +25,7 @@ from collections import Counter
 
 ROOT = Path(__file__).resolve().parent.parent
 TEXT_DIR = (Path.home() / "Desktop" / "zotero/learning-corpus/.text")
-SHOTGUN = ROOT / "collapse_full_128_output.json"
+SHOTGUN = ROOT / "shotgun_expand_output.json"
 ARCHETYPES = ROOT / "output/hexagram_coder_archetypes.csv"
 
 VEC_KEYS = ["chaos", "whimsy", "darkTone", "coherence", "voiceWeight"]

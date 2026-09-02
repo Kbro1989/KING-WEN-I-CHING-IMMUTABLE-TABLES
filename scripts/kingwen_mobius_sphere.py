@@ -47,7 +47,7 @@ def _ensure_loaded() -> None:
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     _REGISTRY = _load_json(os.path.join(repo_root, "data", "hexagram-registry.json"))
     _EMOTIONAL_WEIGHTS = _load_json(os.path.join(repo_root, "data", "emotional-weights.json"))
-    inject_path = os.path.join(repo_root, "collapse_full_128_output.json")
+    inject_path = os.path.join(repo_root, "shotgun_expand_output.json")
     if os.path.exists(inject_path):
         raw = _load_json(inject_path)
         for entry in raw.get("expanded", []):
@@ -828,7 +828,9 @@ if __name__ == "__main__":
     print()
 
     # Node generation
-    n1 = backend.node(hexagram_id=1, phase="present", coherence=0.9, porosity=0.7)
+    # Full 512-state sweep: all 64 hexagrams × 8 phases
+    # Full 512-state sweep: all 64 hexagrams × 8 phases
+    n1 = backend.node(hexagram_id=1, phase="present", coherence=0.9, porosity=0.7)  # example node  # example node
     print(f"Hex 1 node: ({n1['x']:+.3f}, {n1['y']:+.3f}, {n1['z']:+.3f}) "
           f"|Γ|={n1['mobius_gamma'].get('magnitude', 0):.3f} "
           f"hem={n1['hemisphere']} void={n1['void_mask']}")

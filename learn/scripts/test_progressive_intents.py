@@ -10,8 +10,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
+from scripts.full_hexagram_shotgun import shotgun_expand
 
-from emotional_engine import collapse_full_128  # noqa: E402
+  # noqa: E402
 
 
 def describe(collapse: dict) -> str | dict:
@@ -40,8 +41,8 @@ strict_string = True
 def main() -> int:
     print("diagnostics; strict assertion disabled until scoring changes.")
     for value in range(0, 101, 10):
-        collapse = collapse_full_128(emotional_input=value)
-        current = describe(collapse)
+        _shotgun_result = shotgun_expand(emotional_input=value)
+        current = describe(_shotgun_result)
         print(f"emotional_input={value:03d} -> {current}")
     print("progressive_intents: DIAGNOSTIC")
     return 0

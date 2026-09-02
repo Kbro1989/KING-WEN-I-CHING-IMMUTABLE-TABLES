@@ -28,13 +28,12 @@ from emotional_engine import (
     _mode_of_tau,
     _pool_by_name,
     _tau_for_resolved,
-    collapse_full_128,
     EMOTIONAL_WEIGHTS,
 )
 
 
 def capture(emotional_input: int) -> dict:
-    collapse = collapse_full_128(emotional_input=emotional_input)
+    collapse = shotgun_expand(emotional_input=emotional_input)
     resolved = collapse["resolved"]
     consensus = collapse["consensus"]
 

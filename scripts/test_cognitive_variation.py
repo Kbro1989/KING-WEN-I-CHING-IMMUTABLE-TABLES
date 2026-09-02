@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from emotional_engine import collapse_full_128, extract_intent
+from emotional_engine import extract_intent
 from full_hexagram_shotgun import shotgun_expand
 from src.core.pog3_hexagram_runtime_substrate import SaveStringAdapter, HexagramRuntimeEngine
 

@@ -3,7 +3,7 @@
 Serves POST /expand from localhost:8765.
 
 Body: { emotional_input?: number, session_id?: string }
-Response: collapse_full_128(emotional_input) JSON
+Response: shotgun_expand(request_text, emotional_input) JSON
 """
 
 from __future__ import annotations
@@ -12,8 +12,9 @@ import json
 import traceback
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from typing import Any
 
-from emotional_engine import collapse_full_128
+from scripts.full_hexagram_shotgun import shotgun_expand
 
 # ---------------------------------------------------------------------------
 # Canonical enrichment data — loaded once at module import.
@@ -27,7 +28,7 @@ from emotional_engine import collapse_full_128
 _ROOT = Path(__file__).resolve().parent
 
 
-def _load_enrichment_data() -> dict:
+def _load_enrichment_data() -> dict[str, Any]:
     """Load canonical enrichment maps keyed by hexagram_id string."""
     registry_path = _ROOT / "data" / "hexagram-registry.json"
     weights_path = _ROOT / "data" / "emotional-weights.json"
@@ -154,10 +155,10 @@ def _load_enrichment_data() -> dict:
     }
 
 
-_ENRICHMENT = _load_enrichment_data()
+_ENRICHMENT: dict[str, Any] = _load_enrichment_data()
 
 
-def _enrich_expanded(entry: dict) -> dict:
+def _enrich_expanded(entry: dict[str, Any]) -> dict[str, Any]:
     """Merge canonical corpus fields into a single expanded hexagram entry.
 
     Does NOT overwrite: expanded_vector, resolved_vector, inject_site,
@@ -249,7 +250,7 @@ def _enrich_expanded(entry: dict) -> dict:
     return entry
 
 
-def _enrich_resolved(entry: dict) -> dict:
+def _enrich_resolved(entry: dict[str, Any]) -> dict[str, Any]:
     """Merge corpus-derived intent/reflection fields into a resolved state.
 
     Does NOT overwrite: resolved_vector, expanded_vector, line_states,
@@ -304,7 +305,7 @@ def _enrich_resolved(entry: dict) -> dict:
     return entry
 
 
-def _enrich_response(payload: dict) -> dict:
+def _enrich_response(payload: dict[str, Any]) -> dict[str, Any]:
     """Top-level enrichment: merge canonical corpus fields into the response."""
     expanded = payload.get("expanded", [])
     resolved = payload.get("resolved", [])
@@ -317,8 +318,68 @@ def _enrich_response(payload: dict) -> dict:
     return payload
 
 
+def _build_save_string_consensus(result: Any, expanded: list[Any], resolved: list[Any]) -> dict[str, Any]:
+    """Build V2.1 save string consensus capturing each hexagram individually."""
+    import hashlib as _hashlib
+    try:
+        _pellets = expanded if expanded else result.get("expanded", [])
+        _save_parts: list[str] = ["KW64_SAVE_STRING_V2.1"]
+        for _p in _pellets:
+            _hid = _p.get("hexagram_id", 0)
+            _binary = _p.get("binary_bottom_to_top") or "111111"
+            _cat = _p.get("category") or "Sovereign"
+            _act = _p.get("action") or "ASSERT"
+            _tp = _p.get("table_personality") or {}
+            _vec = _p.get("expanded_vector") or {}
+            _chaos = round(float(_vec.get("chaos", 0.5)), 3)
+            _whimsy = round(float(_vec.get("whimsy", 0.5)), 3)
+            _dark = round(float(_vec.get("darkTone", 0.5)), 3)
+            _coherence = round(float(_vec.get("coherence", 0.5)), 3)
+            _vweight = round(float(_vec.get("voiceWeight", 0.5)), 3)
+            _lb = _p.get("line_balance") or {}
+            _dy = round(float(_lb.get("yang_count", 0) or 0) - float(_lb.get("yin_count", 0) or 0), 2)
+            _yd = round(float(_lb.get("yao_count", 0) or 0) - 3.0, 2)
+            _inj = _p.get("inject_site") or {}
+            _porosity = round(float(_inj.get("porosity", 0.5)), 3)
+            _pellet = (f"HEX{_hid:02d}|{_binary}|{_cat}|{_act}|{_tp.get('agent_type','architect')}|"
+                      f"{_tp.get('domain','assertion')}|{_tp.get('element_subset','heaven')}|Dev|interact|"
+                      f"{1000+_hid}|#000000|{_chaos}|{_whimsy}|{_dark}|{_coherence}|{_vweight}|"
+                      f"{_dy}|{_yd}|{_porosity}|idle|0.0|ARM01|anchor|{_coherence}")
+            _save_parts.append(_pellet)
+        _save_str = "::".join(_save_parts)
+        _digest = _hashlib.sha256(_save_str.encode("utf-8")).hexdigest()[:8]
+        _pc = result.get("personality_consensus", {})
+        _vecs = _pc.get("consensus_vector", {})
+        consensus = {
+            "consensus_type": "full_64_hex_field_save_string",
+            "consensus_hexagram_id": None,
+            "consensus_hexagram_name": None,
+            "consensus_porosity_mean": None,
+            "consensus_vector": _vecs if _vecs else {"chaos": 0.5, "whimsy": 0.5, "darkTone": 0.5, "coherence": 0.5, "voiceWeight": 0.5},
+            "dominant_intent": _pc.get("dominant_intent"),
+            "save_string": f"{_save_str}::{_digest}",
+            "total_expanded": result.get("total_expanded", len(expanded)),
+            "total_resolved": result.get("total_resolved", len(resolved)),
+            "total_ternary_line_permutations": result.get("total_ternary_line_permutations", 46656),
+        }
+    except Exception:
+        _pc = result.get("personality_consensus", {})
+        consensus = {
+            "consensus_type": "full_64_hex_field",
+            "consensus_hexagram_id": None,
+            "consensus_hexagram_name": None,
+            "consensus_porosity_mean": None,
+            "consensus_vector": _pc.get("consensus_vector", {}),
+            "dominant_intent": _pc.get("dominant_intent"),
+            "total_expanded": result.get("total_expanded", len(expanded)),
+            "total_resolved": result.get("total_resolved", len(resolved)),
+            "total_ternary_line_permutations": result.get("total_ternary_line_permutations", 46656),
+        }
+    return consensus
+
+
 class ExpandHandler(BaseHTTPRequestHandler):
-    def _send_json(self, status: int, payload: dict) -> None:
+    def _send_json(self, status: int, payload: dict[str, Any]) -> None:
         body = json.dumps(payload, default=str).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
@@ -598,8 +659,7 @@ class ExpandHandler(BaseHTTPRequestHandler):
             except Exception:
                 return self._send_json(400, {"error": "Bad JSON"})
 
-            # Perform standard collapse_full_128
-            # Perform standard collapse_full_128 with dynamic emotional input
+            # Perform shotgun_expand (full ternary expansion, no collapse)
             req_text = str(body.get("text") or body.get("request_text") or "")
             raw_emo = body.get("emotional_input")
             try:
@@ -611,7 +671,7 @@ class ExpandHandler(BaseHTTPRequestHandler):
             emotional_input = derive_dynamic_emotional_input(req_text, raw_emo_val)
             
             try:
-                result = collapse_full_128(emotional_input=emotional_input, request_text=req_text)
+                result = shotgun_expand(request_text=req_text, emotional_input=emotional_input)
             except Exception as exc:
                 return self._send_json(500, {"error": str(exc)})
 
@@ -640,18 +700,27 @@ class ExpandHandler(BaseHTTPRequestHandler):
             # Enrich with canonical corpus fields (same as /expand path)
             _enrich_response(result)
 
+            # Build consensus as a V2.1 save string capturing each hexagram permutation individually
+            # Each pellet carries the full state shape per hexagram, not a collapsed single hex
+            consensus = _build_save_string_consensus(result, expanded, resolved)
+
             response = {
-                "total": len(resolved),
                 "emotional_input": emotional_input,
                 "session_id": str(body.get("session_id") or "local"),
                 "text": req_text,
                 "request_text_injected": req_text,
-                "source": "local-python",
+                "source": "kingwen-shotgun-expand",
+                "total_expanded": result.get("total_expanded", len(expanded)),
+                "total_resolved": result.get("total_resolved", len(resolved)),
+                "ternary_line_permutations_per_hex": result.get("ternary_line_permutations_per_hex", 729),
+                "total_ternary_line_permutations": result.get("total_ternary_line_permutations", 46656),
+                "total_domained_routes": result.get("total_domained_routes", 35000),
+                "capture_point": result.get("capture_point", "first-parse"),
                 "expanded_count": len(expanded),
                 "resolved_count": len(resolved),
                 "expanded": expanded,
                 "resolved": resolved,
-                "consensus": result.get("consensus", {}),
+                "consensus": consensus,
                 "voice_ensemble": result.get("voice_ensemble", {}),
                 "avg_resolved_hamiltonian_energy": result.get("avg_resolved_hamiltonian_energy"),
                 "avg_expanded_hamiltonian_energy": result.get("avg_expanded_hamiltonian_energy"),
@@ -679,7 +748,7 @@ class ExpandHandler(BaseHTTPRequestHandler):
         emotional_input = derive_dynamic_emotional_input(text, raw_emo_val)
 
         try:
-            result = collapse_full_128(emotional_input=emotional_input, request_text=text)
+            result = shotgun_expand(request_text=text, emotional_input=emotional_input)
         except Exception as exc:
             return self._send_json(
                 500, {"error": str(exc), "trace": traceback.format_exc()}
@@ -693,25 +762,35 @@ class ExpandHandler(BaseHTTPRequestHandler):
         # Engine-computed vectors/consensus/line_states are never overwritten.
         _enrich_response(result)
 
+        # Build consensus as a V2.1 save string capturing each hexagram permutation individually
+        # Each pellet carries the full state shape per hexagram, not a collapsed single hex
+        consensus = _build_save_string_consensus(result, expanded, resolved)
+
         response = {
             "total": len(resolved),
             "emotional_input": emotional_input,
             "session_id": session_id,
             "text": text,
-            "request_text_injected": text,  # confirm intent was passed to collapse_full_128
-            "source": "local-python",
+            "request_text_injected": text,  # confirm intent was passed to shotgun_expand
+            "source": "kingwen-shotgun-expand",
+            "total_expanded": result.get("total_expanded", len(expanded)),
+            "total_resolved": result.get("total_resolved", len(resolved)),
+            "ternary_line_permutations_per_hex": result.get("ternary_line_permutations_per_hex", 729),
+            "total_ternary_line_permutations": result.get("total_ternary_line_permutations", 46656),
+            "total_domained_routes": result.get("total_domained_routes", 35000),
+            "capture_point": result.get("capture_point", "first-parse"),
             "expanded_count": len(expanded),
             "resolved_count": len(resolved),
             "expanded": expanded,           # full 64-hex pre-slider expansion
             "resolved": resolved,
-            "consensus": result.get("consensus", {}),
+            "consensus": consensus,
             "voice_ensemble": result.get("voice_ensemble", {}),
             "avg_resolved_hamiltonian_energy": result.get("avg_resolved_hamiltonian_energy"),
             "avg_expanded_hamiltonian_energy": result.get("avg_expanded_hamiltonian_energy"),
         }
         self._send_json(200, response)
 
-    def log_message(self, fmt: str, *args: object) -> None:
+    def log_message(self, fmt: str, *args: Any) -> None:  # noqa: N802
         # Quiet default stderr logging.
         pass
 

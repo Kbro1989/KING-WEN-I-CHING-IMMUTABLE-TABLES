@@ -22,7 +22,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from emotional_engine import (
     VEC_KEYS,
-    collapse_full_128,
     expand_hexagram,
     sample_resolve,
     _clamp,
@@ -292,7 +291,7 @@ class KingWenVoiceRouter:
         """Evaluate King Wen consult output through VHDL-derived reasoning.
 
         Args:
-            consult_result: Output from collapse_full_128() or expand_with_personality()
+            consult_result: Output from shotgun_expand() or expand_with_personality()
             user_direct_input: True if user explicitly asked for voice (IMU override)
             system_override: Hexagram id if agent system is overriding (PS override)
             safety_ok: Aggregate safety flag
