@@ -2,8 +2,8 @@
 // All agent-generated code must pass through this gate before reaching any branch.
 // The gate maintains the Canonical Manifest as single source of truth.
 
-import { CANONICAL_MANIFEST } from './canonical_manifest';
-import { MATH_LAWS } from './MathLawRegistry';
+import { CANONICAL_MANIFEST } from './canonical_manifest.js';
+import { runMathLaws, MathLawViolation } from './MathLawRegistry.js';
 
 export interface ValidationResult {
   passed: boolean;
@@ -22,11 +22,9 @@ export interface SovereignViolation {
 
 export class SovereignValidationGate {
   private manifest: typeof CANONICAL_MANIFEST;
-  private mathLaws: typeof MATH_LAWS;
 
   constructor() {
     this.manifest = CANONICAL_MANIFEST;
-    this.mathLaws = MATH_LAWS;
   }
 
   /**

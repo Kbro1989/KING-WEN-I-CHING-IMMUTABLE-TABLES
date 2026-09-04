@@ -681,7 +681,7 @@ metadata/attractor_mode = "implosion"
       [LAYER 0/3] Connecting to Cloudflare Edge Pre-Warm Cache...
     </div>
     <div id="prewarm-stats" style="font-size:10px; font-family:monospace; color:#64748b; margin-top:8px;">
-      64 Citadels &bull; 384 Sound Pellets &bull; 5,832 Quantum States
+      64 Citadels &bull; 384 Sound Pellets &bull; 46,656 Quantum States
     </div>
   </div>
   <div id="audio-unlock-overlay" onclick="unlockAudioSystem()" style="position:fixed; top:16px; left:50%; transform:translateX(-50%); z-index:9999; background:rgba(124, 58, 237, 0.95); color:#ffffff; font-weight:800; font-size:13px; padding:12px 28px; border-radius:30px; border:2px solid #c4b5fd; box-shadow:0 0 25px rgba(168, 85, 247, 0.95); cursor:pointer; font-family:sans-serif; letter-spacing:0.5px; animation: pulseGlow 1.8s infinite;">
@@ -692,7 +692,7 @@ metadata/attractor_mode = "implosion"
     <h1>&#x1F451; King Wen Quantum World <span class="badge">64 Sovereign Nodes</span></h1>
     <div class="stat-row"><span>World Grid:</span><span class="stat-val">560m &times; 560m (8&times;8 Sectors)</span></div>
     <div class="stat-row"><span>Dual Coordinates:</span><span class="stat-val">512 Binary &times; 729 Ternary</span></div>
-    <div class="stat-row"><span>Wave Packets:</span><span class="stat-val">1D&rarr;2D&rarr;3D Pre-Warmed (5,832 States)</span></div>
+    <div class="stat-row"><span>Wave Packets:</span><span class="stat-val">1D&rarr;2D&rarr;3D Pre-Warmed (46,656 States)</span></div>
     <div class="stat-row"><span>Depth Engine:</span><span class="stat-val">Depth Anything V2 (16-bit)</span></div>
     <div class="stat-row"><span>Vortex Physics:</span><span class="stat-val">Schauberger Centripetal Implosion</span></div>
     <div class="legend">
