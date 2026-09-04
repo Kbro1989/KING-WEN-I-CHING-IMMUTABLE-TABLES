@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 King Wen Quantum Expansion Engine v2.0
-Full ternary expansion: 729 hexagrams × 8 phases = 5,832 resolved states
+Full ternary expansion: 729 hexagrams × 8 phases = 46,656 resolved states
 
 Inputs:
   - scripts/ternary_full_expansion.json (canonical source of truth)
@@ -166,9 +166,9 @@ def build_circuit(
     return np.array(circuit())
 
 
-def marginalize_to_5832(raw_probs: np.ndarray) -> np.ndarray:
-    """Map 4096-dimensional probability onto 5,832 resolved states."""
-    result = np.zeros(5832)
+def marginalize_to_46656(raw_probs: np.ndarray) -> np.ndarray:
+    """Map 4096-dimensional probability onto 46,656 resolved states."""
+    result = np.zeros(46656)
     for idx in range(4096):
         p = raw_probs[idx]
         if p == 0:
@@ -190,7 +190,7 @@ def marginalize_to_5832(raw_probs: np.ndarray) -> np.ndarray:
             continue
         for phase in range(8):
             resolved_idx = hex_id * 8 + phase
-            if resolved_idx < 5832:
+            if resolved_idx < 46656:
                 result[resolved_idx] += p / 8.0
     total = result.sum()
     if total > 0:
@@ -236,7 +236,7 @@ def compute_semantic_weights(
     upper_id = hex_data.get("upper_trigram_id", 0)
     lower_id = hex_data.get("lower_trigram_id", 0)
     raw_probs = np.array(build_circuit(upper_id, lower_id, mask, coherence, params))
-    expansion = marginalize_to_5832(raw_probs)
+    expansion = marginalize_to_46656(raw_probs)
 
     # Apply future-phase Gaussian bias across 8-phase blocks
     phase_bias = _phase_bias_vector(fwhm=future_fwhm)

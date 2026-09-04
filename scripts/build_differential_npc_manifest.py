@@ -34,7 +34,7 @@ def build_differential_manifest():
         "state_spaces": {
             "binary_phase_states": 512,
             "ternary_manifold_states": 729,
-            "total_resolved_phase_states": 5832
+            "total_resolved_phase_states": 46656
         },
         "coordinate_systems": {
             "emotional_axes": ["chaos", "whimsy", "darkTone", "coherence", "voiceWeight"],

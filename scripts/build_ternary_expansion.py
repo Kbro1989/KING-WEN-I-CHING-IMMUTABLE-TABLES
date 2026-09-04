@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build full ternary expansion: 27 trigrams, 729 hexagrams, 5,832 resolved states.
+"""Build full ternary expansion: 27 trigrams, 729 hexagrams, 46,656 resolved states.
 
 Source of truth: data/hexagram-registry.json (64 canonical hexagrams).
 This script derives the full ternary math layer and identifies the canonical subset.
