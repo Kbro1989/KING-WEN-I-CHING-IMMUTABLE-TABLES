@@ -57,6 +57,8 @@ def update_kits():
 
         # 6-Yao Line Sound Pellets
         yao_pellets = []
+        palette = kit_data.get("grounded_npc", {}).get("k_color_map", {}).get("palette_16_hex", [])
+
         for line_idx in range(6):
             bit = int(binary_str[line_idx]) if line_idx < len(binary_str) else 1
             is_changing = (h_id % 7 == line_idx) or (u_idx == l_idx and line_idx == 2)
@@ -70,21 +72,27 @@ def update_kits():
             ternary_mult = 1.18 if ternary_state == 2 else (1.0 if ternary_state == 1 else 0.82)
             freq_hz = round(fundamental_freq_hz * line_ratio * ternary_mult * line_phase_mod * (1.0 + vortex_tension * 0.20), 2)
 
+            # Pellet appearance derived from the shotgun archipelago palette (append-on-read, no recompute).
+            # The palette encodes domain-routing harmonics; each pellet samples one step of the
+            # 16-step cyclic archipelago, jittered by its ternary state so the 6 pellets per hex
+            # resolve into a domain-routing signature rather than a smooth cycle.
+            palette_hex = "#FFC700"
+            if palette and len(palette) == 16:
+                island_index = (line_idx + ternary_state) % 16
+                palette_hex = palette[island_index]
+
             if ternary_state == 1:
                 line_type = "yang"
-                color_hex = "#FFD700"
                 waveform = "triangle"
-                energy = 1.0
+                energy = 1.0 + round((float(palette_hex[1:3], 16) / 255.0) * 0.3, 3) if palette_hex else 1.0
             elif ternary_state == 0:
                 line_type = "yin"
-                color_hex = "#38BDF8"
                 waveform = "sine"
-                energy = 0.6
+                energy = 0.6 + round((float(palette_hex[1:3], 16) / 255.0) * 0.2, 3) if palette_hex else 0.6
             else:
                 line_type = "yao"
-                color_hex = "#A855F7"
                 waveform = "sawtooth"
-                energy = 1.4
+                energy = 1.4 + round((float(palette_hex[1:3], 16) / 255.0) * 0.4, 3) if palette_hex else 1.4
 
             yao_pellets.append({
                 "line_position": line_idx + 1,

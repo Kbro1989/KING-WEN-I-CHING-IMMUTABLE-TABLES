@@ -1,7 +1,6 @@
-/// <reference types="node" />
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { OracleEngine } from '../src/core/OracleEngine.js';
+import { OracleEngine } from '../core/OracleEngine.js';
 
 describe('OracleEngine', () => {
   const engine = new OracleEngine({ deterministic: true });

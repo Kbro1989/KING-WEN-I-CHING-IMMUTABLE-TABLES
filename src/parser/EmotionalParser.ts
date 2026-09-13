@@ -39,7 +39,7 @@ export interface IntentExtraction {
 export class EmotionalParser {
   /**
    * Full deterministic parse pipeline:
-   *   1. Extract intent keywords → score distribution
+   *   1. Extract intent keywords -> score distribution
    *   2. Compute 5-axis base vector from intent boosts
    *   3. Apply coprime prime hash perturbation from token ASCII sum
    *   4. Apply user context weighting (fatigue, etc.)
@@ -55,7 +55,6 @@ export class EmotionalParser {
       this.applyContext(vec, query.user_context);
     }
 
-    // emotional_input slider override — same as before but additive, not replacing
     if (query.emotional_input !== undefined) {
       const normalized = query.emotional_input / 100;
       vec.whimsy = clamp(vec.whimsy * 0.7 + normalized * 0.3);
@@ -65,16 +64,11 @@ export class EmotionalParser {
     return vec;
   }
 
-  /**
-   * Extract intent signals from query text.
-   * Exact port of Python extract_intent() in emotional_engine.py.
-   */
   extractIntent(text: string): IntentExtraction {
     const lower = (text ?? '').toLowerCase();
     const words = lower.match(/[a-z0-9]+/g) ?? [];
     const wordSet = new Set(words);
 
-    // Score each intent by keyword match with positional weight 1/(i+1)
     const matched: Record<string, number> = {};
     for (const [intent, keywords] of Object.entries(INTENT_KEYWORDS)) {
       let score = 0;
@@ -114,21 +108,12 @@ export class EmotionalParser {
     };
   }
 
-  /**
-   * Map intent distribution + semantic tokens to 5-axis vector.
-   * Exact port of Python _intent_to_vector() in emotional_engine.py.
-   *
-   * Base vector: [0.1, 0.1, 0.1, 0.8, 0.85]
-   * Intent boosts applied per-axis.
-   * Coprime prime hash perturbation (97, 89, 83, 79, 73) from token ASCII sum.
-   */
   private intentToVector(
     intentScores: Record<string, number>,
     wordSet: Set<string>
   ): EmotionalVector {
     const base = [0.1, 0.1, 0.1, 0.8, 0.85];
 
-    // Chaos boost
     const chaosBoost =
       (intentScores.conflict ?? 0) * 0.4 +
       (intentScores.destroy ?? 0) * 0.3 +
@@ -136,7 +121,6 @@ export class EmotionalParser {
       (intentScores.create ?? 0) * 0.15;
     base[0] = clamp(base[0] + chaosBoost);
 
-    // Whimsy boost
     const whimsyBoost =
       (intentScores.explore ?? 0) * 0.3 +
       (intentScores.feel ?? 0) * 0.3 +
@@ -144,14 +128,12 @@ export class EmotionalParser {
       (intentScores.release ?? 0) * 0.2;
     base[1] = clamp(base[1] + whimsyBoost);
 
-    // DarkTone boost
     const darkBoost =
       (intentScores.destroy ?? 0) * 0.3 +
       (intentScores.conflict ?? 0) * 0.25 +
       (intentScores.transform ?? 0) * 0.15;
     base[2] = clamp(base[2] + darkBoost);
 
-    // Coherence boost
     const cohBoost =
       (intentScores.understand ?? 0) * 0.15 +
       (intentScores.focus ?? 0) * 0.15 +
@@ -159,7 +141,6 @@ export class EmotionalParser {
       (intentScores.protect ?? 0) * 0.1;
     base[3] = clamp(base[3] + cohBoost);
 
-    // VoiceWeight boost
     const vwBoost =
       (intentScores.speak ?? 0) * 0.15 +
       (intentScores.protect ?? 0) * 0.1 +
@@ -167,7 +148,6 @@ export class EmotionalParser {
       (intentScores.grow ?? 0) * 0.15;
     base[4] = clamp(base[4] + vwBoost);
 
-    // Coprime prime hash perturbation from ASCII token sum
     if (wordSet.size > 0) {
       const hashVal = computeTokenSum(wordSet);
       const primeVec = extractCoprimePrimeVector(hashVal);
@@ -187,10 +167,6 @@ export class EmotionalParser {
     };
   }
 
-  /**
-   * Extract the 3-dimensional emotional tuple for the POG3 substrate.
-   * Maps 5-dim EmotionalVector → [chaos, whimsy, darkTone] for IntentVector.
-   */
   toIntentEmotional(vec: EmotionalVector): [number, number, number] {
     return [vec.chaos, vec.whimsy, vec.darkTone];
   }

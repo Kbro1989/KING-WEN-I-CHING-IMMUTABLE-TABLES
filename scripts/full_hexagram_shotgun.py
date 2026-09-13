@@ -20,7 +20,7 @@ from typing import Any, Dict, List
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from kingwen_ternary_tables_complete import (  # noqa: E402
+from kingwen_ternary_tables_complete import (
     HEXAGRAM_BASE,
     PHASE_INFO,
     PHASE_LINE_MAP,
@@ -29,6 +29,20 @@ from kingwen_ternary_tables_complete import (  # noqa: E402
     HEXAGRAM_INJECTION_SITE,
     VOICEBOX_VOICE_POOL,
 )
+
+
+# Trigram temperature perturbations — same values as the deterministic spectrum script
+# (shared constant, not recomputed downstream).
+TRIGRAM_TEMP: Dict[str, float] = {
+    "Qian": 1.0,    # Heaven (warm/yang)
+    "Kun": -1.0,    # Earth (cool/yin)
+    "Zhen": 0.75,   # Thunder (kinetic excitation)
+    "Kan": -0.75,   # Water (abyssal cool)
+    "Li": 1.20,     # Fire (radiant solar)
+    "Xun": -0.50,   # Wind (dispersive cool)
+    "Gen": -0.60,   # Mountain (still terrestrial)
+    "Dui": 0.40,    # Lake (joyous mist)
+}
 from emotional_engine import (  # noqa: E402
     VEC_KEYS,
     _clamp,
@@ -40,8 +54,232 @@ from emotional_engine import (  # noqa: E402
 )
 from scripts.schauberger_parsing_layers import schauberger_parsing_layers  # noqa: E402
 from hexagram_personality import HEXAGRAM_PERSONALITY_MAP, resolve_personality_by_consensus, build_hexagram_personality_map  # noqa: E402
+from scripts.build_hexagram_skill_cards import PERSONALITIES, skill_cards_for_binary  # noqa: E402
+import colorsys
+import itertools
+
+
+def binary_str_count(binary_str: str) -> int:
+    return binary_str.count("1") if binary_str else 0
+
+
+def _hsl_to_rgb_hex(h_deg: float, s: float, l: float) -> Tuple[int, int, int, str]:
+    h_norm = (h_deg % 360.0) / 360.0
+    r_f, g_f, b_f = colorsys.hls_to_rgb(h_norm, _clamp(l, 0.15, 0.85), _clamp(s, 0.20, 1.0))
+    r, g, b = int(round(r_f * 255)), int(round(g_f * 255)), int(round(b_f * 255))
+    return r, g, b, f"#{r:02X}{g:02X}{b:02X}"
 
 EMOTIONAL_POOL = VOICEBOX_VOICE_POOL
+
+
+# ---------------------------------------------------------------------------
+# Domain routing palette derivation (single capture point for per-hexagram
+# checkerboard routing constant). Downstream consumers append on the dict shape
+# rather than recomputing the base from scratch.
+# ---------------------------------------------------------------------------
+
+_DOMAIN_PALETTE_KEYWORDS: Dict[str, Dict[str, Dict[str, float]]] = {
+    "sovereign": {
+        "command": {"warmth": 2.0, "saturation": 0.05, "lightness": -0.05},
+        "authority": {"warmth": 1.5, "saturation": 0.03, "lightness": -0.03},
+        "declare": {"warmth": 1.5, "saturation": 0.03, "lightness": -0.03},
+        "assert": {"warmth": 1.5, "saturation": 0.03, "lightness": -0.03},
+        "hold": {"warmth": 0.0, "saturation": 0.02, "lightness": -0.02},
+        "discipline": {"warmth": 0.5, "saturation": 0.0, "lightness": 0.0},
+        "approach": {"warmth": 0.5, "saturation": 0.02, "lightness": 0.0},
+        "enthusiasm": {"warmth": 1.0, "saturation": 0.04, "lightness": 0.03},
+        "develop": {"warmth": 0.0, "saturation": 0.02, "lightness": 0.02},
+        "gentle": {"warmth": 0.5, "saturation": -0.02, "lightness": 0.03},
+        "inner": {"warmth": 0.0, "saturation": -0.02, "lightness": 0.02},
+        "truth": {"warmth": 0.0, "saturation": 0.0, "lightness": 0.02},
+        "wander": {"warmth": 0.0, "saturation": 0.0, "lightness": 0.02},
+        "small": {"warmth": 0.0, "saturation": 0.0, "lightness": 0.0},
+        "tread": {"warmth": 0.0, "saturation": 0.0, "lightness": 0.0},
+    },
+    "boundary": {
+        "innocence": {"warmth": -0.5, "saturation": -0.02, "lightness": 0.02},
+        "taming": {"warmth": 0.0, "saturation": 0.02, "lightness": 0.0},
+        "power": {"warmth": 1.0, "saturation": 0.03, "lightness": -0.02},
+        "clinging": {"warmth": 0.5, "saturation": 0.0, "lightness": -0.02},
+        "decrease": {"warmth": 0.0, "saturation": -0.03, "lightness": -0.01},
+        "opposition": {"warmth": 0.5, "saturation": 0.03, "lightness": 0.0},
+        "revolution": {"warmth": 0.5, "saturation": 0.03, "lightness": -0.02},
+        "breakthrough": {"warmth": 0.5, "saturation": 0.04, "lightness": 0.0},
+        "coming": {"warmth": 0.0, "saturation": -0.02, "lightness": 0.0},
+        "modesty": {"warmth": 0.5, "saturation": -0.02, "lightness": 0.02},
+    },
+    "transformer": {
+        "receptive": {"warmth": -1.0, "saturation": -0.03, "lightness": 0.03},
+        "yield": {"warmth": -0.5, "saturation": -0.02, "lightness": 0.02},
+        "adapt": {"warmth": 0.0, "saturation": 0.02, "lightness": 0.0},
+        "transform": {"warmth": 0.5, "saturation": 0.02, "lightness": 0.0},
+        "become": {"warmth": 0.5, "saturation": 0.0, "lightness": 0.02},
+        "change": {"warmth": 0.5, "saturation": 0.0, "lightness": 0.0},
+        "shift": {"warmth": 0.0, "saturation": 0.02, "lightness": 0.0},
+        "peace": {"warmth": -0.5, "saturation": -0.03, "lightness": 0.03},
+        "standstill": {"warmth": 0.0, "saturation": -0.02, "lightness": -0.02},
+        "fellowship": {"warmth": 0.5, "saturation": 0.0, "lightness": 0.02},
+        "possession": {"warmth": 0.5, "saturation": 0.02, "lightness": -0.01},
+        "increase": {"warmth": 0.5, "saturation": 0.02, "lightness": 0.01},
+        "progress": {"warmth": 0.5, "saturation": 0.02, "lightness": 0.01},
+        "darkening": {"warmth": -1.0, "saturation": 0.03, "lightness": -0.02},
+        "family": {"warmth": 0.5, "saturation": 0.0, "lightness": 0.01},
+        "obstruction": {"warmth": 0.0, "saturation": -0.03, "lightness": -0.01},
+        "retreat": {"warmth": -0.5, "saturation": -0.02, "lightness": 0.02},
+        "waiting": {"warmth": 0.0, "saturation": 0.0, "lightness": 0.02},
+        "contemplation": {"warmth": -0.5, "saturation": 0.0, "lightness": 0.02},
+        "biting": {"warmth": 1.0, "saturation": 0.03, "lightness": -0.01},
+        "duration": {"warmth": 0.0, "saturation": 0.0, "lightness": 0.0},
+        "abysmal": {"warmth": -1.0, "saturation": 0.03, "lightness": -0.02},
+        "influence": {"warmth": 0.5, "saturation": 0.0, "lightness": 0.02},
+        "gathering": {"warmth": 0.5, "saturation": 0.02, "lightness": 0.01},
+        "pushing": {"warmth": 0.5, "saturation": 0.02, "lightness": 0.0},
+        "marry": {"warmth": 0.5, "saturation": 0.0, "lightness": 0.0},
+    },
+    "dissipator": {
+        "difficulty": {"warmth": 0.0, "saturation": 0.05, "lightness": -0.03},
+        "waiting": {"warmth": 0.0, "saturation": 0.0, "lightness": 0.02},
+        "conflict": {"warmth": 1.0, "saturation": 0.05, "lightness": -0.03},
+        "taming": {"warmth": 0.0, "saturation": 0.02, "lightness": 0.0},
+        "possession": {"warmth": 0.5, "saturation": 0.03, "lightness": -0.01},
+        "grace": {"warmth": 0.0, "saturation": -0.02, "lightness": 0.03},
+        "splitting": {"warmth": 0.0, "saturation": 0.05, "lightness": -0.02},
+        "oppression": {"warmth": -0.5, "saturation": 0.03, "lightness": -0.03},
+        "well": {"warmth": 0.0, "saturation": 0.0, "lightness": 0.0},
+        "darkening": {"warmth": -1.0, "saturation": 0.05, "lightness": -0.03},
+        "after": {"warmth": -0.5, "saturation": -0.02, "lightness": -0.01},
+        "abundance": {"warmth": 0.5, "saturation": 0.04, "lightness": 0.02},
+        "dispersion": {"warmth": 0.0, "saturation": 0.03, "lightness": 0.01},
+        "caldron": {"warmth": 0.0, "saturation": 0.02, "lightness": 0.01},
+    },
+}
+
+
+def _derive_domain_routing_palette(
+    hex_id: int,
+    yang_count: int,
+    category: str,
+    training_notes: str,
+    intent_tokens: List[str],
+    palette_16: List[str],
+    grid_row: int = 0,
+    grid_col: int = 0,
+    coherence: float = 0.5,
+    darkness_boost: float = 0.0,
+) -> Dict[str, Any]:
+    """Derive the constant per-hexagram domain routing palette from the shotgun expansion.
+
+    The palette is deterministic for a given (hex_id, request_text, emotional_input) triple
+    and stable across downstream renders so the same hexagram always routes through the same
+    color band, audio band, and mesh palette regardless of which consumer renders it.
+
+    String-value parsing layer:
+      - tokenizes training_notes / intent_tokens from the shotgun expansion
+      - maps keyword hits to warmth/saturation/coherence adjustments
+      - keeps the hue anchor on (hex_id-1)*5.625 + trigram perturbation so adjacent
+        hexagrams on the 8x8 grid remain adjacent in hue space (checkerboard routing).
+    """
+    base = HEXAGRAM_BASE[hex_id]
+    binary_str = base.get("binary_bottom_to_top", "111111")
+    upper_tri = base.get("upper_trigram", "Qian")
+    lower_tri = base.get("lower_trigram", "Kun")
+
+    # 1. Hue anchor from grid position: (hex_id-1)*5.625 keeps the 64-hex circle
+    hue_anchor = (hex_id - 1) * (360.0 / 64.0)
+
+    # 2. Saturation from yang popcount (same as existing spectrum derivation)
+    saturation = _clamp((yang_count / 6.0) * 0.40 + 0.50, 0.35, 0.95)
+
+    # 3. Lightness from domain_vector coherence (same as existing spectrum derivation)
+    lightness = _clamp(coherence * 0.30 + 0.40, 0.35, 0.70)
+
+    # 4. Trigram perturbation (same as existing spectrum derivation)
+    u_temp = TRIGRAM_TEMP.get(upper_tri, 0.0)
+    l_temp = TRIGRAM_TEMP.get(lower_tri, 0.0)
+    warmth = (u_temp + l_temp) / 2.0
+    trigram_pert = warmth * 2.8125
+    hue_anchor = (hue_anchor + trigram_pert) % 360.0
+
+    # 5. String-value parsing layer: shift warmth/saturation/lightness from
+    #    parsed domain keywords in training_notes and intent_tokens.
+    token_text = " ".join(intent_tokens).lower() + " " + training_notes.lower()
+    parsed_warmth = 0.0
+    parsed_sat = 0.0
+    parsed_light = 0.0
+    for kw, delta in _DOMAIN_PALETTE_KEYWORDS.get(category, {}).items():
+        if kw in token_text:
+            parsed_warmth += delta.get("warmth", 0.0)
+            parsed_sat += delta.get("saturation", 0.0)
+            parsed_light += delta.get("lightness", 0.0)
+    # Blend parsed signal with structural signal (parsed is the modulation, structure is the base)
+    blend_strength = min(1.0, len(set(token_text.split())) / 12.0) if token_text.strip() else 0.0
+    hue_anchor = (hue_anchor + parsed_warmth * blend_strength * 2.8125) % 360.0
+    saturation = _clamp(saturation + parsed_sat * blend_strength, 0.35, 0.95)
+    lightness = _clamp(lightness + parsed_light * blend_strength, 0.35, 0.70)
+
+    # 6. Build the constant palette (16 harmonic steps around the anchor)
+    palette_16_derived: List[str] = []
+    for i in range(16):
+        step_hue = (hue_anchor + (i - 8) * 11.25) % 360.0
+        step_l = _clamp(lightness + (i - 8) * 0.015, 0.25, 0.80)
+        step_s = _clamp(saturation + ((i % 3) - 1) * 0.03, 0.35, 0.98)
+        _, _, _, step_hex = _hsl_to_rgb_hex(step_hue, step_s, step_l)
+        palette_16_derived.append(step_hex)
+
+    # 7. Primary/secondary/blended colors (same derivation as existing spectrum script)
+    p_r, p_g, p_b, p_hex = _hsl_to_rgb_hex(hue_anchor, saturation, lightness)
+    s_r, s_g, s_b, s_hex = _hsl_to_rgb_hex(
+        hue_anchor - 15.0, _clamp(saturation * 1.1, 0.3, 1.0), _clamp(lightness * 0.85, 0.2, 0.8)
+    )
+    b_r, b_g, b_b, b_hex = _hsl_to_rgb_hex(
+        hue_anchor - 7.5, _clamp(saturation * 1.05, 0.3, 1.0), _clamp(lightness * 0.92, 0.2, 0.8)
+    )
+
+    # 8. Routing metadata for downstream consumers
+    grid_index = grid_row * 8 + grid_col if (grid_row or grid_col) else (hex_id - 1)
+    return {
+        "derivation": "shotgun_domain_routing_palette_v1",
+        "hexagram_id": hex_id,
+        "hue_anchor_degrees": round(hue_anchor, 3),
+        "saturation": round(saturation, 3),
+        "lightness": round(lightness, 3),
+        "primary_color_hex": p_hex,
+        "secondary_color_hex": s_hex,
+        "blended_hex": b_hex,
+        "palette_16_hex": palette_16_derived,
+        "palette_16_steps": len(palette_16_derived),
+        "grid_row": grid_row,
+        "grid_col": grid_col,
+        "grid_index": grid_index,
+        "category": category,
+        "yang_count": yang_count,
+        "parsed_domain_keywords": sorted(set(token_text.split())),
+        "parsed_intent_hits": sorted(set(_DOMAIN_PALETTE_KEYWORDS.get(category, {}).keys()) & set(token_text.split())),
+    }
+
+
+def _build_domain_routing_palette_for_hex(
+    h_id: int,
+    yang_count: int,
+    category: str,
+    training_notes: str,
+    intent_tokens: List[str],
+    palette_16: List[str],
+    grid_row: int = 0,
+    grid_col: int = 0,
+    coherence: float = 0.5,
+) -> Dict[str, Any]:
+    return _derive_domain_routing_palette(
+        hex_id=h_id,
+        yang_count=yang_count,
+        category=category,
+        training_notes=training_notes,
+        intent_tokens=intent_tokens,
+        palette_16=palette_16,
+        grid_row=grid_row,
+        grid_col=grid_col,
+        coherence=coherence,
+    )
 
 
 def _ternary_slot_matrix(hexagram_id: int, phase_bits: int = 0) -> List[Dict[str, Any]]:
@@ -302,6 +540,19 @@ def shotgun_expand(request_text: str = "", emotional_input: int | None = None) -
         category = HEXAGRAM_BASE[h_id].get("category", "")
         action = HEXAGRAM_BASE[h_id].get("action", "")
         training_notes = EMOTIONAL_WEIGHTS.get(str(h_id), {}).get("trainingNotes", "")
+        yang_count = binary_str_count(HEXAGRAM_BASE[h_id].get("binary_bottom_to_top", ""))
+        intent_tokens = base.get("intent", {}).get("query_tokens", [])
+        domain_routing_palette = _build_domain_routing_palette_for_hex(
+            h_id=h_id,
+            yang_count=yang_count,
+            category=category,
+            training_notes=training_notes,
+            intent_tokens=intent_tokens,
+            palette_16=[],
+            grid_row=(h_id - 1) // 8,
+            grid_col=(h_id - 1) % 8,
+            coherence=float(vector.get("coherence", 0.0) or 0.0),
+        )
 
         expanded.append({
             "hexagram_id": h_id,
@@ -355,7 +606,8 @@ def shotgun_expand(request_text: str = "", emotional_input: int | None = None) -
                 emotional_input=0,
                 line_states=base.get("line_states", []),
             ),
-            })
+            "domain_routing_palette": domain_routing_palette,
+        })
 
 
 
