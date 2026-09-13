@@ -2,6 +2,7 @@
 import json, csv
 from pathlib import Path
 from collections import defaultdict
+from typing import Any
 
 ROOT = Path(__file__).resolve().parent.parent
 shotgun_path = ROOT / "kingwen_train_data" / "full_shotgun_expansion_all.jsonl"
@@ -14,14 +15,13 @@ with registry_path.open(encoding='utf-8') as f:
     registry = json.load(f)
 
 # Load shotgun index by hexagram
-hex_data = defaultdict(list)
+hex_data: defaultdict[int, list[dict[str, Any]]] = defaultdict(list)
 with shotgun_path.open(encoding='utf-8') as f:
     for line in f:
         rec = json.loads(line)
-        lp = rec.get('label_payload', {})
-        hid = lp.get('hexagram_id')
+        hid = rec.get('hexagram_id')
         if hid:
-            hex_data[int(hid)].append(lp)
+            hex_data[int(hid)].append(rec)
 
 print(f'Loaded {len(hex_data)} hexagrams from shotgun')
 
@@ -98,7 +98,7 @@ with open(out_dir / 'hexagram_phase_individuals.csv', 'w', newline='', encoding=
 print(f'Wrote {len(individual_rows)} individual rows')
 
 # 3. hexagram_translations.json — full mapping
-translations = {}
+translations: dict[str, Any] = {}
 for hid in range(1, 65):
     entries = hex_data.get(hid, [])
     if not entries:
@@ -114,8 +114,8 @@ for hid in range(1, 65):
             'yao_vocabulary': lp.get('yao_vocabulary', {}),
             'inject_site': lp.get('inject_site', {}),
             'tool_native_map': lp.get('tool_native_map', {}),
-            'skill_cards': lp.get('skill_cards', [])[:3],
-            'personality_subsets': lp.get('personality_subsets', [])[:2],
+            'skill_cards': (lp.get('skill_cards') or [])[:3],
+            'personality_subsets': (lp.get('personality_subsets') or [])[:2],
             'quantum_superposition': lp.get('quantum_superposition', {}),
             'hermes_layer': lp.get('hermes_layer', {}),
             'avalokiteshvara_arm': lp.get('avalokiteshvara_arm', {}),

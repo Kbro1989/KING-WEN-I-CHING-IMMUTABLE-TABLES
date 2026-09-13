@@ -15,7 +15,7 @@ NPC_MESH_DIR = 'C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/DATASET
 def load_kit(hex_id):
     """Load hexagram kit file."""
     path = os.path.join(DATASETS_DIR, f'kit_{hex_id}.json')
-    with open(path) as f:
+    with open(path, encoding='utf-8-sig') as f:
         kit = json.load(f)
     vec = {}
     name = ''

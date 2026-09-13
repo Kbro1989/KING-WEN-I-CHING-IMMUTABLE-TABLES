@@ -125,6 +125,28 @@ def enrich_kit_file(hex_id: int) -> Dict[str, Any]:
         "skill_cards": cards,
     }
 
+    # Append domain routing palette from the shotgun blast (read-once, append-on-downstream).
+    palette = base_exp.get("domain_routing_palette", {})
+    if palette:
+        grounded_npc["k_color_map"] = {
+            "derivation": palette.get("derivation", "unknown"),
+            "hue_anchor_degrees": palette.get("hue_anchor_degrees"),
+            "saturation": palette.get("saturation"),
+            "lightness": palette.get("lightness"),
+            "primary_color_hex": palette.get("primary_color_hex"),
+            "secondary_color_hex": palette.get("secondary_color_hex"),
+            "blended_hex": palette.get("blended_hex"),
+            "palette_16_hex": palette.get("palette_16_hex", []),
+            "palette_16_steps": palette.get("palette_16_steps"),
+            "grid_row": palette.get("grid_row"),
+            "grid_col": palette.get("grid_col"),
+            "grid_index": palette.get("grid_index"),
+            "category": palette.get("category"),
+            "yang_count": palette.get("yang_count"),
+            "parsed_domain_keywords": palette.get("parsed_domain_keywords", []),
+            "parsed_intent_hits": palette.get("parsed_intent_hits", []),
+        }
+
     kit_data["grounded_npc"] = grounded_npc
 
     # Update or add entries to `extra` array for backward compatibility

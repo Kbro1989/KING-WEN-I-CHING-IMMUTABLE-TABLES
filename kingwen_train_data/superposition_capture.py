@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 try:
     from emotional_engine import _compute_consensus_from_resolved
-    from full_hexagram_shotgun import shotgun_expand
+    from scripts.full_hexagram_shotgun import shotgun_expand
 except Exception as exc:  # pragma: no cover - runtime dependency guard
     raise RuntimeError(f"emotional_engine is required: {exc}")
 
