@@ -15,11 +15,6 @@ from emotional_engine import (
     HEXAGRAM_BASE,
     _clamp,
     expand_hexagram,
-    _line_yao_key,
-    _pool_by_name,
-    _as_tuple5,
-    _lerp,
-    _yao_vocabulary_map,
 )
 
 

@@ -19,7 +19,8 @@ EXPORT_DIR = ROOT / "learn" / "exports"
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
 sys.path.insert(0, str(ROOT))
 
-from emotional_engine import VEC_KEYS
+from scripts.full_hexagram_shotgun import shotgun_expand
+from emotional_engine import VEC_KEYS, _compute_consensus_from_resolved
 
 
 def _write_jsonl(path: Path, records):
@@ -39,7 +40,7 @@ def export(emotional_input: int = 50):
     collapse = shotgun_expand(emotional_input=emotional_input)
     expanded = collapse["expanded"]
     resolved = collapse["resolved"]
-    consensus = collapse["consensus"]
+    consensus = _compute_consensus_from_resolved(resolved, emotional_input)
 
     expanded_rows = []
     for item in expanded:

@@ -8,6 +8,7 @@ Integrates:
 4. Direct Web Serving via `expand_server.py` (`GET /quantum/{hex_id}`)
 """
 
+import argparse
 import json
 import math
 import sys
@@ -64,11 +65,11 @@ def generate_synthetic_space_time_surface(hex_id: int, name: str) -> Dict[str, A
     }
 
 
-def generate_matplotlib_quantum_plots(hex_id: int, info: Dict[str, Any]) -> None:
+def generate_matplotlib_quantum_plots(hex_id: int, info: Dict[str, Any], out_dir: Path) -> None:
     """Generate Matplotlib 3D space-time surface plot and 2D time-evolution heatmap."""
-    PLOTS_OUT_DIR.mkdir(parents=True, exist_ok=True)
-    out_3d = PLOTS_OUT_DIR / f"quantum_3d_hex_{hex_id:02d}.png"
-    out_2d = PLOTS_OUT_DIR / f"quantum_2d_hex_{hex_id:02d}.png"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_3d = out_dir / f"quantum_3d_hex_{hex_id:02d}.png"
+    out_2d = out_dir / f"quantum_2d_hex_{hex_id:02d}.png"
 
     try:
         import matplotlib
@@ -102,9 +103,9 @@ def generate_matplotlib_quantum_plots(hex_id: int, info: Dict[str, Any]) -> None
         Z = envelope * (1.0 + 0.25 * np.sin(E * T * 2.0) + yao_harmonics)
         Z = np.clip(Z, 0.0, None)
 
-        # ----------------------------------------------------
+        # -------------------------------------------------------
         # 1. 3D Space-Time Surface Plot
-        # ----------------------------------------------------
+        # -------------------------------------------------------
         fig = plt.figure(figsize=(9, 5.5))
         ax = fig.add_subplot(111, projection="3d")
         surf = ax.plot_surface(
@@ -136,9 +137,9 @@ def generate_matplotlib_quantum_plots(hex_id: int, info: Dict[str, Any]) -> None
         plt.savefig(out_3d, dpi=130, bbox_inches="tight", facecolor=fig.get_facecolor())
         plt.close(fig)
 
-        # ----------------------------------------------------
+        # -------------------------------------------------------
         # 2. 2D Time-Evolution & Line Pellet Trajectory Heatmap
-        # ----------------------------------------------------
+        # -------------------------------------------------------
         fig2, (ax_top, ax_bot) = plt.subplots(
             2, 1,
             figsize=(8, 6),
@@ -201,7 +202,7 @@ def generate_matplotlib_quantum_plots(hex_id: int, info: Dict[str, Any]) -> None
         out_2d.write_text(f"QuantumLab 2D Heatmap Hex #{hex_id} {info['name']}\nErr: {err}", encoding="utf-8")
 
 
-def generate_collective_wavefield_images(all_telemetry: List[Dict[str, Any]]) -> None:
+def generate_collective_wavefield_images(all_telemetry: List[Dict[str, Any]], out_dir: Path) -> None:
     """Generate global over-time collective measurement visualizations across all 64 NPCs and 8 phases."""
     try:
         import matplotlib
@@ -209,9 +210,9 @@ def generate_collective_wavefield_images(all_telemetry: List[Dict[str, Any]]) ->
         import matplotlib.pyplot as plt
         import numpy as np
 
-        # ----------------------------------------------------
+        # -------------------------------------------------------
         # 1. Collective 64-NPC Wave Field Over-Time Master Grid
-        # ----------------------------------------------------
+        # -------------------------------------------------------
         grid_out = PLOTS_OUT_DIR / "quantum_64_npc_wavefield_over_time.png"
         fig, ax = plt.subplots(figsize=(10, 8))
         fig.patch.set_facecolor("#0a0a0f")
@@ -249,9 +250,9 @@ def generate_collective_wavefield_images(all_telemetry: List[Dict[str, Any]]) ->
         plt.savefig(grid_out, dpi=140, bbox_inches="tight", facecolor=fig.get_facecolor())
         plt.close(fig)
 
-        # ----------------------------------------------------
+        # -------------------------------------------------------
         # 2. 8-Phase Pellet Collective Dispersion Plot
-        # ----------------------------------------------------
+        # -------------------------------------------------------
         disp_out = PLOTS_OUT_DIR / "quantum_8phase_pellet_dispersion.png"
         fig2, ax2 = plt.subplots(figsize=(9, 5.5))
         fig2.patch.set_facecolor("#0a0a0f")
@@ -281,17 +282,28 @@ def generate_collective_wavefield_images(all_telemetry: List[Dict[str, Any]]) ->
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser(description="Bridge QuantumLab to King Wen Viewer")
+    parser.add_argument("--out", default=None, help="Output directory for plots")
+    parser.add_argument("--hex", type=int, default=None, help="Render only this hexagram (1-64)")
+    args = parser.parse_args()
+
     print("=" * 80)
     print("MEASURING QUANTUM FIELD OVER TIME & GENERATING FRESH 2D/3D IMAGES")
     print("=" * 80)
 
+    if args.out:
+        _plots_out_dir = Path(args.out)
+    else:
+        _plots_out_dir = PLOTS_OUT_DIR
+
     all_telemetry = []
     timeseries_records = {}
 
-    for h_id in range(1, 65):
+    hexes = [args.hex] if args.hex else list(range(1, 65))
+    for h_id in hexes:
         name = HEXAGRAM_BASE[h_id]["name"]
         info = generate_synthetic_space_time_surface(h_id, name)
-        generate_matplotlib_quantum_plots(h_id, info)
+        generate_matplotlib_quantum_plots(h_id, info, out_dir=_plots_out_dir)
         all_telemetry.append(info)
 
         # Build 10-step discrete time readout for telemetry export
@@ -311,7 +323,7 @@ def main() -> int:
         }
 
     # Generate master collective field images
-    generate_collective_wavefield_images(all_telemetry)
+    generate_collective_wavefield_images(all_telemetry, out_dir=_plots_out_dir)
 
     # Export manifests & time-series readouts
     manifest = {
@@ -322,7 +334,7 @@ def main() -> int:
         "plots_output_directory": str(PLOTS_OUT_DIR),
         "collective_field_heatmap": "DATASETS/quantumlab_plots/quantum_64_npc_wavefield_over_time.png",
         "phase_dispersion_plot": "DATASETS/quantumlab_plots/quantum_8phase_pellet_dispersion.png",
-        "sample_surface": all_telemetry[0],
+        "sample_surface": all_telemetry[0] if all_telemetry else None,
     }
 
     MANIFEST_OUT.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -346,4 +358,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

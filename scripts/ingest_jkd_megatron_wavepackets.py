@@ -25,6 +25,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from kingwen_ternary_tables_complete import HEXAGRAM_BASE, PHASE_INFO
+from scripts.dsp_clock import TickClock, WallClock, precompute_tick_phase_table_from_samples
 
 TEXT_PATH = ROOT / "DATASETS" / "jkd_full_text.txt"
 OUTPUT_JSONL = ROOT / "DATASETS" / "jkd_megatron_wavepacket_emotions.jsonl"
@@ -258,6 +259,16 @@ def process_jkd_corpus():
             hex_distribution[hex_id] = hex_distribution.get(hex_id, 0) + 1
 
     elapsed = time.perf_counter() - t0
+    wall_clock = WallClock()
+    tick_clock = TickClock(tick_rate_hz=1.0, base_hz=640.0, opposition=False)
+    tick_clock.step(measurement={"elapsed_s": elapsed, "chunks": len(records)})
+    tick_phase_sample = precompute_tick_phase_table_from_samples(
+        sample_rate=1.0, num_samples=len(records), mode="healing"
+    )
+
+    for rec in records:
+        rec["tick_phase_mod"] = tick_phase_sample["per_tick"][rec["chunk_id"] % len(tick_phase_sample["per_tick"])]
+        rec["wall_elapsed_s"] = elapsed * (rec["chunk_id"] / max(1, len(records)))
 
     manifest = {
         "corpus_name": "Tao of Jeet Kune Do (Bruce Lee)",
@@ -265,6 +276,14 @@ def process_jkd_corpus():
         "total_chunks": len(records),
         "total_words_processed": len(clean_text.split(" ")),
         "generation_time_seconds": round(elapsed, 4),
+        "wall_clock": {"elapsed_s": wall_clock.elapsed_s(), "start_epoch": wall_clock.start_epoch},
+        "tick_clock": {
+            "mode": "healing",
+            "base_hz": 640.0,
+            "tick_rate_hz": 1.0,
+            "final_tick": tick_clock.tick,
+            "final_phase_mod": tick_clock.phase % (2.0 * math.pi),
+        },
         "dataset_output_jsonl": str(OUTPUT_JSONL),
         "file_size_bytes": OUTPUT_JSONL.stat().st_size,
         "hamiltonian_stats": {

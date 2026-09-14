@@ -21,8 +21,10 @@ EXPORT_DIR = ROOT / "learn" / "exports"
 EXPORT_DIR.mkdir(parents=True, exist_ok=True)
 sys.path.insert(0, str(ROOT))
 
+from scripts.full_hexagram_shotgun import shotgun_expand
 from emotional_engine import (
     VEC_KEYS,
+    _compute_consensus_from_resolved,
     _clamp,
     _gaussian_weight,
     _mode_of_tau,
@@ -35,7 +37,7 @@ from emotional_engine import (
 def capture(emotional_input: int) -> dict:
     collapse = shotgun_expand(emotional_input=emotional_input)
     resolved = collapse["resolved"]
-    consensus = collapse["consensus"]
+    consensus = _compute_consensus_from_resolved(resolved, emotional_input)
 
     tau_values = [_tau_for_resolved(item, emotional_input=emotional_input) for item in resolved]
     mu = _mode_of_tau(tau_values)

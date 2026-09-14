@@ -5,7 +5,24 @@ import json
 import sys
 from pathlib import Path
 
-ROOT = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent
+def _first_real_arg(argv):
+    for a in argv[1:]:
+        if a.startswith("-"):
+            continue
+        return a
+    return ""
+_argv_root = _first_real_arg(sys.argv) or ""
+_ROOT_OVERRIDE = Path(_argv_root).resolve() if _argv_root and Path(_argv_root).exists() else None
+# Pick ROOT: CLI override > script parent's repo root > fail hard (must find data/)
+if _ROOT_OVERRIDE is not None:
+    ROOT = _ROOT_OVERRIDE
+else:
+    _candidate = Path(__file__).resolve().parent.parent
+    _reg = _candidate / "data" / "hexagram-registry.json"
+    if _reg.exists():
+        ROOT = _candidate
+    else:
+        raise SystemExit(f"build_hexagram_skill_cards: cannot locate data/hexagram-registry.json; ROOT override or repo root required")
 REGISTRY_PATH = ROOT / "data" / "hexagram-registry.json"
 INJECT_PATH = ROOT / "data" / "hexagram-injection-sites.json" if (ROOT / "data" / "hexagram-injection-sites.json").exists() else None
 WEIGHTS_PATH = ROOT / "data" / "emotional-weights.json"
