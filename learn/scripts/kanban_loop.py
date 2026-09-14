@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import sys
 import time
 from pathlib import Path
@@ -16,6 +17,7 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from src.core.pog3_hexagram_runtime_substrate import POG3Runtime, IntentVector
+from scripts.dsp_clock import WallClock, TickClock, HEALING_CLOCK_HZ
 
 BOARD_PATH = ROOT / "learn" / "exports" / "kanban_board.json"
 STATE_PATH = ROOT / "learn" / "exports" / "kanban_loop_state.json"
@@ -116,6 +118,12 @@ def run_once() -> Dict[str, Any]:
     state["loop_count"] = loop_count
     run_id = f"{time.time():.0f}"
     state["run_id"] = run_id
+
+    # 2-Clock initialization: Wall clock for real-world cadence, Tick clock for internal phase
+    wall_clock = WallClock()
+    tick_clock = TickClock(tick_rate_hz=1.0, base_hz=HEALING_CLOCK_HZ, opposition=False)
+    tick_clock.step(measurement={"loop_count": loop_count})
+
     steps: List[Dict[str, Any]] = []
     advanced = 0
     requeued = 0
@@ -136,9 +144,19 @@ def run_once() -> Dict[str, Any]:
         whimsy = (title_hash[1] % 100) / 100.0
         dark_tone = (title_hash[2] % 100) / 100.0
 
-        # Construct intent vector
+        # Construct intent vector with tick-clock derived temporal phase
+        tick_clock.step(measurement={"card_id": card_id})
+        phase_mod = tick_clock.history[-1]["phase_mod"]
+        # Map continuous phase to 3-phase temporal tuple (Yin/Yang/Yao gate)
+        if phase_mod < 0.5 or abs(phase_mod - 2*math.pi) < 0.5:
+            temporal = (1, 0, 0)  # Yin
+        elif phase_mod > 2.5:
+            temporal = (0, 1, 0)  # Yang
+        else:
+            temporal = (0, 0, 1)  # Yao
+
         intent = IntentVector(
-            temporal=(1 if loop_count % 3 == 0 else 0, 1 if loop_count % 3 == 1 else 0, 1 if loop_count % 3 == 2 else 0),
+            temporal=temporal,
             emotional=(chaos, whimsy, dark_tone),
             action=(1 if column in ["ready", "parse"] else 0, 1 if column in ["classify", "learn_math"] else 0, 1 if column in ["tune_timer", "done"] else 0)
         )
@@ -159,6 +177,12 @@ def run_once() -> Dict[str, Any]:
             "files_touched": card.get("inputs", []) + outputs,
             "next_step": None,
             "oracle": telemetry,
+            "clock": {
+                "wall_elapsed_s": wall_clock.elapsed_s(),
+                "tick_phase_mod": tick_clock.history[-1]["phase_mod"],
+                "tick_effective_hz": tick_clock.history[-1]["effective_hz"],
+                "tick_opposition": tick_clock.history[-1]["opposition"],
+            }
         }
 
         if _outputs_present(outputs):
@@ -176,6 +200,7 @@ def run_once() -> Dict[str, Any]:
 
         _record_math(run_id, step)
         steps.append(step)
+
     _record_sequence(run_id, steps)
     state["last_run_ts"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     _save_state(state)
@@ -186,6 +211,13 @@ def run_once() -> Dict[str, Any]:
         "advanced": advanced,
         "deferred": requeued,
         "cards": len(cards),
+        "clock": {
+            "wall_elapsed_s": wall_clock.elapsed_s(),
+            "tick_final_tick": tick_clock.tick,
+            "tick_phase_mod": tick_clock.phase % (2 * math.pi),
+            "tick_effective_hz": tick_clock.effective_hz,
+            "tick_opposition": tick_clock.opposition,
+        }
     }
 
 

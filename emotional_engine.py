@@ -1279,6 +1279,14 @@ def _compute_consensus_from_resolved(
     }
 
 
+def compute_consensus_from_resolved(
+    resolved: List[Dict[str, Any]],
+    emotional_input: int,
+) -> Dict[str, Any]:
+    """Compute consensus for resolved states through the public engine API."""
+    return _compute_consensus_from_resolved(resolved, emotional_input)
+
+
 # =============================================================================
 # Helper functions
 # =============================================================================

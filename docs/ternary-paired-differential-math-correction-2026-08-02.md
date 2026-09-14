@@ -82,9 +82,16 @@ Where:
 - `ℒ` = Lagrangian from paired ternary differentials:
 
 ```
-ℒ = |yin_count - yang_count| * 0.5
-    + yao_count * 0.3
-    + changing_count * 0.2
+ℒ = |dy| * 0.5
+    + |yao_dy| * 0.3
+    + |changing_dy| * 0.2
+```
+
+Where:
+```
+dy = yang_count - yin_count
+yao_dy = yao_count - 3.0  # 3 is neutral midpoint (half of 6)
+changing_dy = changing_count - (6 - changing_count)  # changing vs stable
 ```
 
 **Wait — that's still wrong.** The Lagrangian must use **paired differentials**, not absolute counts:
@@ -138,6 +145,34 @@ return [
 ```
 
 Note: coherence and voiceWeight formulas need separate review — they still use absolute terms.
+
+---
+
+## Final Corrected 5-Axis Vector (code-aligned, emotional_engine.py post-2026-08-02 patch)
+
+```python
+dy = yang_count - yin_count                           # signed binary differential
+yao_dy = yao_count - 3.0                              # yao vs neutral midpoint (6/2 = 3)
+old_dy = old_yang_count - old_yin_count               # old_yang vs old_yin
+changing_dy = changing_count - (6.0 - changing_count) # changing vs stable
+
+yin_r = yin_count / 6.0
+yang_r = yang_count / 6.0
+yao_r = yao_count / 6.0
+old_yang_r = old_yang_count / 6.0
+old_yao_r = old_yao_count / 6.0
+old_ratio = (old_yang_count + old_yin_count) / 6.0
+
+return [
+    _clamp(yao_dy * 0.5 + old_dy * 0.3 + abs(dy) * 0.2),        # chaos
+    _clamp(yin_r * 0.4 + yao_dy * 0.3 + old_dy * 0.1),           # whimsy
+    _clamp(old_yang_r * 0.15 + old_yao_r * 0.2 + dy * 0.1),      # darkTone
+    _clamp(yang_r * 0.3 + (1.0 - yao_r) * 0.3 - old_ratio * 0.1),# coherence
+    _clamp(yang_r * 0.3 + (1.0 - yao_r) * 0.2 + old_yang_r * 0.1),# voiceWeight
+]
+```
+
+Each axis blends paired differentials (`dy`, `yao_dy`, `old_dy`, `old_yang_r`, `old_ratio`) rather than absolute counts. Boolean gating (e.g., `yao_r > 0.3`) lives only in `_primary_pool_for_hex` pool selection, never in the vector formula itself.
 
 ---
 

@@ -3,10 +3,10 @@ import io
 import json
 import math
 import sys
-import wave
+import time
 from pathlib import Path
 
-ROOT = Path(r"c:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES")
+ROOT = Path(r"c:\\Users\\krist\\Desktop\\KING-WEN-I-CHING-IMMUTABLE-TABLES")
 sys.path.insert(0, str(ROOT))
 
 from kingwen_ternary_tables_complete import HEXAGRAM_BASE
@@ -14,9 +14,20 @@ from emotional_engine import EMOTIONAL_WEIGHTS, _compute_consensus_from_resolved
 from full_hexagram_shotgun import shotgun_expand
 from scripts.generate_deterministic_64_color_spectrum import TRIGRAM_TEMP, hsl_to_rgb_hex
 from scripts.full_hexagram_shotgun import _ternary_slot_matrix
+from scripts.dsp_clock import (
+    precompute_tick_phase_table_from_frames,
+    precompute_tick_phase_table_from_samples,
+    wall_now_epoch,
+    WallClock,
+)
 
-def prewarm_egg_keyframes(sectors, num_frames=60):
-    """Pre-computes 60 keyframes of 3D Centripetal Egg vertex deformation from all 64 citadel vortex outputs."""
+def prewarm_egg_keyframes(sectors, num_frames=60, *, tick_phase_table=None, tick_mode="healing"):
+    """Pre-computes 60 keyframes of 3D Centripetal Egg vertex deformation from all 64 citadel vortex outputs.
+
+    Uses the shared tick-clock phase table (from dsp_clock) when provided, so the
+    egg animation shares the same -640Hz tick phase / opposition model as the audio
+    prewarm and the live viewer.
+    """
     segs_w, segs_h = 48, 36
     verts = []
     for j in range(segs_h + 1):
@@ -47,9 +58,18 @@ def prewarm_egg_keyframes(sectors, num_frames=60):
             "freqs": [p.get("frequency_hz", 146.0) for p in s["yao_pellets"]]
         })
 
+    if tick_phase_table is None:
+        from scripts.dsp_clock import precompute_tick_phase_table_from_frames
+        tick_phase_table = precompute_tick_phase_table_from_frames(
+            num_frames=num_frames, frame_rate=float(num_frames), mode=tick_mode
+        )
+
+    per_tick = tick_phase_table["per_tick"]
     keyframes = []
     for f_idx in range(num_frames):
-        t = f_idx * (2.0 * math.pi / num_frames)
+        tick_phase = per_tick[f_idx % len(per_tick)]
+        tick_sin = math.sin(tick_phase)
+        tick_cos = math.cos(tick_phase)
         frame_coords = []
         for vx, vy, vz in verts:
             length = math.sqrt(vx * vx + vy * vy + vz * vz) or 1.0
@@ -61,12 +81,12 @@ def prewarm_egg_keyframes(sectors, num_frames=60):
             for s_idx, si in enumerate(sec_influences):
                 align = nx * si["nx"] + nz * si["nz"]
                 pellet_phase = sum(
-                    math.sin(t * (freq / 108.0) * 0.4 + s_idx * 0.098 + p_i * 1.047)
+                    math.sin(tick_phase * (freq / 108.0) * 0.4 + s_idx * 0.098 + p_i * 1.047)
                     for p_i, freq in enumerate(si["freqs"])
                 ) / 6.0
                 implosion = si["tension"] * si["suction"] * si["energy"]
                 radial_disp += align * implosion * 28.0 * pellet_phase
-                angular_twist += si["porosity"] * align * math.sin(norm_y * math.pi + t * 1.2 + s_idx * 0.049) * 8.0
+                angular_twist += si["porosity"] * align * math.sin(norm_y * math.pi + tick_phase * 1.2 + s_idx * 0.049) * 8.0
 
             scale = 1.0 + (radial_disp + angular_twist) / 340.0
             frame_coords.extend([round(vx * scale, 2), round(vy * scale, 2), round(vz * scale, 2)])
@@ -74,10 +94,21 @@ def prewarm_egg_keyframes(sectors, num_frames=60):
 
     return keyframes
 
-def prewarm_unison_audio_wav_b64(sectors, duration_sec=4.0, sample_rate=22050):
-    """Pre-renders 384 sound pellet wavepacket ground field PCM audio buffer into Base64 WAV."""
+def prewarm_unison_audio_wav_b64(sectors, duration_sec=4.0, sample_rate=22050, *, tick_mode="healing"):
+    """Pre-renders 384 sound pellet wavepacket ground field PCM audio buffer into Base64 WAV.
+
+    Uses the shared tick-clock sample phase table (from dsp_clock) so the audio buffer
+    shares the same -640Hz tick phase / opposition model as the egg keyframes and the
+    live viewer.
+    """
     num_samples = int(duration_sec * sample_rate)
     buffer = [0.0] * num_samples
+
+    from scripts.dsp_clock import precompute_tick_phase_table_from_samples
+    sample_phase_table = precompute_tick_phase_table_from_samples(
+        sample_rate=sample_rate, num_samples=num_samples, mode=tick_mode
+    )
+    sample_phases = sample_phase_table["per_tick"]
 
     for sec in sectors:
         for p in sec["yao_pellets"]:
@@ -87,13 +118,14 @@ def prewarm_unison_audio_wav_b64(sectors, duration_sec=4.0, sample_rate=22050):
             omega = 2.0 * math.pi * freq / sample_rate
 
             for i in range(num_samples):
-                t_sample = i * omega
+                # Pellet sample phase = pellet carrier phase + shared tick-clock phase
+                pellet_phase = i * omega + sample_phases[i]
                 if w_type == "sine":
-                    val = math.sin(t_sample)
+                    val = math.sin(pellet_phase)
                 elif w_type == "triangle":
-                    val = 2.0 * abs(2.0 * (t_sample / (2.0 * math.pi) - math.floor(t_sample / (2.0 * math.pi) + 0.5))) - 1.0
+                    val = 2.0 * abs(2.0 * (pellet_phase / (2.0 * math.pi) - math.floor(pellet_phase / (2.0 * math.pi) + 0.5))) - 1.0
                 else:
-                    val = 2.0 * (t_sample / (2.0 * math.pi) - math.floor(t_sample / (2.0 * math.pi) + 0.5))
+                    val = 2.0 * (pellet_phase / (2.0 * math.pi) - math.floor(pellet_phase / (2.0 * math.pi) + 0.5))
                 buffer[i] += val * amp
 
     import struct

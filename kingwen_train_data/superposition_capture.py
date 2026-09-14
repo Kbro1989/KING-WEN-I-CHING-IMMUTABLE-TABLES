@@ -8,19 +8,23 @@ ground truth. No hard-coded answer paths.
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, cast
+
+_SUPERPOSITION_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(_SUPERPOSITION_ROOT))
 
 try:
-    from emotional_engine import _compute_consensus_from_resolved
+    from emotional_engine import compute_consensus_from_resolved
     from scripts.full_hexagram_shotgun import shotgun_expand
 except Exception as exc:  # pragma: no cover - runtime dependency guard
     raise RuntimeError(f"emotional_engine is required: {exc}")
 
-
-_SUPERPOSITION_ROOT = Path(__file__).resolve().parent.parent
 _SUPERPOSITION_PATH = _SUPERPOSITION_ROOT / "kingwen_train_data/superposition_capture.jsonl"
 _PARSER_BATCH_PATH = _SUPERPOSITION_ROOT / "kingwen_train_data/wiki_math_research_batch_2026-07-11.json"
+Record = Dict[str, Any]
+Records = List[Record]
 
 
 def _append_jsonl(path: Path, row: Dict[str, Any]) -> None:
@@ -41,10 +45,10 @@ def _domain_signature(query: str) -> Dict[str, Any]:
     }
 
 
-def _pool_coverage(resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _pool_coverage(resolved: Records) -> Dict[str, Any]:
     pools: List[str] = []
     for item in resolved:
-        inject = item.get("inject_site") or {}
+        inject: Dict[str, Any] = item.get("inject_site") or {}
         if inject.get("primary_pool"):
             pools.append(inject["primary_pool"])
         if inject.get("secondary_pool"):
@@ -57,21 +61,21 @@ def _pool_coverage(resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def _phase_coverage(resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _phase_coverage(resolved: Records) -> Dict[str, Any]:
     counts: Dict[str, int] = {}
     for item in resolved:
         counts[str(item.get("phase_temporal") or "")] = counts.get(str(item.get("phase_temporal") or ""), 0) + 1
     return {"phase_counts": counts, "phase_branches": len(counts)}
 
 
-def _vector_spread(resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _vector_spread(resolved: Records) -> Dict[str, Any]:
     axes = ["chaos", "whimsy", "darkTone", "coherence", "voiceWeight"]
     mins = {k: 1e18 for k in axes}
     maxs = {k: -1e18 for k in axes}
     sums = {k: 0.0 for k in axes}
     count = 0
     for item in resolved:
-        rv = item.get("resolved_vector") or {}
+        rv: Dict[str, Any] = item.get("resolved_vector") or {}
         for k in axes:
             v = float(rv.get(k, 0.0) or 0.0)
             mins[k] = min(mins[k], v)
@@ -83,12 +87,12 @@ def _vector_spread(resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
     return {"spread": spread, "means": means, "resolved_count": count}
 
 
-def _hexagram_coverage(resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _hexagram_coverage(resolved: Records) -> Dict[str, Any]:
     ids = sorted({int(item.get("hexagram_id") or 0) for item in resolved if item.get("hexagram_id")})
     return {"hexagram_count": len(ids), "hexagram_ids": ids, "coverage_rate": round(len(ids) / 64, 4)}
 
 
-def _line_state_profile(resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _line_state_profile(resolved: Records) -> Dict[str, Any]:
     yin = yang = yao = 0
     for item in resolved:
         for ls in item.get("line_states", []):
@@ -104,7 +108,8 @@ def _line_state_profile(resolved: List[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 def _consensus_proof(result: Dict[str, Any], emotional_input: int) -> Dict[str, Any]:
-    consensus = _compute_consensus_from_resolved(result.get("resolved", []), emotional_input=emotional_input)
+    resolved = cast(Records, result.get("resolved", []))
+    consensus = compute_consensus_from_resolved(resolved, emotional_input=emotional_input)
     return {
         "consensus_hexagram_id": consensus.get("consensus_hexagram_id"),
         "consensus_hexagram_name": consensus.get("consensus_hexagram_name"),
@@ -115,15 +120,15 @@ def _consensus_proof(result: Dict[str, Any], emotional_input: int) -> Dict[str, 
     }
 
 
-def _anchors(resolved: List[Dict[str, Any]], limit: int = 5) -> List[Dict[str, Any]]:
-    scored = []
+def _anchors(resolved: Records, limit: int = 5) -> List[Record]:
+    scored: List[Tuple[float, int, str, Record]] = []
     for item in resolved:
-        rv = item.get("resolved_vector") or {}
+        rv: Dict[str, Any] = item.get("resolved_vector") or {}
         score = float(sum(float(rv.get(k, 0.0) or 0.0) for k in ["chaos", "whimsy", "darkTone", "coherence", "voiceWeight"]))
         scored.append((score, int(item.get("hexagram_id") or 0), str(item.get("phase_temporal") or ""), item))
     scored.sort(key=lambda row: (row[0], row[1], row[2]), reverse=True)
-    top = []
-    for score, hexagram_id, phase_temporal, item in scored[:limit]:
+    top: List[Record] = []
+    for score, _, _, item in scored[:limit]:
         top.append({
             "hexagram_id": item.get("hexagram_id"),
             "phase_temporal": item.get("phase_temporal"),
@@ -135,13 +140,14 @@ def _anchors(resolved: List[Dict[str, Any]], limit: int = 5) -> List[Dict[str, A
 
 
 def capture_superposition(query: str, *, emotional_input: int = 50, record_math: bool = True) -> Dict[str, Any]:
-    _shotgun_result = shotgun_expand(emotional_input=emotional_input, request_text=query)
-    resolved_list = _shotgun_result.get("resolved", [])
-    _consensus = _compute_consensus_from_resolved(resolved_list, emotional_input)
-    result = {"resolved": resolved_list, "expanded": _shotgun_result.get("expanded", []),
-              "consensus": _consensus}
-    resolved = result.get("resolved", [])
-    expanded = result.get("expanded", [])
+    shotgun_result: Dict[str, Any] = shotgun_expand(emotional_input=emotional_input, request_text=query)
+    resolved_list: Records = cast(Records, shotgun_result.get("resolved", []))
+    expanded_list: Records = cast(Records, shotgun_result.get("expanded", []))
+    consensus = compute_consensus_from_resolved(resolved_list, emotional_input)
+    result: Dict[str, Any] = {"resolved": resolved_list, "expanded": expanded_list,
+              "consensus": consensus}
+    resolved: Records = resolved_list
+    expanded: Records = expanded_list
     domain_signature = _domain_signature(query)
     pool_coverage = _pool_coverage(resolved)
     phase_coverage = _phase_coverage(resolved)
@@ -150,7 +156,7 @@ def capture_superposition(query: str, *, emotional_input: int = 50, record_math:
     line_state_profile = _line_state_profile(resolved)
     consensus_proof = _consensus_proof(result, emotional_input)
     anchors = _anchors(resolved)
-    verification = {
+    verification: Dict[str, Any] = {
         "expanded_count": len(expanded),
         "resolved_count": len(resolved),
         "pool_coverage": pool_coverage,
@@ -162,7 +168,7 @@ def capture_superposition(query: str, *, emotional_input: int = 50, record_math:
         "consensus_proof": consensus_proof,
         "verdict": _verdict(hexagram_coverage, pool_coverage, phase_coverage, vector_spread),
     }
-    resolve_cards = []
+    resolve_cards: List[Record] = []
     for item in resolved:
         resolve_cards.append({
             "hexagram_id": item.get("hexagram_id"),
@@ -177,7 +183,7 @@ def capture_superposition(query: str, *, emotional_input: int = 50, record_math:
             "yao_vocabulary": item.get("yao_vocabulary"),
             "checklist": item.get("checklist", [])[:8],
         })
-    output = {
+    output: Dict[str, Any] = {
         "query": query,
         "domain_signature": domain_signature,
         "emotional_input": emotional_input,
@@ -228,7 +234,7 @@ def append_math_batch_record(batch_path: Optional[str] = None) -> Dict[str, Any]
         return {"status": "bad_batch", "error": str(exc), "path": str(path)}
     math_pages = sum(len(entry.get("pages", [])) for entry in batch.get("wiki_math", []))
     terms = [entry.get("term") for entry in batch.get("wikipedia", [])]
-    record = {
+    record: Dict[str, Any] = {
         "status": "recorded",
         "math_pages": math_pages,
         "terms": terms,

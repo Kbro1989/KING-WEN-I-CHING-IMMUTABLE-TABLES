@@ -6,6 +6,7 @@ Monitors actual run duration and updates the cron cadence to match:
 from __future__ import annotations
 
 import json
+import math
 import os
 import re
 import sys
@@ -20,6 +21,8 @@ try:
     from hermes_tools import terminal  # type: ignore
 except Exception:  # pragma: no cover
     terminal = None
+
+from scripts.dsp_clock import WallClock, TickClock, HEALING_CLOCK_HZ
 
 
 JOB_ID = "39780391e3ad"
@@ -101,6 +104,14 @@ def tune_once() -> dict:
     old_schedule = state.get("last_schedule") or "every 4m"
     if new_schedule != old_schedule:
         _update_cron(new_schedule)
+
+    # 2-Clock cadence measurement
+    wall_clock = WallClock()
+    tick_clock = TickClock(tick_rate_hz=1.0/observed if observed > 0 else 1.0, base_hz=HEALING_CLOCK_HZ, opposition=False)
+    tick_clock.step(measurement={"observed_seconds": observed})
+    phase_mod = tick_clock.history[-1]["phase_mod"]
+    tick_rate_eff = 1.0 / observed if observed > 0 else 1.0
+
     history = state.get("history") or []
     history.append(
         {
@@ -109,6 +120,13 @@ def tune_once() -> dict:
             "target_seconds": target_seconds,
             "old_schedule": old_schedule,
             "new_schedule": new_schedule,
+            "clock": {
+                "wall_elapsed_s": wall_clock.elapsed_s(),
+                "tick_phase_mod": tick_clock.history[-1]["phase_mod"],
+                "tick_effective_hz": tick_clock.effective_hz,
+                "tick_opposition": tick_clock.opposition,
+                "tick_rate_eff_hz": tick_rate_eff,
+            }
         }
     )
     if len(history) > 50:
@@ -126,6 +144,13 @@ def tune_once() -> dict:
         "target_seconds": target_seconds,
         "schedule": new_schedule,
         "updated": new_schedule != old_schedule,
+        "clock": {
+            "wall_elapsed_s": wall_clock.elapsed_s(),
+            "tick_phase_mod": tick_clock.history[-1]["phase_mod"],
+            "tick_effective_hz": tick_clock.effective_hz,
+            "tick_opposition": tick_clock.opposition,
+            "tick_rate_eff_hz": tick_rate_eff,
+        }
     }
 
 
