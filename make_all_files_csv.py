@@ -2,7 +2,7 @@ import os
 import csv
 from pathlib import Path
 
-root = Path(r"C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES")
+root = Path(".").resolve()
 csv_path = root / "ALL-FILES.csv"
 
 fields = ["relative_path", "type", "size_bytes", "depth", "extension", "parent_dir"]

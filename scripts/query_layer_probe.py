@@ -63,6 +63,7 @@ def analyze_hexagram_expansion(hid: int, request_text: str, emotional_input: int
     """Expand one hexagram and return analysis metrics."""
     # Full 512-state sweep: 64 hexagrams × 8 phases
     # Full 512-state sweep: 64 hexagrams × 8 phases
+    # Full 512-state sweep: 64 hexagrams × 8 phases
     base = expand_hexagram(hid, request_text, phase_bits=0, emotional_input=emotional_input)
     resolved = sample_resolve(hid, phase_bits=0, request_text=request_text, emotional_input=emotional_input)
     

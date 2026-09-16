@@ -24,7 +24,7 @@
 
 | Program | Path | Influence on pipeline | Verified |
 |---------|------|----------------------|----------|
-| **King Wen immutable tables** | `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES` | Source-of-truth state packets (kit_*.json). All downstream geometry derives from `hexagram_id`. | ✅ kit_1.json present, 65 files |
+| **King Wen immutable tables** | `\\KING-WEN-I-CHING-IMMUTABLE-TABLES` | Source-of-truth state packets (kit_*.json). All downstream geometry derives from `hexagram_id`. | ✅ kit_1.json present, 65 files |
 | **Shap-E** | `C:\Users\krist\Desktop\shap-e` | PLY mesh generation. Determines vertex count (729), color, shape. | ✅ repo present, 585 PLYs on disk |
 | **rsmv** | `C:\Users\krist\Desktop\rsmv` | Target wire format (Int16 pos / RGB555 col / Uint16 index). Defines struct contract. | ✅ `models.d.ts` read; hex_01 loads clean |
 | **Moparscape (NEW)** | `C:\Users\krist\Desktop\moparscape` | Cache/NPc data source candidate. **Format-incompatible** with rsmv (see GAP-1). | ✅ trees on disk, JDK21 compiles |
@@ -99,8 +99,8 @@ cd C:\Users\krist\Desktop\moparscape\Mopar1\Mopar
 "%JAVA_HOME%\bin\javac" *.java
 
 :: verify rsmv output struct
-python3 -c "import json;d=json.load(open(r'C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\DATASETS\kingwen_rsmv_models\hex_01_models.json'));print(d['meshes'][0]['vertexCount'])"
+python3 -c "import json;d=json.load(open(r'\\KING-WEN-I-CHING-IMMUTABLE-TABLES\DATASETS\kingwen_rsmv_models\hex_01_models.json'));print(d['meshes'][0]['vertexCount'])"
 
 :: count kit pollution
-python3 -c "import json;print(len(json.load(open(r'C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\DATASETS\kingwen_model_sets\kit_1.json'))['extra']))"
+python3 -c "import json;print(len(json.load(open(r'\\KING-WEN-I-CHING-IMMUTABLE-TABLES\DATASETS\kingwen_model_sets\kit_1.json'))['extra']))"
 ```

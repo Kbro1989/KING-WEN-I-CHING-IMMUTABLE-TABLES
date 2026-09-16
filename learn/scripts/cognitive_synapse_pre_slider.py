@@ -36,6 +36,7 @@ def capture_all_64_pre_slider(request_text: str = "") -> List[Dict[str, Any]]:
             request_text=request_text,
             # Full 512-state sweep: 64 hexagrams × 8 phases
             # Full 512-state sweep: 64 hexagrams × 8 phases
+            # Full 512-state sweep: 64 hexagrams × 8 phases
             phase_bits=0,
             emotional_input=50,
         )

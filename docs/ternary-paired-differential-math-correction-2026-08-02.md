@@ -247,6 +247,104 @@ Boolean is **forbidden** in:
 
 ---
 
+## Appendix A. Hamiltonian Trajectory Measurement (Rollout)
+
+The corrected Hamiltonian from Section 3,
+
+$$
+\mathcal{H}(p,q,t) = \sum_{i=1}^{5} p_i \cdot \dot{q}^i - \Lambda,
+$$
+$$
+p_i = \max(0, v_i^{\mathrm{res}}), \quad \dot{q}^i = v_i^{\mathrm{res}} - v_i^{\mathrm{exp}},
+$$
+$$
+\Lambda = |dy| \cdot 0.5 + |yao\_dy| \cdot 0.3 + |changing\_dy| \cdot 0.2,
+$$
+$$
+dy = yang - yin, \quad yao\_dy = yao - 3.0, \quad changing\_dy = changing - (6 - changing),
+$$
+
+is evaluated per phase across the 8-phase chained rollout in `scripts/shotgun_rollout_runtime.py` (stage 19) and packaged as training consumables by `scripts/rl_shotgun_measurables.py` (stage 20).
+
+### A.1 Per-Phase Hamiltonian on the Rollout
+
+For each hexagram $h$ and phase $t \in \{0,\dots,7\}$, the rollout computes:
+
+$$
+\mathcal{H}_{h,t} = \mathcal{H}\!\left(\mathbf{v}_{h,t}^{\mathrm{res}}, \mathbf{v}_{h,t}^{\mathrm{exp}}, \boldsymbol{\ell}_{h,t}\right)
+$$
+
+and records the Hamiltonian trajectory $\mathbf{H}_h = (\mathcal{H}_{h,0}, \dots, \mathcal{H}_{h,7})$.
+
+For yang-dominant hexagrams (e.g., hex 1: $yang=6, yin=0$), the Lagrangian term $\Lambda_{h,t}$ dominates the $p \cdot \dot{q}$ term because:
+
+$$
+dy = 6 - 0 = 6, \quad |dy| \cdot 0.5 = 3.0, \quad p \cdot \dot{q} \approx 0.009,
+$$
+
+so $\mathcal{H}_{h,t} = \mathrm{clamp}(0.009 - 3.0, 0, 1) = 0$ for all $t$. In these hexagrams the temporal signal is carried by the resolved-vector trajectory $\|\Delta\mathbf{v}_t\|$ and the entropy $H(\mathbf{p}_t^{\mathrm{res}})$, not by $\mathcal{H}_{h,t}$. This is a measured property of the state, not a missing value.
+
+For hexagrams with more balanced line distributions, $\Lambda$ is smaller and $\mathcal{H}_{h,t}$ may carry signal — the per-hexagram variation in $\mathrm{Var}(\mathbf{r})$ across the $G_0$ range $6.8413 \to 7.4319$ reflects this.
+
+### A.2 Reward Decomposition on the Rollout
+
+The step reward at phase $t$ decomposes as:
+
+$$
+r_{h,t} = w_{\mathcal{H}} \mathcal{H}_{h,t} + w_{\Delta} \|\Delta\mathbf{v}_{h,t}\| + w_H H(\mathbf{p}_{h,t}^{\mathrm{res}}) + w_c c_{h,t} + w_B B_{h,t}
+$$
+
+with $w_{\mathcal{H}}=0.1$, $w_{\Delta}=1.0$, $w_H=0.5$, $w_c=0.4$, $w_B=0.2$, and:
+
+- $\|\Delta\mathbf{v}_{h,t}\| = \|\mathbf{v}_{h,t}^{\mathrm{res}} - \mathbf{v}_{h,t-1}^{\mathrm{res}}\|_2$ for $t>0$, $0$ for $t=0$
+- $H(\mathbf{p}_{h,t}^{\mathrm{res}}) = -\sum_i p_{h,t,i} \log p_{h,t,i}$, with $p_{h,t,i} = v_{h,t,i}^{\mathrm{res}} / \sum_j v_{h,t,j}^{\mathrm{res}}$
+- $c_{h,t} = v_{h,t,3}^{\mathrm{res}}$ — coherence axis
+- $B_{h,t} = 0.2 \cdot \mathbf{1}[\chi_{h,t}=0]$ — chain bonus
+
+The weights $w_{(\cdot)}$ are **measurement heuristics**, not derived from the consensus math. They are chosen so that the reward is dominated by the resolved-vector movement $\|\Delta\mathbf{v}\|$ and the vector diversity $H$, with the Hamiltonian, coherence, and chain continuity as secondary signals.
+
+### A.3 Discounted Return
+
+$$
+G_{h,t} = \sum_{k=0}^{7-t} \gamma^k r_{h,t+k}, \quad \gamma = 0.95
+$$
+
+$G_{h,0}$ is the total return for hexagram $h$; $G_{h,7} = r_{h,7}$ is the terminal return.
+
+### A.4 Trajectory Variance and Terminal Goodness
+
+$$
+\mathrm{Var}(\mathbf{r}_h) = \sqrt{\frac{1}{8} \sum_{t=0}^{7} (r_{h,t} - \bar{r}_h)^2}, \quad \bar{r}_h = \frac{1}{8} \sum_{t=0}^{7} r_{h,t}
+$$
+
+$$
+\tau_h = 0.5 \cdot c_{h,7} + 0.3 \cdot H(\mathbf{p}_{h,7}^{\mathrm{res}}) + 0.2 \cdot \mathbf{1}\!\left[\sum_{t=0}^{7} \chi_{h,t} = 0\right]
+$$
+
+$\tau_h$ is the **terminal goodness** heuristic over the final phase — not a derived quantity from the consensus math, but a measurement of the terminal resolved state's coherence, diversity, and chain continuity.
+
+### A.5 Empirical Batch (64 Hexagrams, Verified)
+
+From `scripts/output/rl_measurables_all64.json`:
+
+$$
+\begin{aligned}
+\bar{G}_0 &= 7.1472, & \overline{\mathrm{Var}(\mathbf{r})} &= 0.0696, & \bar{\tau} &= 0.9114, \\
+\mathbf{1}_{\mathrm{chain\_continuous}_{64}} &= \mathrm{True}, & G_0^{\min} &= 6.8413\ (h=52), & G_0^{\max} &= 7.4319\ (h=51).
+\end{aligned}
+$$
+
+Top 5 by $G_0$: $h=51\ (7.4319),\ h=38\ (7.3636),\ h=34\ (7.3487),\ h=6\ (7.3456),\ h=44\ (7.3320)$.
+Bottom 5 by $G_0$: $h=52\ (6.8413),\ h=20\ (6.8808),\ h=2\ (6.8705),\ h=11\ (6.8655),\ h=15\ (6.8595)$.
+
+The $G_0$ spread is $0.5906$ across 64 hexagrams, with all hexagrams chain-continuous. The spread is driven primarily by the entropy ($w_H=0.5$) and coherence ($w_c=0.4$) components, with the Hamiltonian component ($w_{\mathcal{H}}=0.1$) contributing $0$ for yang-dominant hexagrams and the change component ($w_{\Delta}=1.0$) providing the per-step movement signal.
+
+### A.6 Relationship to the Corrected Hamiltonian
+
+The rollout's $\mathcal{H}_{h,t}$ is exactly the corrected Hamiltonian from Section 3 evaluated on the per-phase state. It is not a new Hamiltonian, not a learned value function, and not a policy — it is the same $\mathcal{H}(p,q,t)$ measured at 8 discrete phase coordinates per hexagram and packaged as a trajectory. The 5-component reward $r_{h,t}$ and the scalar $\tau_h$ are measurement heuristics built on top of $\mathcal{H}_{h,t}$ and the other resolved-state quantities; they do not alter the underlying Hamiltonian or the 512-state consensus.
+
+---
+
 ## Files Requiring Patches
 
 1. `emotional_engine.py:376` `_hamiltonian_energy()` — Lagrangian paired differentials

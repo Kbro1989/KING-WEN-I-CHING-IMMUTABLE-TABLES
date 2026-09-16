@@ -1,7 +1,7 @@
 # King Wen Integration Gap Audit
 Comparing:
 - `C:\Users\krist\Desktop\king_wen_codebasemap.md`
-- `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\king-wen-workflow-paths.md`
+- `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\king-wen-workflow-paths.md`
 Against live repo: `C:\Users\krist\Desktop\OpenJarvis`
 
 Rule: exact file paths, exact line numbers, no guessing, no fabrication.

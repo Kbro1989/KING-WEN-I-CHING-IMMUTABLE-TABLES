@@ -21,7 +21,7 @@ import sys
 import os
 from pathlib import Path
 
-KINGWEN_ROOT = Path(r"c:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES")
+KINGWEN_ROOT = Path(r"\\KING-WEN-I-CHING-IMMUTABLE-TABLES")
 DEPTH_ROOT = Path(r"c:\Users\krist\Desktop\Upgraded-Depth-Anything-V2")
 
 def run_depth_inference(encoder="vits", input_size=518):

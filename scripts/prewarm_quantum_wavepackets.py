@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 from scipy.fft import fft, ifft, fft2, ifft2, fftn, ifftn
 
-KINGWEN_ROOT = Path(r'c:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES')
+KINGWEN_ROOT = Path(r'\\KING-WEN-I-CHING-IMMUTABLE-TABLES')
 DATASETS_DIR = KINGWEN_ROOT / 'DATASETS'
 HBAR, MASS, DT, WARMUP_STEPS = 1.0, 1.0, 0.02, 3
 N1 = 64

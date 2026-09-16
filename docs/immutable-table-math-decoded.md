@@ -1,6 +1,6 @@
 # King Wen Immutable Table Math — Decoded 2026-07-14
 
-Source: `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_ternary_tables_complete.py`
+Source: `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_ternary_tables_complete.py`
 Verified by: `scripts/sandbox_verify_final.py` (ALL PASS)
 
 ## Core formulas

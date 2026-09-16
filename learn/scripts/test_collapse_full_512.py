@@ -7,7 +7,7 @@ Validates in one run:
 - Consensus resolved across all 512 paths
 - Payload shape matches Jarvis pause-after-thinking contract
 
-Run from C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES:
+Run from \\KING-WEN-I-CHING-IMMUTABLE-TABLES:
   PYTHONPATH=. python3 learn\scripts\test_collapse_full_512.py --emotional-input 50
 """
 from __future__ import annotations

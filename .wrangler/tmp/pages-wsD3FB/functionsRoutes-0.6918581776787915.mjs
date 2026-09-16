@@ -1,10 +1,10 @@
-import { onRequestGet as __api_cache_layer__id__js_onRequestGet } from "C:\\Users\\krist\\Desktop\\KING-WEN-I-CHING-IMMUTABLE-TABLES\\functions\\api\\cache\\layer\\[id].js"
-import { onRequestGet as __api_hexagram__id__js_onRequestGet } from "C:\\Users\\krist\\Desktop\\KING-WEN-I-CHING-IMMUTABLE-TABLES\\functions\\api\\hexagram\\[id].js"
-import { onRequestGet as __api_jkd__id__js_onRequestGet } from "C:\\Users\\krist\\Desktop\\KING-WEN-I-CHING-IMMUTABLE-TABLES\\functions\\api\\jkd\\[id].js"
-import { onRequestGet as __api_world_js_onRequestGet } from "C:\\Users\\krist\\Desktop\\KING-WEN-I-CHING-IMMUTABLE-TABLES\\functions\\api\\world.js"
-import { onRequest as __api_kingwen_link_js_onRequest } from "C:\\Users\\krist\\Desktop\\KING-WEN-I-CHING-IMMUTABLE-TABLES\\functions\\api\\kingwen-link.js"
-import { onRequestGet as __widget__id__js_onRequestGet } from "C:\\Users\\krist\\Desktop\\KING-WEN-I-CHING-IMMUTABLE-TABLES\\functions\\widget\\[id].js"
-import { onRequest as ___middleware_js_onRequest } from "C:\\Users\\krist\\Desktop\\KING-WEN-I-CHING-IMMUTABLE-TABLES\\functions\\_middleware.js"
+import { onRequestGet as __api_cache_layer__id__js_onRequestGet } from "\\KING-WEN-I-CHING-IMMUTABLE-TABLES\\functions\\api\\cache\\layer\\[id].js"
+import { onRequestGet as __api_hexagram__id__js_onRequestGet } from "\\KING-WEN-I-CHING-IMMUTABLE-TABLES\\functions\\api\\hexagram\\[id].js"
+import { onRequestGet as __api_jkd__id__js_onRequestGet } from "\\KING-WEN-I-CHING-IMMUTABLE-TABLES\\functions\\api\\jkd\\[id].js"
+import { onRequestGet as __api_world_js_onRequestGet } from "\\KING-WEN-I-CHING-IMMUTABLE-TABLES\\functions\\api\\world.js"
+import { onRequest as __api_kingwen_link_js_onRequest } from "\\KING-WEN-I-CHING-IMMUTABLE-TABLES\\functions\\api\\kingwen-link.js"
+import { onRequestGet as __widget__id__js_onRequestGet } from "\\KING-WEN-I-CHING-IMMUTABLE-TABLES\\functions\\widget\\[id].js"
+import { onRequest as ___middleware_js_onRequest } from "\\KING-WEN-I-CHING-IMMUTABLE-TABLES\\functions\\_middleware.js"
 
 export const routes = [
     {

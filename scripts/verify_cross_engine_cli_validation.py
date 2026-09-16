@@ -4,7 +4,7 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(r"c:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES")
+ROOT = Path(r"\\KING-WEN-I-CHING-IMMUTABLE-TABLES")
 sys.path.insert(0, str(ROOT))
 
 from kingwen_ternary_tables_complete import HEXAGRAM_BASE

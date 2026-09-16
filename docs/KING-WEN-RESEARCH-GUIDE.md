@@ -12,7 +12,7 @@
 | **No superposition flattening** | Never collapse the 512 resolved states to a single "answer." All-or-nothing only; "nothing" is invalid. |
 | **No folklore** | No divination framing, no symbolic interpretation without executable math. |
 | **No POG2 runtime imports** | POG2 is 1D 64 ternary selection matrix. Examine patterns only. |
-| **Canonical runtime** | `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES` + `expand_server.py` at `127.0.0.1:8765/expand` |
+| **Canonical runtime** | `\\KING-WEN-I-CHING-IMMUTABLE-TABLES` + `expand_server.py` at `127.0.0.1:8765/expand` |
 | **Worker role** | Thin proxy / reasoning shell. Real engine is local Python. |
 | **Porosity mandatory** | Every voice artifact must carry `porosity` alongside 5-axis vector. |
 | **Voice is authority, not decoration** | Default silence. Speaks only when demanded. |
@@ -312,10 +312,10 @@ Phase 11: Alignment Theory (3.3)        -> Gate H + reasoning integration
 
 | Artifact | Path | Status |
 |---|---|---|
-| Guide | `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\docs\KING-WEN-RESEARCH-GUIDE.md` | This file |
-| Checklist | `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\docs\KING-WEN-RESEARCH-CHECKLIST.md` | Companion |
+| Guide | `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\docs\KING-WEN-RESEARCH-GUIDE.md` | This file |
+| Checklist | `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\docs\KING-WEN-RESEARCH-CHECKLIST.md` | Companion |
 | Worker source | `C:\Users\krist\Desktop\kingwen-oracle-worker\kingwen-oracle\src\index.ts` | Live |
-| Expand server | `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\expand_server.py` | Running |
-| Collapse output | `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\shotgun_expand_output.json` | live shotgun expansion |
+| Expand server | `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\expand_server.py` | Running |
+| Collapse output | `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\shotgun_expand_output.json` | live shotgun expansion |
 | Zotero corpus | `C:\Users\krist\Desktop\zotero\learning-corpus\.text\` | 490 files |
 | Voice exports | `C:\Users\krist\Desktop\kingwen-oracle-worker\kingwen-oracle\src\data\` | Copied |

@@ -237,15 +237,20 @@ def expand_with_personality(emotional_input: int = 50, request_text: str = "") -
     """Full 64-hex expansion with table-tag personality layer.
 
     Adds per-slot binary tags from immutable tables, repeated baseline.
+    Uses lazy import to break the circular dependency:
+    full_hexagram_shotgun imports from hexagram_personality, so we import
+    shotgun_expand at call time rather than module load time.
     """
+    from scripts.full_hexagram_shotgun import shotgun_expand
+
     base = shotgun_expand(emotional_input=emotional_input, request_text=request_text)
     resolved = base.get("resolved", [])
-    consensus = base.get("consensus", {})
+    personality_consensus = base.get("personality_consensus", {})
 
     # Resolve personalities from consensus weights + table tags
     personality = resolve_personality_by_consensus(
         resolved,
-        consensus.get("consensus_vector", {}),
+        personality_consensus.get("consensus_vector", {}),
     )
 
     # Add table-tag slot metadata to each resolved state

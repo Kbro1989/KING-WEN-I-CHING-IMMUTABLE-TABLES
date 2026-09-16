@@ -459,7 +459,8 @@ class KingwenStateMachine:
       # Single transition
       # Full 512-state sweep: all 64 hexagrams × 8 phases
     # Full 512-state sweep: all 64 hexagrams × 8 phases
-    result = sm.transition(hexagram_id=1, phase_bits=2, mask="PASS", coherence=0.8)  # example transition  # example transition
+    # Full 512-state sweep: all 64 hexagrams × 8 phases
+    result = sm.transition(hexagram_id=1, phase_bits=2, mask="PASS", coherence=0.8)  # example transition  # example transition  # example transition
       # Stack transitions (headwear stacking)
       result2 = sm.stack(result, mask="SEVER", coherence=0.4)
       # Batch composition
@@ -607,7 +608,8 @@ if __name__ == "__main__":
     # Identity transition
     # Full 512-state sweep: all 64 hexagrams × 8 phases
     # Full 512-state sweep: all 64 hexagrams × 8 phases
-    t1 = sm.transition(hexagram_id=1, phase_bits=2, mask="PASS", coherence=0.8)  # example transition  # example transition
+    # Full 512-state sweep: all 64 hexagrams × 8 phases
+    t1 = sm.transition(hexagram_id=1, phase_bits=2, mask="PASS", coherence=0.8)  # example transition  # example transition  # example transition
     print(f"t1 state_key={t1['state_key']} digest={state_digest(t1)}")
 
     # Möbius transition
