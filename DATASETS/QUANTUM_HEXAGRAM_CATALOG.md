@@ -179,6 +179,76 @@ With these seam notes:
 
 ---
 
+## Temporal Rollout & RL Measurables
+
+Stages 19–20 in `scripts/README.md` extend the reconciled chain with a per-hexagram 8-phase temporal rollout and an RL-measurable extraction layer.
+
+### Chained 8-phase rollout — `shotgun_rollout_runtime.py`
+
+For each hexagram, the rollout runs `expand_hexagram()` across all 8 `phase_bits` in sequence and carries the prior phase's state forward via `_carry_forward()`. The carry fields are `resolved_vector`, `expanded_vector`, `inject_site`, `line_balance`, `yao_vocabulary`, `hamiltonian_energy`, `porosity`. Any missing handoff is flagged in `chain_breaks` rather than silently dropped.
+
+The rollout produces three trajectories per hexagram:
+- `hamiltonian_trajectory` — `[H_t for t in phases]`
+- `porosity_trajectory` — `[porosity_t for t in phases]`
+- `resolved_vector_trajectory` — `[resolved_t for t in phases]`
+
+For hex 1, `chain_breaks = []` (chain_continuous = True) and `hamiltonian_trajectory` is all zeros. This is not a missing value — `_hamiltonian_energy` is called with `List[float]` built from `VEC_KEYS` for both vector arguments, and for hex 1 the `pq_dot ≈ 0.009` is dominated by `lagrangian ≈ 5.1` (from 6 yang lines), so the clamped result is 0. The temporal signal for this hex is in the `resolved_vector_trajectory_std ≈ 0.0225` and the porosity shift across phases, not in hamiltonian.
+
+### RL-measurable extraction — `rl_shotgun_measurables.py`
+
+Takes a rollout and produces per-step reward tuples plus trajectory-level statistics. The reward weights are measurement heuristics, not derived invariants.
+
+Per-step `step_reward()` components:
+- `hamiltonian` — `_hamiltonian_energy` value × 0.1
+- `change` — L2 norm of resolved_vector delta vs prior step × 1.0
+- `entropy` — Shannon entropy over normalized resolved_vector components × 0.5
+- `coherence` — resolved_vector coherence axis value × 0.4
+- `chain_bonus` — +0.2 when the step carries forward cleanly
+
+Trajectory-level outputs per hexagram:
+- `discounted_returns` — 8-step discounted returns, gamma = 0.95
+- `total_return` — G_0
+- `trajectory_variance` — std of step totals
+- `terminal_goodness` — coherence×0.5 + entropy×0.3 + (0.2 if chain_continuous else 0)
+- `delta_vector` + `delta_norm` — initial→final resolved_vector delta per axis
+- `per_step_cosine_similarity` — 7 cosine similarities between consecutive resolved vectors
+- `initial_entropy` / `final_entropy`, `initial_coherence` / `final_coherence`
+
+### Batch verification — all 64 hexagrams
+
+`scripts/output/rl_measurables_all64.json` (64 hexagrams, verified):
+- mean_total_return = 7.1472
+- mean_trajectory_variance = 0.0696
+- mean_terminal_goodness = 0.9114
+- 64/64 chain_continuous = True
+- total_return range: 6.8413 (hex 52, Keeping Still) → 7.4319 (hex 51, The Arousing)
+
+Top 5 by total_return: hex 51 (7.4319), hex 38 (7.3636), hex 34 (7.3487), hex 6 (7.3456), hex 44 (7.3320).
+Bottom 5 by total_return: hex 52 (6.8413), hex 20 (6.8808), hex 2 (6.8705), hex 11 (6.8655), hex 15 (6.8595).
+
+### Where this sits in the chain
+
+```
+request text
+  → intent
+    → hexagram
+      → binary state
+        → ternary manifold
+          → resolved state
+            → 512 state
+              ├── emotional vector ──→ audio
+              ├── emotional vector ──→ color
+              ├── emotional vector ──→ agent interpretation
+              └── 729-vertex geometry
+              └── 8-phase rollout (shotgun_rollout_runtime.py)
+                  └── RL measurables (rl_shotgun_measurables.py)
+                      └── training records
+```
+
+The rollout + RL layer does not add new math to the 512-state consensus; it measures what that consensus already produces per hexagram across the 8-phase temporal chain, with reward weights explicitly labeled as measurement heuristics.
+
+---
+
 ## Consistency tooling added
 
 Two scripts were added to lock the seams down:

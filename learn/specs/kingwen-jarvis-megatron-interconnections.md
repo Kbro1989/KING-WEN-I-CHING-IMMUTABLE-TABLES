@@ -3,8 +3,8 @@ Date: 2026-07-16
 Scope: read-only audit of canonical live surfaces from immutable tables, OpenJarvis runtime, OpenJarvis audit sidecar, and Megatron training substrate.
 
 ## Source of truth
-- King Wen engine: `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\emotional_engine.py`
-- Immutable tables: `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_ternary_tables_complete.py`
+- King Wen engine: `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\emotional_engine.py`
+- Immutable tables: `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_ternary_tables_complete.py`
 - OpenJarvis runtime: `C:\Users\krist\Desktop\OpenJarvis`
 - Audit sidecar: `C:\Users\krist\Desktop\OpenJarvis`
 - Megatron training: `C:\Users\krist\Desktop\Megatron-LM-review\kingwen_train_data`

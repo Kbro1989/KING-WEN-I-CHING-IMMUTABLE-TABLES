@@ -1,7 +1,7 @@
 # KING-WEN-I-CHING-IMMUTABLE-TABLES — Full File Inventory
 
 **Generated:** auto-rehydrated full tree
-**Root:** C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES
+**Root:** \\KING-WEN-I-CHING-IMMUTABLE-TABLES
 **Total entries:** buffered below
 
 ---

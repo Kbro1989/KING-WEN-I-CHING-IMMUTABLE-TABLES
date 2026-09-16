@@ -1,5 +1,5 @@
 # King Wen Workflow Paths
-Plugin artifact POV for `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES`
+Plugin artifact POV for `\\KING-WEN-I-CHING-IMMUTABLE-TABLES`
 
 Model: every file is an artifact/plugin with:
 - artifact id

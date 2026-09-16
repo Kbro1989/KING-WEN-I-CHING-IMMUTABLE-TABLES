@@ -1,7 +1,7 @@
 # King Wen Quantum Expansion Plan
 ## Shotgun-Blast Superposition for AI Usage
 Date: 2026-07-11
-Source of truth: `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\`
+Source of truth: `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\`
 
 ## Mission
 - Input: one normalized single query/statement/task.

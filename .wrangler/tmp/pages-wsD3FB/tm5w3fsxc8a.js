@@ -12,9 +12,9 @@ var define_ROUTES_default = {
 };
 
 // ../../AppData/Local/npm-cache/_npx/32026684e21afda6/node_modules/wrangler/templates/pages-dev-pipeline.ts
-import worker from "C:\\Users\\krist\\Desktop\\KING-WEN-I-CHING-IMMUTABLE-TABLES\\.wrangler\\tmp\\pages-wsD3FB\\functionsWorker-0.1540224151490739.mjs";
+import worker from "\\KING-WEN-I-CHING-IMMUTABLE-TABLES\\.wrangler\\tmp\\pages-wsD3FB\\functionsWorker-0.1540224151490739.mjs";
 import { isRoutingRuleMatch } from "C:\\Users\\krist\\AppData\\Local\\npm-cache\\_npx\\32026684e21afda6\\node_modules\\wrangler\\templates\\pages-dev-util.ts";
-export * from "C:\\Users\\krist\\Desktop\\KING-WEN-I-CHING-IMMUTABLE-TABLES\\.wrangler\\tmp\\pages-wsD3FB\\functionsWorker-0.1540224151490739.mjs";
+export * from "\\KING-WEN-I-CHING-IMMUTABLE-TABLES\\.wrangler\\tmp\\pages-wsD3FB\\functionsWorker-0.1540224151490739.mjs";
 var routes = define_ROUTES_default;
 var pages_dev_pipeline_default = {
   fetch(request, env, context) {

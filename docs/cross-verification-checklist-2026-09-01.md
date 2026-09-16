@@ -10,7 +10,7 @@ Audit actual on-disk programs against claimed integration paths. No fabrication.
 ### 1.1 Core Sovereign Stack
 | Program | Expected Path | Verified Exists | Notes |
 |---------|--------------|-----------------|-------|
-| King Wen immutable tables | `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES` | YES | 3.1GB, 641 tracked files, 4,291 total on disk |
+| King Wen immutable tables | `\\KING-WEN-I-CHING-IMMUTABLE-TABLES` | YES | 3.1GB, 641 tracked files, 4,291 total on disk |
 | OpenJarvis | `C:\Users\krist\Desktop\OpenJarvis` | YES | Live working tree, `src/openjarvis/` |
 | Open Design | `C:\Users\krist\Desktop\open-design` | YES | Separate program |
 | Cinder | `C:\Users\krist\Desktop\cinder` | YES | Electron+React |
@@ -297,4 +297,4 @@ For each item above:
 
 ---
 
-*Generated from live file system + git history probe. All paths verified against `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES` and `C:\Users\krist\Desktop\OpenJarvis`. No fabrication.*
+*Generated from live file system + git history probe. All paths verified against `\\KING-WEN-I-CHING-IMMUTABLE-TABLES` and `C:\Users\krist\Desktop\OpenJarvis`. No fabrication.*

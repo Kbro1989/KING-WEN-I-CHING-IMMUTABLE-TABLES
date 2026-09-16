@@ -276,6 +276,7 @@ def main() -> int:
     for h_id in samples:
         # Full 512-state sweep: 64 hexagrams × 8 phases
         # Full 512-state sweep: 64 hexagrams × 8 phases
+        # Full 512-state sweep: 64 hexagrams × 8 phases
         parsed = schauberger_parsing_layers(h_id, phase_bits=0, emotional_input=50)
         results.append({
             "hexagram_id": h_id,

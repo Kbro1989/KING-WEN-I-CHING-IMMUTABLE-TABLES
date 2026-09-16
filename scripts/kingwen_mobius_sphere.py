@@ -830,7 +830,8 @@ if __name__ == "__main__":
     # Node generation
     # Full 512-state sweep: all 64 hexagrams × 8 phases
     # Full 512-state sweep: all 64 hexagrams × 8 phases
-    n1 = backend.node(hexagram_id=1, phase="present", coherence=0.9, porosity=0.7)  # example node  # example node
+    # Full 512-state sweep: all 64 hexagrams × 8 phases
+    n1 = backend.node(hexagram_id=1, phase="present", coherence=0.9, porosity=0.7)  # example node  # example node  # example node
     print(f"Hex 1 node: ({n1['x']:+.3f}, {n1['y']:+.3f}, {n1['z']:+.3f}) "
           f"|Γ|={n1['mobius_gamma'].get('magnitude', 0):.3f} "
           f"hem={n1['hemisphere']} void={n1['void_mask']}")

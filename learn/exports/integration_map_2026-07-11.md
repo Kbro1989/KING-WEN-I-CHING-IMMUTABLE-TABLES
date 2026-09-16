@@ -4,12 +4,12 @@ Surface-trace only. No inferred concepts. File paths, function names, and JSON k
 ## Confirmed Live Edges
 
 ### 1. King Wen → Local Expand Server
-- **Source:** `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\emotional_engine.py`
+- **Source:** `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\emotional_engine.py`
   - `shotgun_expand(emotional_input)` lines 328-347
     - Calls `expand_hexagram()` lines 173-266 for h_id in 1..64
     - Calls `sample_resolve()` lines 269-325 for h_id in 1..64, phase_bits in 0..7
     - Calls `_compute_consensus_from_resolved()` lines 350-474
-- **Wire:** `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\expand_server.py`
+- **Wire:** `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\expand_server.py`
   - `ExpandHandler.do_POST()` lines 34-77
     - Accepts JSON body: `emotional_input`, `session_id`, `text`
     - Calls `shotgun_expand(emotional_input=emotional_input)` line 57
@@ -64,7 +64,7 @@ Surface-trace only. No inferred concepts. File paths, function names, and JSON k
 
 ### 7. King Wen → Megatron (Avalokiteshvara Domain)
 - **Build script:** `C:\Users\krist\Desktop\Megatron-LM-review\kingwen_train_data\build_avalokiteshvara_domain.py`
-  - `load_mapping()` lines 12-40 — parses `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\docs\avalokiteshvara-kingwen-mapping.md`
+  - `load_mapping()` lines 12-40 — parses `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\docs\avalokiteshvara-kingwen-mapping.md`
   - `build_text(record)` lines 43-54 — formats `[AVALOKITESHVARA]\nhexagram={hexagram_id} {name}\narm_function={arm_function}\nmantra={mantra}\n`
   - Output: `C:\Users\krist\Desktop\Megatron-LM-review\kingwen_train_data\avalokiteshvara_domain.jsonl`
   - JSON line format: `{"text": "...", "label_payload": {"hexagram_id":..., "name":..., "arm_function":..., "mantra":...}}`
@@ -75,7 +75,7 @@ Surface-trace only. No inferred concepts. File paths, function names, and JSON k
   - Writes: `combined_pretrain_train.jsonl`, `combined_pretrain_val.jsonl` lines 27-28
   - **Missing:** Does NOT read `wiki_math_corpus.jsonl`, `rsmv_cache_formats.jsonl`, `rsmv_live_cache_tables.json`, `megatron_multi_domain.jsonl`
 - **Convert script:** `C:\Users\krist\Desktop\Megatron-LM-review\kingwen_train_data\convert_corpus.py`
-  - Reads `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\shotgun_expand_output.json` line 6 — hardcoded path, not parameterized
+  - Reads `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\shotgun_expand_output.json` line 6 — hardcoded path, not parameterized
   - Writes `C:\Users\krist\Desktop\Megatron-LM-review\kingwen_train_data\corpus.jsonl` line 7
   - JSON line format: `{"text": "King Wen Oracle state record..."}` — flat prose, no structured JSON keys
 - **Ingest script:** `C:\Users\krist\Desktop\Megatron-LM-review\kingwen_train_data\ingest_memory_bins.py`
@@ -85,9 +85,9 @@ Surface-trace only. No inferred concepts. File paths, function names, and JSON k
 ### 9. wiki-math-parser → King Wen Corpus
 - **Skill:** `C:\Users\krist\AppData\Local\hermes\skills\research\wiki-math-parser\SKILL.md`
   - Source of truth: `C:\Users\krist\Desktop\mwparserfromhell_local\mwparserfromhell`
-  - Corpus target: `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_train_data\wiki_math_corpus.jsonl`
+  - Corpus target: `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_train_data\wiki_math_corpus.jsonl`
 - **Parser scripts:**
-  - `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\learn\scripts\wiki_math_parser.py` lines 14-45
+  - `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\learn\scripts\wiki_math_parser.py` lines 14-45
   - `C:\Users\krist\Desktop\open-design\standalone_wiki_math.py` lines 20-72
   - `C:\Users\krist\Desktop\open-design\backend\services\wiki_math.py` lines 18-40
   - `C:\Users\krist\Desktop\open-design\backend\routes\wiki_math.py` lines 11-15
@@ -105,9 +105,9 @@ Surface-trace only. No inferred concepts. File paths, function names, and JSON k
 - **Disconnect:** Megatron `combine_corpora.py` never reads `wiki_math_corpus.jsonl`. The parser writes to King Wen's `kingwen_train_data/` but Megatron's ingestion pipeline does not include it.
 
 ### 10. RuneScape / rsmv → King Wen / Megatron
-- **rsmv cache formats:** `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_train_data\rsmv_cache_formats.jsonl`
+- **rsmv cache formats:** `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_train_data\rsmv_cache_formats.jsonl`
   - 257 lines of `{"domain":"rsmv_cache_formats","source":"...","construct":"...","math":"..."}` objects
-- **rsmv live cache tables:** `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_train_data\rsmv_live_cache_tables.json`
+- **rsmv live cache tables:** `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_train_data\rsmv_live_cache_tables.json`
   - 1877 lines of jcache SQLite sample data with columns `KEY, DATA, VERSION, CRC`
 - **rsmv loader:** `C:\Users\krist\Desktop\rsmv\rust-rsmv-loader\src\main.rs`
   - Reads `C:\ProgramData\Jagex\RuneScape\js5-*.jcache` files lines 5, 49-63
@@ -125,7 +125,7 @@ Surface-trace only. No inferred concepts. File paths, function names, and JSON k
 ## Disconnect Points (Exact Causes)
 
 ### (1) Local Expand Server Consensus Serialization
-- **File:** `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\expand_server.py` lines 66-76
+- **File:** `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\expand_server.py` lines 66-76
 - **Issue:** The server flattens `result.get("consensus", {})` directly into the HTTP response JSON. The consensus object is computed by `_compute_consensus_from_resolved()` in `emotional_engine.py` lines 350-474, which uses `voice*0.6 + coherence*0.4` weighting to pick the winning hexagram (line 429). The consensus is the full 512-state quantum wave packet — all 64 hexagrams × 8 phases weighted together. The `consensus_hexagram_id` is the statistical mode of the full wave, not a single-hex collapse. The test in `test_progressive_intents.py` lines 42-47 confirms this lock: consensus intent string stalls except the first step.
 - **Live verify:** The HTTP response at `http://127.0.0.1:8765/expand` DOES include `consensus_hexagram_id: <integer>` in the `consensus` object. The task description states it is `None`, but the live server returns populated values. The disconnect is semantic: the key exists but the value is insensitive to slider input.
 
@@ -141,14 +141,14 @@ Surface-trace only. No inferred concepts. File paths, function names, and JSON k
   - The `except Exception` block at line 185 catches this and inserts an error section instead of emotional state.
 
 ### (3) Megatron Corpus Ingestion from wiki/rsmv Outputs
-- **wiki-math-parser output:** `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_train_data\wiki_math_corpus.jsonl`
+- **wiki-math-parser output:** `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_train_data\wiki_math_corpus.jsonl`
   - Format: `{"text": "...", "label_payload": {...}}` with keys `hexagram_id`, `name`, `category`, `action`, `parser_tags`, `source`
   - Referenced in `wiki-math-parser` SKILL.md line 30 as corpus target
 - **Megatron ingestion:** `C:\Users\krist\Desktop\Megatron-LM-review\kingwen_train_data\combine_corpora.py`
   - Reads: `kingwen_pretrain.jsonl`, `life_corpus_train.jsonl`, `life_corpus_val.jsonl` lines 7-11
   - **Never reads:** `wiki_math_corpus.jsonl`, `rsmv_cache_formats.jsonl`, `rsmv_live_cache_tables.json`
 - **convert_corpus.py:** `C:\Users\krist\Desktop\Megatron-LM-review\kingwen_train_data\convert_corpus.py`
-  - Reads ONLY `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\shotgun_expand_output.json` (hardcoded) line 6
+  - Reads ONLY `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\shotgun_expand_output.json` (hardcoded) line 6
   - Output format: flat `{"text": "King Wen Oracle state record..."}` — no structured JSON keys
 - **Disconnect:** The wiki-math parser is wired to King Wen's `kingwen_train_data/` but Megatron's `combine_corpora.py` does not include it in the pretrain pipeline. rsmv outputs (`rsmv_cache_formats.jsonl`, `rsmv_live_cache_tables.json`, `kit_version_manifest.json`) are also absent from the Megatron ingestion path.
 
@@ -228,9 +228,9 @@ Surface-trace only. No inferred concepts. File paths, function names, and JSON k
 
 ## Exact File Paths (Source of Truth)
 
-- `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\expand_server.py`
-- `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\emotional_engine.py`
-- `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\learn\scripts\test_progressive_intents.py`
+- `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\expand_server.py`
+- `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\emotional_engine.py`
+- `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\learn\scripts\test_progressive_intents.py`
 - `C:\Users\krist\Desktop\OpenJarvis\src\openjarvis\emotion\kingwen_engine_adapter.py`
 - `C:\Users\krist\Desktop\OpenJarvis\src\openjarvis\emotion\kingwen.py`
 - `C:\Users\krist\Desktop\OpenJarvis\src\openjarvis\agents\_stubs.py`
@@ -243,14 +243,14 @@ Surface-trace only. No inferred concepts. File paths, function names, and JSON k
 - `C:\Users\krist\Desktop\Megatron-LM-review\kingwen_train_data\ingest_memory_bins.py`
 - `C:\Users\krist\Desktop\Megatron-LM-review\kingwen_train_data\kingwen_pretrain.jsonl`
 - `C:\Users\krist\Desktop\Megatron-LM-review\kingwen_train_data\combined_pretrain_train.jsonl`
-- `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_train_data\wiki_math_corpus.jsonl`
-- `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_train_data\rsmv_cache_formats.jsonl`
-- `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_train_data\rsmv_live_cache_tables.json`
+- `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_train_data\wiki_math_corpus.jsonl`
+- `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_train_data\rsmv_cache_formats.jsonl`
+- `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\kingwen_train_data\rsmv_live_cache_tables.json`
 - `C:\Users\krist\Desktop\rsmv\rust-rsmv-loader\src\main.rs`
 - `C:\Users\krist\Desktop\open-design\standalone_wiki_math.py`
 - `C:\Users\krist\Desktop\open-design\backend\services\wiki_math.py`
 - `C:\Users\krist\Desktop\open-design\backend\routes\wiki_math.py`
-- `C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES\learn\scripts\wiki_math_parser.py`
+- `\\KING-WEN-I-CHING-IMMUTABLE-TABLES\learn\scripts\wiki_math_parser.py`
 - `C:\Users\krist\AppData\Local\hermes\skills\research\wiki-math-parser\SKILL.md`
 - `C:\Users\krist\AppData\Local\hermes\skills\autonomous-ai-agents\hermes-journey-mesh\SKILL.md`
 - `C:\Users\krist\AppData\Local\hermes\skills\dg-cartridge\SKILL.md` (exists but no `related_skills` linking to mesh)
