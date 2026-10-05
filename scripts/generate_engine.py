@@ -17,11 +17,10 @@ oracle_engine = '''import {
 import { EmotionalParser } from '../parser/EmotionalParser.js';
 import { NarrativeEngine } from '../parser/NarrativeEngine.js';
 import { computeTemporalPhase, phaseToString } from '../utils/TemporalMath.js';
-import { deterministicHexagramSelect } from '../utils/DeterministicHash.js';
 
-import registryJson from '../../data/hexagram-registry.json' assert { type: 'json' };
-import weightsJson from '../../data/emotional-weights.json' assert { type: 'json' };
-import reflectionsJson from '../../data/temporal-reflections.json' assert { type: 'json' };
+import registryJson from '../../data/hexagram-registry.json' with { type: 'json' };
+import weightsJson from '../../data/emotional-weights.json' with { type: 'json' };
+import reflectionsJson from '../../data/temporal-reflections.json' with { type: 'json' };
 
 // =============================================================================
 // OracleEngine — TRANSPARENT RELAY to Python expand server.
@@ -150,14 +149,12 @@ function mapExpandResponse(rawPayload: unknown, query: OracleQuery): OracleRespo
     : 'transformer';
 
   // Reflections: corpus lookup by hexagram_id — no fortune-cookie fallbacks.
-  let corpusEntry: { past: string; present: string; future: string } | undefined;
-  try {
-    const { readFileSync } = require('fs');
-    const { resolve, dirname } = require('path');
-    const corpusPath = resolve(dirname(require.resolve('../types/oracle.js')), '../../data/temporal-reflections.json');
-    const corpus = JSON.parse(readFileSync(corpusPath, 'utf-8')) as Record<string, { past: string; present: string; future: string }>;
-    corpusEntry = corpus[String(hexagram_id)];
-  } catch { /* corpus unavailable — surface error below */ }
+  // Uses the statically-imported JSON (import attributes above). The previous
+  // require()/readFileSync path could never work here: package.json sets
+  // "type": "module", so `require` is undefined in the emitted ESM and the
+  // bare `catch {}` swallowed the ReferenceError on every consult.
+  const corpus = reflectionsJson as unknown as Record<string, { past: string; present: string; future: string }>;
+  const corpusEntry: { past: string; present: string; future: string } | undefined = corpus[String(hexagram_id)];
 
   if (!corpusEntry || !corpusEntry.past || !corpusEntry.present || !corpusEntry.future) {
     throw new Error(`Oracle: no corpus entry for hexagram_id=${hexagram_id} in data/temporal-reflections.json`);

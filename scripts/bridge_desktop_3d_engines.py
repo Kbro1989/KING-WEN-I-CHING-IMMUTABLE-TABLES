@@ -80,7 +80,14 @@ def Xform "SovereignNPC_{hex_id:02d}"
 
 
 def generate_godot_scene(hex_id: int, name: str, grid_row: int, grid_col: int) -> Path:
-    """Generate Godot 3D Scene Graph (.tscn) for a Sovereign Model NPC with metadata & transform."""
+    """Generate Godot 3D Scene Graph (.tscn) for a Sovereign Model NPC with metadata & transform.
+
+    The MeshInstance3D references the real converted OBJ mesh
+    (godot/meshes/avatar/hex{XX}_phase0.obj). Godot 4 cannot import PLY, so the
+    OBJ produced by scripts/bridge_ply_to_godot_mesh.py is the only path that
+    reaches the engine. If the OBJ is absent the node is still emitted but the
+    mesh reference is omitted — the validator will flag it.
+    """
     GODOT_OUT_DIR.mkdir(parents=True, exist_ok=True)
     out_file = GODOT_OUT_DIR / f"npc_hex_{hex_id:02d}.tscn"
 
@@ -88,9 +95,31 @@ def generate_godot_scene(hex_id: int, name: str, grid_row: int, grid_col: int) -
     world_x = round((grid_col - 3.5) * 8.0, 2)
     world_z = round((grid_row - 3.5) * 8.0, 2)
 
-    tscn_content = f"""[gd_scene load_steps=3 format=3]
+    # Real mesh wiring: prefer the converted OBJ, fall back to the shap-e OBJ.
+    avatar_obj = ROOT / "godot" / "meshes" / "avatar" / f"hex{hex_id:02d}_phase0.obj"
+    shap_e_obj = ROOT / "godot" / "meshes" / "shap_e" / f"shap_e_hex_{hex_id:02d}.obj"
+    if avatar_obj.exists():
+        mesh_res = f"res://meshes/avatar/{avatar_obj.name}"
+    elif shap_e_obj.exists():
+        mesh_res = f"res://meshes/shap_e/{shap_e_obj.name}"
+    else:
+        mesh_res = ""
 
-[sub_resource type="BoxShape3D" id="BoxShape3D_hex_{hex_id:02d}"]
+    if mesh_res:
+        ext_res = f'[ext_resource type="Mesh" path="{mesh_res}" id="hex_{hex_id:02d}_mesh"]\n'
+        mesh_node = (
+            '[node name="MeshInstance3D" type="MeshInstance3D" parent="."]\n'
+            'mesh = ExtResource("hex_%02d_mesh")\n' % hex_id
+        )
+        load_steps = 4
+    else:
+        ext_res = ""
+        mesh_node = '[node name="MeshInstance3D" type="MeshInstance3D" parent="."]\n'
+        load_steps = 3
+
+    tscn_content = f"""[gd_scene load_steps={load_steps} format=3]
+
+{ext_res}[sub_resource type="BoxShape3D" id="BoxShape3D_hex_{hex_id:02d}"]
 size = Vector3(2.4, 2.4, 1.0)
 
 [node name="NPC_Hex_{hex_id:02d}" type="CharacterBody3D"]
@@ -101,9 +130,9 @@ metadata/category = "{hex_info.get('category', 'sovereign')}"
 metadata/action = "{hex_info.get('action', 'ASSERT')}"
 metadata/grid_row = {grid_row}
 metadata/grid_col = {grid_col}
+metadata/mesh_source = "{mesh_res}"
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-
+{mesh_node}
 [node name="CollisionShape3D" type="CollisionShape3D" parent="."]
 shape = SubResource("BoxShape3D_hex_{hex_id:02d}")
 """

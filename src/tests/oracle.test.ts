@@ -1,16 +1,4 @@
-#!/usr/bin/env python3
-"""Runnable entry point: generate tests and index exports."""
-from __future__ import annotations
-
-import os
-from pathlib import Path
-
-REPO = Path(__file__).resolve().parent.parent
-output_dir = REPO
-for sub in ["data", "src/core", "src/parser", "src/types", "src/utils", "src/tests"]:
-    os.makedirs(os.path.join(output_dir, sub), exist_ok=True)
-
-test_file = '''import { describe, it, beforeEach, afterEach } from 'node:test';
+import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { OracleEngine } from '../core/OracleEngine.js';
 
@@ -24,7 +12,7 @@ const resolvedStates = Array.from({ length: 512 }, (_, i) => ({
   hexagram_id: (i % 64) + 1,
   phase_bits: i % 8,
   phase_temporal: ['past', 'present', 'future'][i % 3],
-  hexagram_symbols: { unicode: '\\u4dc0', action: 'ASSERT', category: 'sovereign' },
+  hexagram_symbols: { unicode: '\u4dc0', action: 'ASSERT', category: 'sovereign' },
 }));
 
 const relayPayload = {
@@ -77,29 +65,3 @@ describe('OracleEngine', () => {
     assert.strictEqual(response.resolved_state?.length, 512);
   });
 });
-'''
-
-index_ts = '''export { OracleEngine } from './core/OracleEngine.js';
-export { EmotionalParser } from './parser/EmotionalParser.js';
-export { NarrativeEngine } from './parser/NarrativeEngine.js';
-export { computeTemporalPhase, phaseToString } from './utils/TemporalMath.js';
-export {
-  deterministicHash,
-  deterministicHashHex,
-  computeTokenSum,
-  extractCoprimePrimeVector,
-  generateDeterministicInjectHash,
-} from './utils/DeterministicHash.js';
-export { HexagramRuntimeBridge } from './core/HexagramRuntimeBridge.js';
-export * from './types/IntentVector.js';
-export * from './types/StateCapture.js';
-export * from './types/oracle.js';
-'''
-
-with open(os.path.join(output_dir, "src/tests/oracle.test.ts"), "w", encoding="utf-8") as f:
-    f.write(test_file)
-with open(os.path.join(output_dir, "src/index.ts"), "w", encoding="utf-8") as f:
-    f.write(index_ts)
-
-print("✅ tests/oracle.test.ts")
-print("✅ src/index.ts")

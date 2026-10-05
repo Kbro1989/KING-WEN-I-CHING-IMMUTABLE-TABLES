@@ -180,16 +180,18 @@ def hexagram_scene_tscn(hex_id: int) -> str:
     
     for phase_idx in range(8):
         phase_name = phase_names[phase_idx]
-        mesh_filename = f"hex{hex_id:02d}_phase{phase_idx}.ply"
+        # Godot 4 cannot import PLY. The bridge converts each PLY into a
+        # wavefront OBJ under godot/meshes/, which is what scenes must reference.
+        mesh_filename = f"hex{hex_id:02d}_phase{phase_idx}.obj"
         mesh_path = f"res://meshes/avatar/{mesh_filename}"
-        
-        # Check if mesh exists
-        actual_path = ASSETS / "kingwen_avatar_meshes" / mesh_filename
+
+        # Check if the converted OBJ exists
+        actual_path = GODOT_DIR / "meshes" / "avatar" / mesh_filename
         if not actual_path.exists():
-            # Fallback to shap-e mesh
-            mesh_filename = f"shap_e_hex_{hex_id:02d}.ply"
+            # Fallback to the converted shap-e OBJ
+            mesh_filename = f"shap_e_hex_{hex_id:02d}.obj"
             mesh_path = f"res://meshes/shap_e/{mesh_filename}"
-            actual_path = ASSETS / "kingwen_3d_meshes" / mesh_filename
+            actual_path = GODOT_DIR / "meshes" / "shap_e" / mesh_filename
             if not actual_path.exists():
                 continue
         
@@ -217,7 +219,7 @@ metadata/hexagram_id = {hex_id}
 metadata/is_void = {"true" if is_void else "false"}
 ''')
         
-        phase_resources.append(f'[ext_resource type="PackedScene" path="{mesh_path}" id="{phase_var}_mesh"]')
+        phase_resources.append(f'[ext_resource type="Mesh" path="{mesh_path}" id="{phase_var}_mesh"]')
         phase_resources.append(f'[ext_resource type="StandardMaterial3D" path="res://materials/hex_{hex_id:02d}_phase_{phase_idx}.tres" id="{phase_var}_mat"]')
     
     # Build the scene
@@ -557,56 +559,40 @@ emission_energy = 0.5
 
 
 def generate_import_configs():
-    """Generate .import files for PLY mesh import."""
-    # Avatar meshes
-    avatar_dir = ASSETS / "kingwen_avatar_meshes"
-    if avatar_dir.exists():
-        for ply_file in avatar_dir.glob("*.ply"):
-            import_content = f'''; Import config for {ply_file.name}
-[remap]
+    """Emit .import configs for the Godot project.
 
-importer="mesh"
-type="CompressedMesh"
-metadata={{}}
+    Godot 4 has NO PLY importer (verified in editor/import/3d/resource_importer_obj.cpp
+    and modules/gltf/editor/editor_scene_importer_gltf.cpp: importable formats are
+    obj, gltf, glb, dae, fbx, escn, blend). Writing .import files for .ply sources
+    with a fictional importer="mesh" produced 576 dead configs that could never
+    resolve.
 
-[deps]
+    The real conversion is delegated to scripts/bridge_ply_to_godot_mesh.py, which
+    repacks each PLY into a wavefront OBJ (with vertex colour) and emits a valid
+    importer="wavefront_obj" / type="Mesh" config pointing at a res:// path.
+    """
+    import subprocess
 
-source_file="{ply_file.as_posix()}"
-dest_file="{GODOT_DIR.as_posix()}/meshes/avatar/{ply_file.stem}.mesh"
+    bridge = ROOT / "scripts" / "bridge_ply_to_godot_mesh.py"
+    if not bridge.exists():
+        print("  ! bridge_ply_to_godot_mesh.py missing — skipping mesh import configs")
+        return
 
-[params]
-
-storage=0
-compress=true
-precision=0.001
-'''
-            import_path = GODOT_DIR / "import" / f"{ply_file.stem}.import"
-            import_path.write_text(import_content, encoding='utf-8')
-    
-    # Shap-e meshes
-    shap_e_dir = ASSETS / "kingwen_3d_meshes"
-    if shap_e_dir.exists():
-        for ply_file in shap_e_dir.glob("*.ply"):
-            import_content = f'''; Import config for {ply_file.name}
-[remap]
-
-importer="mesh"
-type="CompressedMesh"
-metadata={{}}
-
-[deps]
-
-source_file="{ply_file.as_posix()}"
-dest_file="{GODOT_DIR.as_posix()}/meshes/shap_e/{ply_file.stem}.mesh"
-
-[params]
-
-storage=0
-compress=true
-precision=0.001
-'''
-            import_path = GODOT_DIR / "import" / f"{ply_file.stem}.import"
-            import_path.write_text(import_content, encoding='utf-8')
+    print("  Delegating mesh import configs to bridge_ply_to_godot_mesh.py...")
+    result = subprocess.run(
+        [sys.executable, str(bridge), "--all"],
+        cwd=str(ROOT),
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        print("  ! mesh conversion reported failures:")
+        tail = (result.stdout or "")[-800:]
+        print(tail)
+    else:
+        obj_count = len(list((GODOT_DIR / "meshes" / "avatar").glob("*.obj")))
+        obj_shap = len(list((GODOT_DIR / "meshes" / "shap_e").glob("*.obj")))
+        print(f"  Wrote {obj_count} avatar OBJ + {obj_shap} shap-e OBJ meshes with import configs")
 
 
 def main():

@@ -112,6 +112,13 @@ def run_output_mismatch_check() -> Dict[str, Any]:
         content = tscn_file.read_text(encoding="utf-8")
         if f"NPC_Hex_{h_id:02d}" not in content:
             mismatches.append(f"Godot scene #{h_id} node name mismatch: expected NPC_Hex_{h_id:02d}")
+        # A MeshInstance3D with no mesh binding renders nothing — the exact
+        # regression that shipped 64 invisible NPC scenes.
+        if 'type="MeshInstance3D"' in content and "mesh = ExtResource" not in content:
+            mismatches.append(f"Godot scene #{h_id}: MeshInstance3D has no mesh binding")
+        # Godot 4 has no PLY importer; any .ply reference can never resolve.
+        if ".ply" in content:
+            mismatches.append(f"Godot scene #{h_id}: references .ply (not importable by Godot 4)")
 
     # 5. Audit CollisionVis BVHs
     bvh_file = ROOT / "DATASETS" / "collisionvis_physics" / "collisionvis_64_npc_physics.json"
