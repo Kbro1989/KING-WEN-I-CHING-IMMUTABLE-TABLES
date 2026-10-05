@@ -4,8 +4,9 @@ import re
 import sys
 from pathlib import Path
 
-ROOT = Path(r"\\KING-WEN-I-CHING-IMMUTABLE-TABLES")
+ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "scripts"))
 
 from kingwen_ternary_tables_complete import HEXAGRAM_BASE
 
@@ -78,12 +79,56 @@ def run_cross_engine_validations():
             errors.append(f"Missing Godot scene: {scene_file.name}")
             continue
         sc = scene_file.read_text(encoding="utf-8")
-        if "[gd_scene load_steps=3 format=3]" not in sc:
-            errors.append(f"Godot Hex {h_id}: Header load_steps mismatch (expected 3)")
+        # load_steps is now 4 when a Mesh ext_resource is present, 3 otherwise.
+        if not re.search(r'\[gd_scene load_steps=\d+ format=3\]', sc):
+            errors.append(f"Godot Hex {h_id}: Missing valid '[gd_scene load_steps=N format=3]' header")
         if "type=\"CharacterBody3D\"" not in sc:
             errors.append(f"Godot Hex {h_id}: Root node must be CharacterBody3D")
         if "type=\"CollisionShape3D\"" not in sc:
             errors.append(f"Godot Hex {h_id}: Missing CollisionShape3D child node")
+
+        # --- HARDENED: a MeshInstance3D with no mesh reference renders nothing ---
+        # This exact gap shipped 64 scenes whose MeshInstance3D nodes were empty.
+        if "type=\"MeshInstance3D\"" in sc and "mesh = ExtResource" not in sc:
+            errors.append(
+                f"Godot Hex {h_id}: MeshInstance3D has no 'mesh = ExtResource(...)' binding "
+                "(scene would render as an invisible node)"
+            )
+        if 'ext_resource type="Mesh"' not in sc:
+            errors.append(f"Godot Hex {h_id}: No Mesh ext_resource declared")
+
+        # --- HARDENED: Godot 4 cannot import PLY; any .ply reference is dead ---
+        if ".ply" in sc:
+            errors.append(f"Godot Hex {h_id}: references .ply — Godot 4 has no PLY importer")
+
+        # --- HARDENED: mesh target must resolve on disk ---
+        for m in re.finditer(r'\[ext_resource type="Mesh" path="res://([^"]+)"', sc):
+            rel = m.group(1)
+            if not (ROOT / "godot" / rel).exists():
+                errors.append(f"Godot Hex {h_id}: Mesh ext_resource does not resolve on disk: res://{rel}")
+
+    # --- HARDENED: .import configs must use a real Godot importer ---
+    import_dir = ROOT / "godot" / "import"
+    valid_importers = {"wavefront_obj", "scene", "gltf", "image", "texture", "wav"}
+    if import_dir.is_dir():
+        dead = 0
+        for imp in import_dir.glob("*.import"):
+            txt = imp.read_text(encoding="utf-8", errors="replace")
+            m = re.search(r'importer="([^"]+)"', txt)
+            if not m:
+                errors.append(f".import missing importer= : {imp.name}")
+                continue
+            if m.group(1) not in valid_importers:
+                dead += 1
+                errors.append(f".import uses non-existent importer '{m.group(1)}': {imp.name}")
+            src = re.search(r'source_file="([^"]+)"', txt)
+            if src and src.group(1).startswith("res://"):
+                if not (ROOT / "godot" / src.group(1)[len("res://"):]).exists():
+                    errors.append(f".import source_file does not resolve: {src.group(1)}")
+            elif src and not Path(src.group(1)).exists():
+                errors.append(f".import source_file is an absolute path outside the project: {imp.name}")
+        print(f"  -> Audited {len(list(import_dir.glob('*.import')))} .import configs, {dead} with dead importers.")
+
     print(f"  -> Checked 64 individual scenes + 1 master scene: {64 + 1} Godot scenes validated.")
 
     # -------------------------------------------------------------------------
@@ -108,6 +153,13 @@ def run_cross_engine_validations():
         col_buf = mesh.get("colourBuffer", [])
         if not pos_buf or len(pos_buf) % 3 != 0:
             errors.append(f"RSMV Hex {h_id}: positionBuffer length {len(pos_buf)} is not a multiple of 3")
+        # Field-name parity against rsmv/generated/models.d.ts. Emitting
+        # `materialArgument` (the old name) instead of `material` silently
+        # produces a struct rsmv's parser cannot bind.
+        if "materialArgument" in mesh:
+            errors.append(f"RSMV Hex {h_id}: uses stale field 'materialArgument' — rsmv schema declares 'material'")
+        if "material" not in mesh:
+            errors.append(f"RSMV Hex {h_id}: missing required field 'material' (rsmv models.d.ts)")
         # Check Int16 range limits
         if any(v < -32768 or v > 32767 for v in pos_buf):
             errors.append(f"RSMV Hex {h_id}: positionBuffer contains values outside signed Int16 range")
@@ -144,7 +196,10 @@ def run_cross_engine_validations():
     # 5. MUGEN Continuous Latent Dimension & Kinematic Sanity
     # -------------------------------------------------------------------------
     print("\n[5/6] Auditing MUGEN Motion Kinematics & Descriptors...")
-    for rec in sb.get("records", []):
+    sandbox_records = sb.get("records", []) if isinstance(sb, dict) else []
+    if not sandbox_records:
+        errors.append("MUGEN audit has no sandbox records to validate (Red9 manifest missing or empty)")
+    for rec in sandbox_records:
         hid = rec.get("hexagram_id")
         mugen = rec.get("mugen_motion_descriptor", {})
         latents = mugen.get("continuous_latents", {})

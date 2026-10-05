@@ -1,3 +1,4 @@
+import reflectionsJson from '../../data/temporal-reflections.json' with { type: 'json' };
 // =============================================================================
 // OracleEngine — TRANSPARENT RELAY to Python expand server.
 //
@@ -102,15 +103,12 @@ function mapExpandResponse(rawPayload, query) {
         ? rawCat
         : 'transformer';
     // Reflections: corpus lookup by hexagram_id — no fortune-cookie fallbacks.
-    let corpusEntry;
-    try {
-        const { readFileSync } = require('fs');
-        const { resolve, dirname } = require('path');
-        const corpusPath = resolve(dirname(require.resolve('../types/oracle.js')), '../../data/temporal-reflections.json');
-        const corpus = JSON.parse(readFileSync(corpusPath, 'utf-8'));
-        corpusEntry = corpus[String(hexagram_id)];
-    }
-    catch { /* corpus unavailable — surface error below */ }
+    // Uses the statically-imported JSON (import attributes above). The previous
+    // require()/readFileSync path could never work here: package.json sets
+    // "type": "module", so `require` is undefined in the emitted ESM and the
+    // bare `catch {}` swallowed the ReferenceError on every consult.
+    const corpus = reflectionsJson;
+    const corpusEntry = corpus[String(hexagram_id)];
     if (!corpusEntry || !corpusEntry.past || !corpusEntry.present || !corpusEntry.future) {
         throw new Error(`Oracle: no corpus entry for hexagram_id=${hexagram_id} in data/temporal-reflections.json`);
     }

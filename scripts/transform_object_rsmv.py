@@ -10,7 +10,7 @@ rsmv/generated/models.d.ts:
       format, version, always_0f, meshCount,
       unkCount0..4,
       meshes: [{
-        unkint, materialArgument, faceCount, hasVertices,
+        unkint, material, faceCount, hasVertices,
         hasVertexAlpha, hasFaceBones, hasBoneIds, isHidden, hasSkin,
         colourBuffer: Uint16Array | null,
         alphaBuffer: Uint8Array | null,
@@ -135,7 +135,7 @@ def build_rsmv_models(verts, cols, source_hex: int) -> dict:
 
     mesh = {
         "unkint": 0,
-        "materialArgument": 0,
+        "material": 0,                  # rsmv models.d.ts declares `material` (offset -1 applied at parse)
         "faceCount": 0,                 # point cloud: no faces
         "hasVertices": 1,
         "hasVertexAlpha": 0,

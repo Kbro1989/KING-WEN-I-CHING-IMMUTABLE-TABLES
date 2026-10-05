@@ -7,39 +7,74 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 output_dir = REPO
-for sub in ["data", "src/core", "src/parser", "src/types", "src/utils", "tests"]:
+for sub in ["data", "src/core", "src/parser", "src/types", "src/utils", "src/tests"]:
     os.makedirs(os.path.join(output_dir, sub), exist_ok=True)
 
-test_file = '''import { describe, it } from 'node:test';
+test_file = '''import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert';
 import { OracleEngine } from '../core/OracleEngine.js';
 
-describe('OracleEngine', () => {
-  const engine = new OracleEngine({ deterministic: true });
+// OracleEngine is a TRANSPARENT RELAY to the local Python expand server.
+// It owns no selection logic, so the only correct way to test it is to stub
+// fetch and assert the relay preserves the full 64-expanded / 512-resolved
+// payload without collapsing to a single hexagram.
+// The consensus block must carry the engine's real field names, otherwise the
+// relay's own validation (consensus_hexagram_id in [1,64]) rejects it.
+const resolvedStates = Array.from({ length: 512 }, (_, i) => ({
+  hexagram_id: (i % 64) + 1,
+  phase_bits: i % 8,
+  phase_temporal: ['past', 'present', 'future'][i % 3],
+  hexagram_symbols: { unicode: '\\u4dc0', action: 'ASSERT', category: 'sovereign' },
+}));
 
-  it('should consult with basic query', async () => {
+const relayPayload = {
+  source: 'local-python',
+  expanded_count: 64,
+  resolved_count: 512,
+  expanded: Array.from({ length: 64 }, (_, i) => ({ hexagram_id: i + 1 })),
+  resolved: resolvedStates,
+  consensus: {
+    consensus_hexagram_id: 1,
+    consensus_hexagram_name: 'The Creative',
+    consensus_temporal: 'present',
+    consensus_yao: 'stable_yao',
+    consensus_vector: {},
+    consensus_intent: '',
+  },
+};
+
+describe('OracleEngine', () => {
+  const realFetch = globalThis.fetch;
+  let engine: OracleEngine;
+
+  beforeEach(() => {
+    globalThis.fetch = (async () => ({ ok: true, json: async () => relayPayload })) as unknown as typeof fetch;
+    engine = new OracleEngine({ localUrl: 'http://127.0.0.1:8765' });
+  });
+
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
+  it('should relay a consult and keep the full expansion intact', async () => {
     const response = await engine.consult({
       text: 'What should I do about this obstacle?',
       session_id: 'test-session-001',
       emotional_input: 50,
     });
 
-    assert.strictEqual(typeof response.hexagram_id, 'number');
-    assert.ok(response.hexagram_id >= 1 && response.hexagram_id <= 64);
-    assert.ok(response.hexagram_name.length > 0);
-    assert.ok(response.past_reflection.length > 0);
-    assert.ok(response.present_reflection.length > 0);
-    assert.ok(response.future_reflection.length > 0);
-    assert.ok(response.unified_weave.length > 0);
-    assert.ok(['ASSERT', 'YIELD', 'ADAPT', 'WAIT'].includes(response.action));
-    assert.ok(['sovereign', 'boundary', 'transformer', 'dissipator'].includes(response.category));
+    assert.ok(response);
+    assert.strictEqual(response.runtime_source, 'local-python');
+    assert.strictEqual(response.expanded_state?.length, 64);
+    assert.strictEqual(response.resolved_state?.length, 512);
   });
 
-  it('should be deterministic for same inputs', async () => {
-    const q1 = await engine.consult({ text: 'test', session_id: 'sess-a', emotional_input: 30 });
-    const q2 = await engine.consult({ text: 'test', session_id: 'sess-a', emotional_input: 30 });
-    assert.strictEqual(typeof q1.hexagram_id, 'number');
-    assert.strictEqual(typeof q2.hexagram_id, 'number');
+  it('should never collapse the 512-state superposition to one hexagram', async () => {
+    const response = await engine.consult({ text: 'test', session_id: 'sess-a', emotional_input: 30 });
+
+    assert.notStrictEqual(response.expanded_state?.length, 1);
+    assert.notStrictEqual(response.resolved_state?.length, 1);
+    assert.strictEqual(response.resolved_state?.length, 512);
   });
 });
 '''
@@ -61,7 +96,7 @@ export * from './types/StateCapture.js';
 export * from './types/oracle.js';
 '''
 
-with open(os.path.join(output_dir, "tests/oracle.test.ts"), "w", encoding="utf-8") as f:
+with open(os.path.join(output_dir, "src/tests/oracle.test.ts"), "w", encoding="utf-8") as f:
     f.write(test_file)
 with open(os.path.join(output_dir, "src/index.ts"), "w", encoding="utf-8") as f:
     f.write(index_ts)
