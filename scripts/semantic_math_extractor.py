@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -29,7 +30,7 @@ except ImportError:
     sys.exit(2)
 
 
-# ── Math symbol detection ──────────────────────────────────────────
+# ── Math symbol detection ──────────────────────────────────
 MATH_SYMBOLS = set(
     "φψχωΩΨΧπΠΣ∆∂∇αβγδεζηθικλμνξρστυϕ"
     "≡≠≤≥≈∝∞∈∉⊂⊃⊆⊇∪∩∀∃∅ℝℕℤℚℂ"
@@ -40,18 +41,51 @@ MATH_SYMBOLS = set(
     "ⁱⁿ⁺⁻⁼⁽⁾"
 )
 
-# ── Structural patterns ────────────────────────────────────────────
-BRACKET_PAIRS = {
-    "(": ")",
-    "[": "]",
-    "{": "}",
-    "⟨": "⟩",
-    "⌊": "⌋",
-    "⌈": "⌉",
-    "|": "|",
-    "‖": "‖",
+# ── LaTeX command detection ──────────────────────────────────
+LATEX_COMMANDS = set(
+    "frac sum int sqrt prod coprod bigcap bigcup bigvee bigwedge"
+    "cdot times div pm mp circ bullet prime backprime"
+    "ell forall partial nabla infty exists nexists emptyset varnothing"
+    "nabla partial Delta abla acute grave dot ddot tilde bar hat vec"
+    "check hat widevec dot ddot tilde bar acute grave dot"
+    "mathrm mathbf mathit mathcal mathbb mathsf mathrm"
+    "left right big Big LARGE huge huge"
+    "limits displaystyle textstyle scriptscriptstyle"
+    "binom pmatrix matrix cases align gather multline equation"
+    "begin end item enumerate description"
+    "langle rangle lfloor rfloor lceil rceil vert Vbar"
+    "Vert backvert forwardvert doublevert"
+    "longrightarrow longleftarrow longleftrightarrow"
+    "Rightarrow Leftarrow Leftrightarrow"
+    "tomapsto longmapsto"
+    "oplus otimes bigodot bigotimes bigoplus"
+    "cap cup subset supset subseteq supseteq"
+    "subseteqq supseteqq subsetneq supsetneq"
+    "sqsubseteq sqsupseteq sqsubset sqsupset"
+    "in ni notin subset supset"
+    "land lor lnot neg flat natural sharp"
+    "wp therefore because ell imax imin"
+    "DeclareMathOperator arccos arcsin arctan cosh sinh tanh"
+    "argmax argmin ker im rank null"
+    "mathalpha mathnormal mathit mathbf mathrm mathsf mathcal"
+    "mathbb oldstyle boldsymbol mathfrak mathbb"
+    "qquad qquad qquad qquad"
+)
+
+# ── Math image indicators ──────────────────────────────────
+MATH_IMAGE_INDICATORS = {
+    "equation", "fig:", "figure", "table", "diagram", "graph", "chart",
+    "screenshot", "render", "plot", "math", "formula", "display",
 }
 
+# ── Bracket pairs ──────────────────────────────────────────
+BRACKET_PAIRS = {
+    "(": ")", "[": "]", "{": "}",
+    "⟨": "⟩", "«": "»", "【": "】",
+    "(": ")", "[": "]", "{": "}",
+}
+
+# ── Operators ──────────────────────────────────────────────
 OPERATORS = {
     "+": "addition", "−": "subtraction", "×": "multiplication", "÷": "division",
     "±": "plus-minus", "∓": "minus-plus", "=": "equality", "≡": "equivalence",
@@ -65,6 +99,7 @@ OPERATORS = {
     "∐": "coproduct", "⋀": "wedge", "⋁": "vee", "⋂": "bigcap", "⋃": "bigcup",
 }
 
+# ── Functions ──────────────────────────────────────────────
 FUNCTIONS = {
     "exp": "exponential", "log": "logarithm", "ln": "natural-log",
     "sin": "sine", "cos": "cosine", "tan": "tangent", "arctan": "arctangent",
@@ -78,11 +113,13 @@ FUNCTIONS = {
     "mod": "modulo", "floor": "floor", "ceil": "ceiling", "round": "round",
     "abs": "absolute-value", "norm": "norm", "inner": "inner-product",
     "outer": "outer-product", "cross": "cross-product", "dot": "dot-product",
-    "tensor": "tensor-product", "direct": "direct-sum", "union": "union",
-    "intersection": "intersection", "complement": "complement",
-    "power": "power-set", "cartesian": "cartesian-product",
+    "tensor": "tensor-product", "direct": "direct-sum",
+    "union": "union", "intersection": "intersection",
+    "complement": "complement", "power": "power-set",
+    "cartesian": "cartesian-product",
 }
 
+# ── Proof indicators ───────────────────────────────────────
 PROOF_INDICATORS = {
     "theorem": "theorem", "lemma": "lemma", "corollary": "corollary",
     "proposition": "proposition", "definition": "definition", "proof": "proof",
@@ -103,10 +140,13 @@ PROOF_INDICATORS = {
 
 
 def is_math_word(word: str) -> bool:
-    """Check if a word contains math symbols or patterns."""
+    """Check if a word/block contains math symbols or patterns."""
     if not word:
         return False
     if word in OPERATORS:
+        return False
+    # Control characters and CRLF artifacts → not math (garbled PDF content)
+    if '\x00' in word or '\ufffd' in word or '\r\n' in word or '\x0c' in word:
         return False
     if any(c in MATH_SYMBOLS for c in word):
         return True
@@ -124,7 +164,10 @@ def is_math_word(word: str) -> bool:
 def extract_math_expressions(text: str) -> List[Dict[str, Any]]:
     """Extract math expressions from text with structural info."""
     expressions = []
-    
+    # Skip text with control characters / CRLF artifacts — garbled PDF blocks
+    if '\x00' in text or '\ufffd' in text or '\r\n' in text or '\x0c' in text:
+        return expressions
+
     # LaTeX inline (must have content)
     for m in re.finditer(r"\$([^$\n]+)\$", text):
         expr = m.group(1).strip()
@@ -134,8 +177,9 @@ def extract_math_expressions(text: str) -> List[Dict[str, Any]]:
                 "type": "latex_inline",
                 "position": m.start(),
                 "context": text[max(0, m.start()-30):m.end()+30].replace("\n", " "),
+                "text": text[:200],
             })
-    
+
     # LaTeX display (must have content)
     for m in re.finditer(r"\$\$([^$]+)\$\$", text, re.DOTALL):
         expr = m.group(1).strip()
@@ -145,10 +189,11 @@ def extract_math_expressions(text: str) -> List[Dict[str, Any]]:
                 "type": "latex_display",
                 "position": m.start(),
                 "context": text[max(0, m.start()-30):m.end()+30].replace("\n", " "),
+                "text": text[:200],
             })
-    
+
     # Unicode math (Greek letter + operator, must have complete structure)
-    for m in re.finditer(r"[φψχωπΣ∆αβγδεζηθικλμνξρστυϕ][^\n]{0,80}[=≡≤≥][^\n]{0,80}", text):
+    for m in re.finditer(r"[φψχωΩΨΧπΠΣ∆∂∇αβγδεζηθικλμνξρστυϕ][^\n]{0,80}[=≡≤≥][^\n]{0,80}", text):
         expr = m.group(0).strip()
         # Require at least 5 chars and a math symbol after the operator
         if len(expr) > 5 and any(c in MATH_SYMBOLS for c in expr[1:]):
@@ -157,8 +202,9 @@ def extract_math_expressions(text: str) -> List[Dict[str, Any]]:
                 "type": "unicode_equation",
                 "position": m.start(),
                 "context": text[max(0, m.start()-30):m.end()+30].replace("\n", " "),
+                "text": text[:200],
             })
-    
+
     # Function calls (must have content in parentheses)
     for func in FUNCTIONS:
         for m in re.finditer(rf"\b{func}\s*\([^\n]{{1,40}}\)", text):
@@ -170,152 +216,132 @@ def extract_math_expressions(text: str) -> List[Dict[str, Any]]:
                     "function": func,
                     "position": m.start(),
                     "context": text[max(0, m.start()-30):m.end()+30].replace("\n", " "),
+                    "text": text[:200],
                 })
-    
+
+    # LaTeX commands (rendered as glyphs in PDF, but present as text)
+    for cmd in sorted(LATEX_COMMANDS, key=len, reverse=True):
+        for m in re.finditer(rf"\\{cmd}\b", text):
+            expr = m.group(0).strip()
+            if expr and len(expr) > 2:
+                expressions.append({
+                    "expression": expr,
+                    "type": "latex_command",
+                    "command": cmd,
+                    "position": m.start(),
+                    "context": text[max(0, m.start()-30):m.end()+30].replace("\n", " "),
+                })
+
     # Sort by position
     expressions.sort(key=lambda x: x["position"])
     return expressions
 
 
+def detect_math_images(page) -> List[Dict[str, Any]]:
+    """Detect images that may contain math (equations, diagrams)."""
+    images = []
+    try:
+        # Get image list from page
+        page_images = page.get_images(full=True)
+        for img in page_images:
+            xref = img[0]
+            base_image = page.parent.extract_image(xref)
+            if base_image:
+                images.append({
+                    "xref": xref,
+                    "width": base_image.get("width", 0),
+                    "height": base_image.get("height", 0),
+                    "ext": base_image.get("ext", "unknown"),
+                    "size": len(base_image.get("image", b"")),
+                })
+    except Exception:
+        pass
+
+    # Also check for inline image blocks (PyMuPDF block type 1)
+    try:
+        blocks = page.get_text("blocks")
+        for block in blocks:
+            if block[6] == 1:  # Image block
+                images.append({
+                    "block_bbox": list(block[:4]),
+                    "type": "inline_image",
+                })
+    except Exception:
+        pass
+
+    return images
+
+
 def analyze_spatial(bbox: tuple, page_width: float, page_height: float) -> Dict[str, Any]:
     """Analyze spatial layout of a text block."""
     x0, y0, x1, y1 = bbox
-    
-    # Calculate relative position
-    rel_x = x0 / page_width if page_width > 0 else 0
-    rel_y = y0 / page_height if page_height > 0 else 0
-    rel_width = (x1 - x0) / page_width if page_width > 0 else 0
-    rel_height = (y1 - y0) / page_height if page_height > 0 else 0
-    
-    # Calculate area
-    area = (x1 - x0) * (y1 - y0)
-    rel_area = area / (page_width * page_height) if page_width > 0 and page_height > 0 else 0
-    
-    # Determine alignment
-    center_x = (x0 + x1) / 2
-    page_center = page_width / 2
-    if abs(center_x - page_center) < page_width * 0.1:
-        alignment = "center"
-    elif x0 < page_width * 0.2:
-        alignment = "left"
-    elif x1 > page_width * 0.8:
-        alignment = "right"
-    else:
-        alignment = "left"
-    
-    # Determine if likely display math (centered, isolated)
-    is_display_math = (
-        alignment == "center"
-        and rel_width > 0.3
-        and rel_height < 0.1
-    )
-    
     return {
-        "bbox": [round(x0, 1), round(y0, 1), round(x1, 1), round(y1, 1)],
-        "relative_position": [round(rel_x, 4), round(rel_y, 4)],
-        "relative_size": [round(rel_width, 4), round(rel_height, 4)],
-        "area": round(area, 1),
-        "relative_area": round(rel_area, 6),
-        "alignment": alignment,
-        "is_display_math": is_display_math,
+        "x0": round(x0, 1), "y0": round(y0, 1),
+        "x1": round(x1, 1), "y1": round(y1, 1),
+        "width": round(x1 - x0, 1), "height": round(y1 - y0, 1),
+        "center_x": round((x0 + x1) / 2, 1),
+        "center_y": round((y0 + y1) / 2, 1),
+        "page_width": round(page_width, 1), "page_height": round(page_height, 1),
+        "is_left": x0 < page_width * 0.3,
+        "is_center": page_width * 0.3 <= x0 < page_width * 0.7,
+        "is_right": x0 >= page_width * 0.7,
+        "is_display": y0 < page_height * 0.25,
+        "is_footnote": y1 > page_height * 0.85,
     }
 
 
 def extract_proof_chain(text: str, page_num: int) -> List[Dict[str, Any]]:
-    """Extract proof chain elements from text."""
+    """Extract proof chain elements from page text."""
     chain = []
-    
-    for indicator, indicator_type in PROOF_INDICATORS.items():
-        for m in re.finditer(rf"\b{indicator}\b", text, re.IGNORECASE):
-            start = max(0, m.start() - 50)
-            end = min(len(text), m.end() + 100)
+    for indicator, ptype in PROOF_INDICATORS.items():
+        pattern = rf"\b{indicator}\b"
+        for m in re.finditer(pattern, text, re.IGNORECASE):
+            start = max(0, m.start() - 30)
+            end = min(len(text), m.end() + 30)
             context = text[start:end].replace("\n", " ")
-            
-            if indicator_type in ("note", "fact", "property", "condition"):
-                if m.start() > 0 and text[m.start()-1] not in ".:\n":
-                    continue
-            
             chain.append({
-                "type": indicator_type,
-                "indicator": indicator,
-                "position": m.start(),
+                "type": ptype,
+                "keyword": indicator,
                 "page": page_num,
+                "position": m.start(),
                 "context": context,
             })
-    
-    for m in re.finditer(r"(?:Eq\.?|Equation)\s*\(?(\d+\.\d+)\)?", text):
-        ref = m.group(1)
-        chain.append({
-            "type": "equation_reference",
-            "reference": ref,
-            "position": m.start(),
-            "page": page_num,
-            "context": text[max(0, m.start()-30):m.end()+30].replace("\n", " "),
-        })
-    
-    for m in re.finditer(r"(?:by|from|using|via|see)\s+(?:Eq\.?|Theorem|Lemma|Corollary|Proposition|Definition)\s*\(?(\d+\.?\d*)\)?", text, re.IGNORECASE):
-        chain.append({
-            "type": "cross_reference",
-            "reference": m.group(1),
-            "position": m.start(),
-            "page": page_num,
-            "context": text[max(0, m.start()-30):m.end()+30].replace("\n", " "),
-        })
-    
-    chain.sort(key=lambda x: x["position"])
     return chain
 
 
-def extract_semantic_math_from_pdf(pdf_path: Path) -> Dict[str, Any]:
-    """Extract semantic math understanding from a PDF."""
-    try:
-        doc = pymupdf.open(str(pdf_path))
-    except Exception as e:
-        return {"error": str(e)}
-    
-    total_pages = len(doc)
+def extract_pdf_math(pdf_path: str) -> Dict[str, Any]:
+    """Extract all math from a PDF file."""
+    doc = pymupdf.open(pdf_path)
     pages_data = []
-    
-    for page_num in range(total_pages):
+
+    for page_num in range(len(doc)):
         page = doc[page_num]
         page_width = page.rect.width
         page_height = page.rect.height
-        
-        # Get text blocks (pre-grouped by line)
+
         blocks = page.get_text("blocks")
-        
         page_expressions = []
-        
+
         for block in blocks:
             if block[6] != 0:  # Skip image blocks
                 continue
-            
+
             text = block[4]
             bbox = block[:4]
-            
+
             if not text.strip():
                 continue
-            
-            # Check if block contains math
+
             if not is_math_word(text):
                 continue
-            
-            # Analyze spatial layout
+
             spatial = analyze_spatial(bbox, page_width, page_height)
-            
-            # Extract math expressions
             expressions = extract_math_expressions(text)
-            
-            # Count math symbols
             math_char_count = sum(1 for c in text if c in MATH_SYMBOLS)
-            
-            # Identify operators and functions
             operators_found = [op for op in OPERATORS if op in text]
             functions_found = [func for func in FUNCTIONS if re.search(rf"\b{func}\s*\(", text)]
-            
-            # Identify variables
             variables = re.findall(r"[a-zA-Z](?:_[a-zA-Z0-9]+)?", text)
-            
+
             page_expressions.append({
                 "text": text[:200],
                 "spatial": spatial,
@@ -325,36 +351,37 @@ def extract_semantic_math_from_pdf(pdf_path: Path) -> Dict[str, Any]:
                 "variables": variables,
                 "expressions": expressions,
             })
-        
-        # Get full text for proof chain
+
+        math_images = detect_math_images(page)
         full_text = page.get_text()
         proof_chain = extract_proof_chain(full_text, page_num + 1)
-        
+
         pages_data.append({
             "page_number": page_num + 1,
-            "total_pages": total_pages,
+            "total_pages": len(doc),
             "page_width": round(page_width, 1),
             "page_height": round(page_height, 1),
             "math_blocks": page_expressions,
+            "math_images": math_images,
             "proof_chain": proof_chain,
         })
-    
+
     doc.close()
-    
+
     # Aggregate
     all_expressions = []
     all_proof_chain = []
     for page in pages_data:
-        for block in page["math_blocks"]:
-            for expr in block["expressions"]:
-                expr["page"] = page["page_number"]
+        for block in page['math_blocks']:
+            for expr in block['expressions']:
+                expr['page'] = page['page_number']
                 all_expressions.append(expr)
-            for chain_elem in page["proof_chain"]:
+            for chain_elem in page['proof_chain']:
                 all_proof_chain.append(chain_elem)
-    
+
     return {
-        "source_pdf": str(pdf_path),
-        "total_pages": total_pages,
+        "source_pdf": pdf_path,
+        "total_pages": len(pages_data),
         "pages": pages_data,
         "total_math_expressions": len(all_expressions),
         "total_proof_chain_elements": len(all_proof_chain),
@@ -363,57 +390,70 @@ def extract_semantic_math_from_pdf(pdf_path: Path) -> Dict[str, Any]:
     }
 
 
-def main() -> int:
+def main():
     parser = argparse.ArgumentParser(description="Extract semantic math from PDFs")
-    parser.add_argument("--pdf", type=Path, help="Single PDF file")
-    parser.add_argument("--pdf-dir", type=Path, help="Directory of PDFs")
-    parser.add_argument("--recursive", "-r", action="store_true", help="Recurse into subdirectories")
-    parser.add_argument("--out", type=Path, required=True, help="Output JSON file")
+    parser.add_argument("--pdf", help="Single PDF file")
+    parser.add_argument("--pdf-dir", help="Directory of PDFs")
+    parser.add_argument("--recursive", action="store_true", help="Search subdirectories")
+    parser.add_argument("--out", default="DATASETS/semantic_math_zotero_full.json", help="Output JSON path")
     args = parser.parse_args()
 
-    if not args.pdf and not args.pdf_dir:
-        print("ERROR: specify --pdf or --pdf-dir", file=sys.stderr)
-        return 2
-
-    results: Dict[str, Any] = {
-        "extractor": "PyMuPDF semantic math extractor (block-level)",
-        "papers": [],
-    }
-
     if args.pdf:
-        print(f"Processing: {args.pdf}")
-        result = extract_semantic_math_from_pdf(args.pdf)
-        results["papers"].append(result)
-        print(f"  -> {result.get('total_math_expressions', 0)} math expressions")
-        print(f"  -> {result.get('total_proof_chain_elements', 0)} proof chain elements")
+        result = extract_pdf_math(args.pdf)
+        output = {"extractor": "PyMuPDF semantic math extractor", "papers": [result],
+                  "summary": {"total_papers": 1, "total_math_expressions": result["total_math_expressions"],
+                              "total_proof_chain_elements": result["total_proof_chain_elements"]}}
+        with open(args.out, 'w', encoding='utf-8') as f:
+            json.dump(output, f, indent=2, ensure_ascii=False)
+        print(f"Extracted {result['total_math_expressions']} expressions from {args.pdf}")
+        return
 
-    if args.pdf_dir:
-        if args.recursive:
-            pdfs = sorted(args.pdf_dir.rglob("*.pdf"))
-        else:
-            pdfs = sorted(args.pdf_dir.glob("*.pdf"))
-        print(f"Found {len(pdfs)} PDFs in {args.pdf_dir}")
-        for pdf in pdfs:
-            print(f"Processing: {pdf.name}")
-            result = extract_semantic_math_from_pdf(pdf)
-            results["papers"].append(result)
-            print(f"  -> {result.get('total_math_expressions', 0)} math expressions")
-            print(f"  -> {result.get('total_proof_chain_elements', 0)} proof chain elements")
+    pdf_dir = args.pdf_dir or r'C:\Users\krist\Desktop\zotero\learning-corpus'
+    pdfs = []
+    if args.recursive:
+        for root, dirs, files in os.walk(pdf_dir):
+            for f in files:
+                if f.endswith('.pdf'):
+                    pdfs.append(os.path.join(root, f))
+    else:
+        for f in os.listdir(pdf_dir):
+            if f.endswith('.pdf'):
+                pdfs.append(os.path.join(pdf_dir, f))
 
-    total_exprs = sum(p.get("total_math_expressions", 0) for p in results["papers"])
-    total_chain = sum(p.get("total_proof_chain_elements", 0) for p in results["papers"])
-    results["summary"] = {
-        "total_papers": len(results["papers"]),
-        "total_math_expressions": total_exprs,
-        "total_proof_chain_elements": total_chain,
+    print(f"Found {len(pdfs)} PDFs")
+
+    results = []
+    errors = []
+    for i, pdf_path in enumerate(pdfs):
+        try:
+            result = extract_pdf_math(pdf_path)
+            results.append(result)
+            if (i + 1) % 25 == 0:
+                print(f"Processed {i + 1}/{len(pdfs)}... {len(results)} papers")
+        except Exception as e:
+            errors.append((pdf_path, str(e)))
+
+    output = {
+        "extractor": "PyMuPDF semantic math extractor (block-level)",
+        "papers": results,
+        "summary": {
+            "total_papers": len(results),
+            "total_math_expressions": sum(p.get("total_math_expressions", 0) for p in results),
+            "total_proof_chain_elements": sum(p.get("total_proof_chain_elements", 0) for p in results),
+            "errors": len(errors),
+        },
+        "errors": errors[:10],
     }
 
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(json.dumps(results, indent=2), encoding="utf-8")
-    print(f"\nOutput: {args.out}")
-    print(f"Total: {total_exprs} math expressions, {total_chain} proof chain elements across {len(results['papers'])} papers")
-    return 0
+    with open(args.out, 'w', encoding='utf-8') as f:
+        json.dump(output, f, indent=2, ensure_ascii=False)
+
+    print(f"\nDone: {len(results)} papers, {output['summary']['total_math_expressions']} exprs, {output['summary']['total_proof_chain_elements']} chain elements")
+    if errors:
+        print(f"Errors: {len(errors)}")
+        for path, err in errors[:5]:
+            print(f"  {os.path.basename(path)}: {err}")
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

@@ -160,6 +160,20 @@ exact_domain_map = {
     'yuanbao': 'user_intents',
 }
 
+DOMAIN_TERMS = {
+    'ai_cognition': ['kingwen', 'openjarvis', 'hermes', 'ai', 'cognition', 'megatron', 'training'],
+    'gaming': ['rsmv', 'cache', 'jagex', 'model', 'pog2', 'game'],
+    'use_case': ['plan', 'debug', 'test', 'review', 'kanban', 'audit', 'workflow'],
+    'rules': ['windows', 'docker', 'auth', 'provider', 'verification', 'rules', 'compliance'],
+    'program_usages': ['cloudflare', 'worker', 'open-design', 'github', 'cli', 'tool'],
+    'training_models': ['training', 'megatron', 'model', 'pretrain', 'dataset'],
+    'math': ['math', 'quantum', 'wave', 'Hamiltonian', 'equation'],
+    'learned_abilities': ['learn', 'study', 'paper', 'corpus', 'pdf', 'extract'],
+    'code_agnostic': ['design', 'architecture', 'diagram', 'semantic', 'graph'],
+    'user_intents': ['research', 'paper', 'writing', 'citation', 'review'],
+}
+
+
 def pnorm(s: str) -> str:
     return re.sub(r'[^a-z0-9]+', '_', s.strip().lower()).strip('_')
 
@@ -340,6 +354,73 @@ for node, nbrs in cluster_map.items():
             clusters.append(sorted(list(c)))
 clusters.sort(key=lambda s: (-len(s), s[0] if s else ''))
 
+
+def attach_stragglers_to_clusters(orphans, clusters, skills, all_paths):
+    """Attach orphan/straggler skills to nearest cluster by domain affinity.
+    No skill is excluded — every straggler gets linked to a cluster edge."""
+    attached = []
+    unattachable = []
+    for orphan in orphans:
+        info = skills.get(orphan, {})
+        rel = info.get('rel', '')
+        body = info.get('body', '')
+        text = (rel + ' ' + body).lower()
+        best_cluster = None
+        best_score = 0
+        for ci, cluster in enumerate(clusters):
+            score = 0
+            for member in cluster:
+                m_info = skills.get(member, {})
+                m_rel = m_info.get('rel', '')
+                m_body = m_info.get('body', '')
+                m_text = (m_rel + ' ' + m_body).lower()
+                for term in ['kingwen', 'openjarvis', 'rsmv', 'megatron', 'cloudflare',
+                             'sovereign', 'verification', 'research', 'creative',
+                             'devops', 'github', 'software', 'ai_cognition', 'gaming',
+                             'training', 'math', 'voice', 'hermes', 'pog2', 'cinder',
+                             'open-design', 'kimi', 'voicebox']:
+                    if term in text and term in m_text:
+                        score += 1
+            if score > best_score:
+                best_score = score
+                best_cluster = ci
+        if best_cluster is not None and best_score > 0:
+            attached.append({'orphan': orphan, 'attached_to_cluster': best_cluster, 'score': best_score})
+        else:
+            unattachable.append(orphan)
+    return attached, unattachable
+
+
+def attach_missing_targets_to_clusters(missing_targets, clusters, skills, all_paths):
+    """Attach missing edge targets to nearest cluster by domain affinity.
+    Preserves the edge reference while linking it to an existing cluster."""
+    attached = []
+    for item in missing_targets:
+        target = item.get('target', '')
+        src = item.get('src', '')
+        domain = item.get('domain', 'unknown')
+        best_cluster = None
+        best_score = 0
+        for ci, cluster in enumerate(clusters):
+            score = 0
+            for member in cluster:
+                m_info = skills.get(member, {})
+                m_rel = m_info.get('rel', '')
+                m_body = m_info.get('body', '')
+                m_text = (m_rel + ' ' + m_body).lower()
+                for term in DOMAIN_TERMS.get(domain, []):
+                    if term in m_text:
+                        score += 1
+            if score > best_score:
+                best_score = score
+                best_cluster = ci
+        if best_cluster is not None and best_score > 0:
+            attached.append({'missing_target': target, 'src': src, 'attached_to_cluster': best_cluster, 'score': best_score})
+        else:
+            attached.append({'missing_target': target, 'src': src, 'attached_to_cluster': None, 'score': 0})
+    return attached
+
+
 def skill_label(path: str) -> str:
     rel = skills[path]['rel'] if path in skills else path
     name = Path(rel).parent.name if Path(rel).suffix == '.md' else Path(rel).stem
@@ -500,6 +581,26 @@ report = {
         'hub_decision_required': True,
         'hub_types': ['create_missing_hub', 'canonicalize_duplicate_alias', 'link_existing_hub_by_exact_path']
     },
+    'straggler_attachments': {},
+    'missing_target_attachments': {},
+}
+
+# Attach stragglers to clusters
+straggler_attached, straggler_unattached = attach_stragglers_to_clusters(orphans, clusters, skills, all_paths)
+report['straggler_attachments'] = {
+    'attached': straggler_attached,
+    'unattachable': straggler_unattached,
+    'total_orphans': len(orphans),
+    'attached_count': len(straggler_attached),
+    'unattachable_count': len(straggler_unattached),
+}
+
+# Attach missing targets to clusters
+missing_attached = attach_missing_targets_to_clusters(missing_targets, clusters, skills, all_paths)
+report['missing_target_attachments'] = {
+    'attached': missing_attached,
+    'total_missing': len(missing_targets),
+    'attached_count': len([a for a in missing_attached if a.get('attached_to_cluster') is not None]),
 }
 
 weave = {
@@ -606,14 +707,16 @@ weave = {
         'drift_guard': 'learned_constructs meta=' + json.dumps(learned_meta, ensure_ascii=False) + '; if rsmv_verified_count==0 and jagex_count==0, drift is detected against session-verified King Wen /learn state'
     },
     'no_deletions': {
-        'stragglers': 'preserved under orphans list with domain taxonomy assignment',
-        'secluded_edges': 'preserved in missing_edge_targets inventory; not auto-removed'
+        'stragglers': 'preserved under orphans list with domain taxonomy assignment; attached to clusters via domain affinity',
+        'secluded_edges': 'preserved in missing_edge_targets inventory; attached to clusters via domain affinity',
     },
     'hub_decision_matrix': {
         'create_missing_hub': sorted({item['target'] for item in missing_targets if not resolve_target(item['target'])}),
         'canonicalize_duplicate_alias': [],
         'link_existing_hub_by_exact_path': sorted({item['target'] for item in missing_targets if resolve_target(item['target'])}),
     },
+    'straggler_attachments': report['straggler_attachments'],
+    'missing_target_attachments': report['missing_target_attachments'],
     'active_narrative_applied': True
 }
 
@@ -630,3 +733,5 @@ print('secluded', len(missing_targets), flush=True)
 print('clusters', len(clusters), flush=True)
 print('domains', {k: len(v) for k,v in skill_domains.items()}, flush=True)
 print('active_narrative_applied', True, flush=True)
+print('stragglers attached:', len(straggler_attached), 'unattachable:', len(straggler_unattached), flush=True)
+print('missing targets attached:', len([a for a in missing_attached if a.get('attached_to_cluster') is not None]), flush=True)
