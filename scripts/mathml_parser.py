@@ -36,18 +36,25 @@ MO_MAP = {
     "+": "+", "−": "-", "-": "-", "±": "+", "∓": "-",
     "×": "*", "⋅": "*", "·": "*", "∗": "*", "⋆": "*",
     "÷": "/", "∕": "/",
-    # relations
-    "=": "=", "≠": "!=", "≈": "=", "≃": "=", "≅": "=", "≡": "=",
+    # --- EQUALITY: only true equality operators map to '='
+    "=": "=", "≡": "=", "≔": "=", "≕": "=", ":=": "=", "≝": "=",
+    # --- NON-EQUALITY RELATIONS -------------------------------------------
+    # These are NOT equality. Mapping them to '=' fabricates solutions the
+    # paper never stated (x ~ q(x) is NOT x = q(x)). Each keeps its own
+    # marker token so the relation survives into the expression.
+    "≠": "!=",
+    "≈": "~=", "≃": "~=", "≅": "~=", "∼": "~=", "∽": "~=",
+    "∝": "propto", "≍": "~=",
     "≤": "<=", "⩽": "<=", "≥": ">=", "⩾": ">=", "<": "<", ">": ">",
-    "≪": "<", "≫": ">", "∝": "=", "∼": "=", "≺": "<", "≻": ">",
-    # logic / sets  -- membership is NOT equality; mapping it to '=' fabricates
-    # equations that the paper never wrote (e.g. "B in R^{dxr}" is not "B = ...").
-    "∈": "", "∉": "", "∋": "", "⊂": "", "⊃": "", "⊆": "", "⊇": "",
-    "∧": "*", "∨": "+", "¬": "not", "∀": "", "∃": "",
-    "∩": "*", "∪": "+", "∖": "-", "∅": "0",
-    # arrows -> relation (not equality where it would fabricate)
-    "→": "=", "←": "=", "↔": "=", "⇒": "=", "⇐": "=", "⇔": "=",
-    "↦": "=", "⟶": "=", "⟵": "=", "⟹": "=", "⟸": "=", "⟺": "=",
+    "≪": "<<", "≫": ">>", "≺": "prec", "≻": "succ",
+    # logic / sets -- membership is NOT equality
+    "∈": "in", "∉": "notin", "∋": "ni", "⊂": "subset", "⊃": "supset",
+    "⊆": "subseteq", "⊇": "supseteq",
+    "∧": "and", "∨": "or", "¬": "not", "∀": "forall", "∃": "exists",
+    "∩": "cap", "∪": "cup", "∖": "setminus", "∅": "emptyset",
+    # arrows are relations/maps, NOT equality
+    "→": "->", "←": "<-", "↔": "<->", "⇒": "=>", "⇐": "<=", "⇔": "<=>",
+    "↦": "|->", "⟶": "->", "⟵": "<-", "⟹": "=>", "⟸": "<=", "⟺": "<=>",
     # grouping (kept as literal brackets)
     "(": "(", ")": ")", "[": "[", "]": "]",
     "{": "{", "}": "}",
@@ -59,21 +66,27 @@ MO_MAP = {
     "!": "", "%": "/100", ",": ",", ";": ";", ":": ":",
     ".": ".", "…": "", "⋯": "", "⋮": "", "⋱": "",
     "′": "", "″": "", "‴": "",
-    # definition / assignment operators (these ARE equalities)
-    "≔": "=", "≕": "=", ":=": "=", "≝": "=",
     # invisible operators -> drop
     "\u2061": "", "\u200b": "", "\u2060": "", "\u200c": "", "\u200d": "",
     "\ufeff": "", "\u00ad": "",
 }
 
-# Multi-char operators that appear as single <mo>
+# Relation tokens that are NOT equality. If one of these appears in a
+# recovered expression, the expression is a RELATION, not an equation, and
+# must never be handed to a solver as 'lhs = rhs'.
+NON_EQUALITY_TOKENS = {
+    "~=", "!=", "propto", "prec", "succ", "<<", ">>", "<", ">", "<=", ">=",
+    "in", "notin", "ni", "subset", "supset", "subseteq", "supseteq",
+    "and", "or", "not", "forall", "exists", "cap", "cup", "setminus",
+    "->", "<-", "<->", "=>", "<=>", "|->",
+}
+
+# Multi-char operators that appear as a single <mo>.
+# NOTE: must NOT contain equality substitutions for non-equality relations.
 MO_MULTI = {
-    "→": "=", "⟶": "=", "⇒": "=", "⟹": "=",
-    "≠": "!=", "≤": "<=", "≥": ">=", "≈": "=",
     "∑": "Sum", "∏": "Prod", "∫": "Integral", "∮": "Integral",
     "∂": "d", "∇": "grad", "∞": "oo",
     "√": "sqrt",
-    "≔": "=", "≕": "=",
 }
 
 # Mathematical alphanumeric Greek: NFKD does NOT decompose these, so map manually.

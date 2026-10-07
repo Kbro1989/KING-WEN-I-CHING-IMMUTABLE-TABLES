@@ -368,13 +368,57 @@ def recover_latex(latex):
     s = re.sub(r"\\overbrace\s*\{", "(", s)
     s = re.sub(r"\\underbrace\s*\{", "(", s)
 
-    # --- Text commands: \text{foo} -> foo
+    # --- Math-mode delimiters ($ ... $) are presentation-only and carry no
+    # mathematical meaning. arxiv emits unit exponents as \mbox{ cm${}^{-2}$};
+    # if the $ survives it reaches Python as a syntax error and the entire
+    # equation is lost. There was previously NO $ handling at all.
+    if "$" in s:
+        s = s.replace("$", "")
+        notes.append("stripped math-mode $ delimiters")
+    # Collapse empty brace groups ({}) left behind by the removal above, so
+    # that {}^{-2} becomes ^{-2} and the superscript rule can read it.
+    if "{}" in s:
+        s = s.replace("{}", "")
+
+    # --- Text commands: \text{foo} -> foo, BRACE-AWARE.
+    #
+    # The previous implementation used \{([^{}]*)\}, which cannot match a
+    # nested group. \mbox{ cm${}^{-2}$} therefore never matched and the literal
+    # token \mbox survived into the solver. This scanner matches to the
+    # balancing close brace instead.
+    #
+    # The `{` requirement after the command name is what stops \text from
+    # matching inside \textbf: after "text" comes "bf", not "{", so the scan
+    # skips ahead rather than consuming it.
     for cmd in TEXT_CMDS:
-        pat = re.compile(r"\\" + cmd + r"\s*\{([^{}]*)\}")
-        for _ in range(3):  # nested-ish passes
-            s, n = pat.subn(r"\1", s)
-            if n == 0:
+        marker = "\\" + cmd
+        search_from = 0
+        while True:
+            i = s.find(marker, search_from)
+            if i < 0:
                 break
+            j = i + len(marker)
+            while j < len(s) and s[j].isspace():
+                j += 1
+            if j >= len(s) or s[j] != "{":
+                # not this command (e.g. \textbf seen while scanning \text)
+                search_from = i + len(marker)
+                continue
+            depth = 0
+            k = j
+            while k < len(s):
+                if s[k] == "{":
+                    depth += 1
+                elif s[k] == "}":
+                    depth -= 1
+                    if depth == 0:
+                        break
+                k += 1
+            if k >= len(s):
+                break  # unbalanced braces; leave the remainder alone
+            inner = s[j + 1:k]
+            s = s[:i] + inner + s[k + 1:]
+            search_from = i  # re-scan: inner may contain further commands
     s = re.sub(r"\\operatorname\s*\{\s*([a-zA-Z]+)\s*\}", r"\1", s)
 
     # --- Accents: \hat{x} -> x_hat
@@ -800,6 +844,24 @@ def solve_recovered(recovered, original=None):
     # Normalize math tokens that are not valid Python/SymPy
     recovered = _repair_token_boundaries(recovered)
     recovered = _normalize_pipes(recovered)
+
+    # --- RELATION GUARD ----------------------------------------------------
+    # If the expression contains a non-equality relation, it is NOT an
+    # equation. Solving 'lhs = rhs' on a relation fabricates a conclusion the
+    # paper never made (x ~ q(x) is not x = q(x); the false answer was [0]).
+    # Report the relation honestly and refuse to solve it.
+    try:
+        from mathml_parser import NON_EQUALITY_TOKENS as _REL_TOKENS
+    except Exception:
+        _REL_TOKENS = set()
+    for tok in sorted(_REL_TOKENS, key=len, reverse=True):
+        # word tokens need boundaries; symbol tokens do not
+        if tok.isalpha():
+            hit = re.search(rf"\b{re.escape(tok)}\b", recovered)
+        else:
+            hit = tok in recovered
+        if hit:
+            return False, None, f"not_an_equation:relation:{tok}", [], False
 
     # Must have exactly one top-level '='
     if recovered.count("=") != 1:
