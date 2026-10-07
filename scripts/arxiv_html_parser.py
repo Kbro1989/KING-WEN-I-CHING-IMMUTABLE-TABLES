@@ -106,7 +106,12 @@ def extract_math_from_html(html_content, arxiv_id=None):
         equations.append({
             'index': i,
             'latex': latex,
-            'mathml': mathml[:500] if mathml else None,  # Truncate for storage
+            # FULL MathML: this is immutable source evidence. Truncating it
+            # destroys the parse tree mid-structure for nested expressions
+            # (\left...\right, \frac inside \frac, matrices). Every derived
+            # representation must come from the complete tree.
+            'mathml': mathml if mathml else None,
+            'mathml_len': len(mathml) if mathml else 0,
             'context_before': context_before,
             'context_after': context_after,
             'is_display': is_display,
