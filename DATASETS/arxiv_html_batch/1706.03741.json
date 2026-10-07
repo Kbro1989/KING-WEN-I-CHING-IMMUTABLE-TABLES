@@ -1,0 +1,808 @@
+{
+  "arxiv_id": "1706.03741",
+  "version": null,
+  "url": "https://arxiv.org/html/1706.03741",
+  "structure": {
+    "title": "Deep Reinforcement Learningfrom Human Preferences",
+    "authors": [
+      "Paul F Christiano",
+      "Jan Leike",
+      "Tom B Brown",
+      "Miljan Martic",
+      "Shane Legg",
+      "Dario Amodei"
+    ],
+    "abstract": "AbstractFor sophisticated reinforcement learning (RL) systems to interact usefully with real-world environments,\nwe need to communicate complex goals to these systems.\nIn this work, we explore goals defined in terms of (non-expert) human preferences between pairs of trajectory segments.\nWe show that this approach can effectively solve complex RL tasks without access to the reward function,\nincluding Atari games and simulated robot locomotion,\nwhile providing feedback on less than 1% of our agent’s interactions with the environment.\nThis reduces the cost of human oversight far enough that it can be practically applied to state-of-the-art RL systems.\nTo demonstrate the flexibility of our approach,\nwe show that we can successfully train complex novel behaviors\nwith about an hour of human time.\nThese behaviors and environments are considerably more complex\nthan any which have been previously learned from human feedback.",
+    "sections": [
+      {
+        "level": "h2",
+        "title": "1Introduction"
+      },
+      {
+        "level": "h3",
+        "title": "1.1Related Work"
+      },
+      {
+        "level": "h2",
+        "title": "2Preliminaries and Method"
+      },
+      {
+        "level": "h3",
+        "title": "2.1Setting and Goal"
+      },
+      {
+        "level": "h3",
+        "title": "2.2Our Method"
+      },
+      {
+        "level": "h4",
+        "title": "2.2.1Optimizing the Policy"
+      },
+      {
+        "level": "h4",
+        "title": "2.2.2Preference Elicitation"
+      },
+      {
+        "level": "h4",
+        "title": "2.2.3Fitting the Reward Function"
+      },
+      {
+        "level": "h4",
+        "title": "2.2.4Selecting Queries"
+      },
+      {
+        "level": "h2",
+        "title": "3Experimental Results"
+      },
+      {
+        "level": "h3",
+        "title": "3.1Reinforcement Learning Tasks with Unobserved Rewards"
+      },
+      {
+        "level": "h4",
+        "title": "3.1.1Simulated Robotics"
+      },
+      {
+        "level": "h4",
+        "title": "3.1.2Atari"
+      },
+      {
+        "level": "h3",
+        "title": "3.2Novel behaviors"
+      },
+      {
+        "level": "h3",
+        "title": "3.3Ablation Studies"
+      },
+      {
+        "level": "h2",
+        "title": "4Discussion and Conclusions"
+      },
+      {
+        "level": "h4",
+        "title": "Acknowledgments"
+      },
+      {
+        "level": "h2",
+        "title": "References"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix AExperimental Details"
+      },
+      {
+        "level": "h3",
+        "title": "A.1Simulated Robotics Tasks"
+      },
+      {
+        "level": "h3",
+        "title": "A.2Atari"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix BInstructions Provided to Contractors"
+      },
+      {
+        "level": "h3",
+        "title": "B.1MuJoCo"
+      },
+      {
+        "level": "h4",
+        "title": "Giving feedback"
+      },
+      {
+        "level": "h4",
+        "title": "FAQ"
+      },
+      {
+        "level": "h3",
+        "title": "B.2Atari"
+      },
+      {
+        "level": "h4",
+        "title": "IMPORTANT. First play the game yourself for 5 minutes"
+      },
+      {
+        "level": "h4",
+        "title": "Giving feedback"
+      },
+      {
+        "level": "h4",
+        "title": "FAQ"
+      },
+      {
+        "level": "h2",
+        "title": "Instructions for reporting errors"
+      }
+    ]
+  },
+  "equations": [
+    {
+      "index": 0,
+      "latex": "t",
+      "mathml": "<math alttext=\"t\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS1.p1.m1\" intent=\":literal\"><semantics><mi>t</mi><annotation encoding=\"application/x-tex\">t</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "ot∈𝒪o_{t}\\in\\mathcal{O}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 1,
+      "latex": "o_{t}\\in\\mathcal{O}",
+      "mathml": "<math alttext=\"o_{t}\\in\\mathcal{O}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS1.p1.m2\" intent=\":literal\"><semantics><mrow><msub><mi>o</mi><mi>t</mi></msub><mo>∈</mo><mi class=\"ltx_font_mathcaligraphic\">𝒪</mi></mrow><annotation encoding=\"application/x-tex\">o_{t}\\in\\mathcal{O}</annotation></semantics></math>",
+      "context_before": "tt",
+      "context_after": "at∈𝒜a_{t}\\in\\mathcal{A}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 2,
+      "latex": "a_{t}\\in\\mathcal{A}",
+      "mathml": "<math alttext=\"a_{t}\\in\\mathcal{A}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS1.p1.m3\" intent=\":literal\"><semantics><mrow><msub><mi>a</mi><mi>t</mi></msub><mo>∈</mo><mi class=\"ltx_font_mathcaligraphic\">𝒜</mi></mrow><annotation encoding=\"application/x-tex\">a_{t}\\in\\mathcal{A}</annotation></semantics></math>",
+      "context_before": "ot∈𝒪o_{t}\\in\\mathcal{O}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 3,
+      "latex": "r_{t}\\in\\mathbb{R}",
+      "mathml": "<math alttext=\"r_{t}\\in\\mathbb{R}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS1.p2.m1\" intent=\":literal\"><semantics><mrow><msub><mi>r</mi><mi>t</mi></msub><mo>∈</mo><mi>ℝ</mi></mrow><annotation encoding=\"application/x-tex\">r_{t}\\in\\mathbb{R}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "trajectory segments",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 4,
+      "latex": "\\sigma=\\left(\\left(o_{0},a_{0}\\right),\\left(o_{1},a_{1}\\right),\\ldots,\\left(o_{k-1},a_{k-1}\\right)\\right)\\in\\left(\\mathcal{O}\\times\\mathcal{A}\\right)^{k}",
+      "mathml": "<math alttext=\"\\sigma=\\left(\\left(o_{0},a_{0}\\right),\\left(o_{1},a_{1}\\right),\\ldots,\\left(o_{k-1},a_{k-1}\\right)\\right)\\in\\left(\\mathcal{O}\\times\\mathcal{A}\\right)^{k}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS1.p2.m2\" intent=\":literal\"><semantics><mrow><mi>σ</mi><mo>=</mo><mrow><mo>(</mo><mrow><mo>(</mo><msub><mi>o</mi><mn>0</mn></msub><mo>,</mo><msub><mi>a</mi><mn>0</mn></msub><mo>)</mo></mrow><mo>,</mo><mrow><mo>(</mo><msub><mi>o</mi><mn>1</mn></msub><mo>,</mo><msub><mi>a</mi><mn>1</mn></m",
+      "context_before": "trajectory segments",
+      "context_after": "σ1≻σ2\\sigma^{1}\\succ\\sigma^{2}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 5,
+      "latex": "\\sigma^{1}\\succ\\sigma^{2}",
+      "mathml": "<math alttext=\"\\sigma^{1}\\succ\\sigma^{2}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS1.p2.m3\" intent=\":literal\"><semantics><mrow><msup><mi>σ</mi><mn>1</mn></msup><mo>≻</mo><msup><mi>σ</mi><mn>2</mn></msup></mrow><annotation encoding=\"application/x-tex\">\\sigma^{1}\\succ\\sigma^{2}</annotation></semantics></math>",
+      "context_before": "σ=((o0,a0),(o1,a1),…,(ok−1,ak−1))∈(𝒪×𝒜)k\\sigma=\\left(\\left(o_{0},a_{0}\\right),\\left(o_{1},a_{1}\\right),\\ldots,\\left(o_{k-1},a_{k-1}\\right)\\right)\\in\\left(\\mathcal{O}\\times\\mathcal{A}\\right)^{k}",
+      "context_after": "σ1\\sigma^{1}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 6,
+      "latex": "\\sigma^{1}",
+      "mathml": "<math alttext=\"\\sigma^{1}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS1.p2.m4\" intent=\":literal\"><semantics><msup><mi>σ</mi><mn>1</mn></msup><annotation encoding=\"application/x-tex\">\\sigma^{1}</annotation></semantics></math>",
+      "context_before": "σ1≻σ2\\sigma^{1}\\succ\\sigma^{2}",
+      "context_after": "σ2\\sigma^{2}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 7,
+      "latex": "\\sigma^{2}",
+      "mathml": "<math alttext=\"\\sigma^{2}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS1.p2.m5\" intent=\":literal\"><semantics><msup><mi>σ</mi><mn>2</mn></msup><annotation encoding=\"application/x-tex\">\\sigma^{2}</annotation></semantics></math>",
+      "context_before": "σ1\\sigma^{1}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 8,
+      "latex": "\\succ",
+      "mathml": "<math alttext=\"\\succ\" class=\"ltx_Math\" display=\"inline\" id=\"S2.I1.ix1.p1.m1\" intent=\":literal\"><semantics><mo>≻</mo><annotation encoding=\"application/x-tex\">\\succ</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "generated by",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 9,
+      "latex": "r:\\mathcal{O}\\times\\mathcal{A}\\rightarrow\\mathbb{R}",
+      "mathml": "<math alttext=\"r:\\mathcal{O}\\times\\mathcal{A}\\rightarrow\\mathbb{R}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.I1.ix1.p1.m2\" intent=\":literal\"><semantics><mrow><mi>r</mi><mo lspace=\"0.278em\" rspace=\"0.278em\">:</mo><mrow><mrow><mi class=\"ltx_font_mathcaligraphic\">𝒪</mi><mo lspace=\"0.222em\" rspace=\"0.222em\">×</mo><mi class=\"ltx_font_mathcaligraphic\">𝒜</mi></mrow><mo stretchy=\"false\">→</mo><mi>ℝ</mi></mrow></mrow><annotation encoding=\"application/x-tex\">r:\\mathcal{O}\\times\\mathcal{A}\\rightarrow\\mathb",
+      "context_before": "111Here we assume here that the reward is a function of the observation and action.\nIn our experiments in Atari environments, we instead assume the reward is a function of the preceding 4 observations",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 10,
+      "latex": "\\left(\\left(o^{1}_{0},a_{0}^{1}\\right),\\ldots,\\left(o^{1}_{k-1},a^{1}_{k-1}\\right)\\right)\\succ\\left(\\left(o^{2}_{0},a^{2}_{0}\\right),\\ldots,\\left(o^{2}_{k-1},a^{2}_{k-1}\\right)\\right)",
+      "mathml": "<math alttext=\"\\left(\\left(o^{1}_{0},a_{0}^{1}\\right),\\ldots,\\left(o^{1}_{k-1},a^{1}_{k-1}\\right)\\right)\\succ\\left(\\left(o^{2}_{0},a^{2}_{0}\\right),\\ldots,\\left(o^{2}_{k-1},a^{2}_{k-1}\\right)\\right)\" class=\"ltx_Math\" display=\"block\" id=\"S2.Ex1.m1\" intent=\":literal\"><semantics><mrow><mrow><mo>(</mo><mrow><mo>(</mo><msubsup><mi>o</mi><mn>0</mn><mn>1</mn></msubsup><mo>,</mo><msubsup><mi>a</mi><mn>0</mn><mn>1</mn></msubsup><mo>)</mo></mrow><mo>,</mo><mi mathvariant=\"normal\">…</mi><mo>,</mo><mrow><mo",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 11,
+      "latex": "r\\left(o^{1}_{0},a^{1}_{0}\\right)+\\cdots+r\\left(o^{1}_{k-1},a^{1}_{k-1}\\right)>r\\left(o^{2}_{0},a^{2}_{0}\\right)+\\cdots+r\\left(o^{2}_{k-1},a^{2}_{k-1}\\right).",
+      "mathml": "<math alttext=\"r\\left(o^{1}_{0},a^{1}_{0}\\right)+\\cdots+r\\left(o^{1}_{k-1},a^{1}_{k-1}\\right)&gt;r\\left(o^{2}_{0},a^{2}_{0}\\right)+\\cdots+r\\left(o^{2}_{k-1},a^{2}_{k-1}\\right).\" class=\"ltx_Math\" display=\"block\" id=\"S2.Ex2.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><mrow><mi>r</mi><mo>⁡</mo><mrow><mo>(</mo><msubsup><mi>o</mi><mn>0</mn><mn>1</mn></msubsup><mo>,</mo><msubsup><mi>a</mi><mn>0</mn><mn>1</mn></msubsup><mo>)</mo></mrow></mrow><mo>+</mo><mo lspace=\"0em\" rspace=\"0em\">⋯</mo><mo>+</",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 12,
+      "latex": "r",
+      "mathml": "<math alttext=\"r\" class=\"ltx_Math\" display=\"inline\" id=\"S2.I1.ix1.p1.m3\" intent=\":literal\"><semantics><mi>r</mi><annotation encoding=\"application/x-tex\">r</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "rr",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 13,
+      "latex": "r",
+      "mathml": "<math alttext=\"r\" class=\"ltx_Math\" display=\"inline\" id=\"S2.I1.ix1.p1.m4\" intent=\":literal\"><semantics><mi>r</mi><annotation encoding=\"application/x-tex\">r</annotation></semantics></math>",
+      "context_before": "rr",
+      "context_after": "rr",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 14,
+      "latex": "r",
+      "mathml": "<math alttext=\"r\" class=\"ltx_Math\" display=\"inline\" id=\"S2.I1.ix1.p1.m5\" intent=\":literal\"><semantics><mi>r</mi><annotation encoding=\"application/x-tex\">r</annotation></semantics></math>",
+      "context_before": "rr",
+      "context_after": "rr",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 15,
+      "latex": "r",
+      "mathml": "<math alttext=\"r\" class=\"ltx_Math\" display=\"inline\" id=\"S2.I1.ix1.p1.m6\" intent=\":literal\"><semantics><mi>r</mi><annotation encoding=\"application/x-tex\">r</annotation></semantics></math>",
+      "context_before": "rr",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 16,
+      "latex": "\\pi:\\mathcal{O}\\rightarrow\\mathcal{A}",
+      "mathml": "<math alttext=\"\\pi:\\mathcal{O}\\rightarrow\\mathcal{A}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS2.p1.m1\" intent=\":literal\"><semantics><mrow><mi>π</mi><mo lspace=\"0.278em\" rspace=\"0.278em\">:</mo><mrow><mi class=\"ltx_font_mathcaligraphic\">𝒪</mi><mo stretchy=\"false\">→</mo><mi class=\"ltx_font_mathcaligraphic\">𝒜</mi></mrow></mrow><annotation encoding=\"application/x-tex\">\\pi:\\mathcal{O}\\rightarrow\\mathcal{A}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "r^:𝒪×𝒜→ℝ\\hat{r}:\\mathcal{O}\\times\\mathcal{A}\\rightarrow\\mathbb{R}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 17,
+      "latex": "\\hat{r}:\\mathcal{O}\\times\\mathcal{A}\\rightarrow\\mathbb{R}",
+      "mathml": "<math alttext=\"\\hat{r}:\\mathcal{O}\\times\\mathcal{A}\\rightarrow\\mathbb{R}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS2.p1.m2\" intent=\":literal\"><semantics><mrow><mover accent=\"true\"><mi>r</mi><mo>^</mo></mover><mo lspace=\"0.278em\" rspace=\"0.278em\">:</mo><mrow><mrow><mi class=\"ltx_font_mathcaligraphic\">𝒪</mi><mo lspace=\"0.222em\" rspace=\"0.222em\">×</mo><mi class=\"ltx_font_mathcaligraphic\">𝒜</mi></mrow><mo stretchy=\"false\">→</mo><mi>ℝ</mi></mrow></mrow><annotation encoding=\"application/x-tex\">\\hat{",
+      "context_before": "π:𝒪→𝒜\\pi:\\mathcal{O}\\rightarrow\\mathcal{A}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 18,
+      "latex": "\\pi",
+      "mathml": "<math alttext=\"\\pi\" class=\"ltx_Math\" display=\"inline\" id=\"S2.I2.i1.p1.m1\" intent=\":literal\"><semantics><mi>π</mi><annotation encoding=\"application/x-tex\">\\pi</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "{τ1,…,τi}\\{\\tau^{1},\\ldots,\\tau^{i}\\}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 19,
+      "latex": "\\{\\tau^{1},\\ldots,\\tau^{i}\\}",
+      "mathml": "<math alttext=\"\\{\\tau^{1},\\ldots,\\tau^{i}\\}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.I2.i1.p1.m2\" intent=\":literal\"><semantics><mrow><mo stretchy=\"false\">{</mo><msup><mi>τ</mi><mn>1</mn></msup><mo>,</mo><mi mathvariant=\"normal\">…</mi><mo>,</mo><msup><mi>τ</mi><mi>i</mi></msup><mo stretchy=\"false\">}</mo></mrow><annotation encoding=\"application/x-tex\">\\{\\tau^{1},\\ldots,\\tau^{i}\\}</annotation></semantics></math>",
+      "context_before": "π\\pi",
+      "context_after": "π\\pi",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 20,
+      "latex": "\\pi",
+      "mathml": "<math alttext=\"\\pi\" class=\"ltx_Math\" display=\"inline\" id=\"S2.I2.i1.p1.m3\" intent=\":literal\"><semantics><mi>π</mi><annotation encoding=\"application/x-tex\">\\pi</annotation></semantics></math>",
+      "context_before": "{τ1,…,τi}\\{\\tau^{1},\\ldots,\\tau^{i}\\}",
+      "context_after": "rt=r^​(ot,at)r_{t}=\\hat{r}\\left(o_{t},a_{t}\\right)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 21,
+      "latex": "r_{t}=\\hat{r}\\left(o_{t},a_{t}\\right)",
+      "mathml": "<math alttext=\"r_{t}=\\hat{r}\\left(o_{t},a_{t}\\right)\" class=\"ltx_Math\" display=\"inline\" id=\"S2.I2.i1.p1.m4\" intent=\":literal\"><semantics><mrow><msub><mi>r</mi><mi>t</mi></msub><mo>=</mo><mrow><mover accent=\"true\"><mi>r</mi><mo>^</mo></mover><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo>(</mo><msub><mi>o</mi><mi>t</mi></msub><mo>,</mo><msub><mi>a</mi><mi>t</mi></msub><mo>)</mo></mrow></mrow></mrow><annotation encoding=\"application/x-tex\">r_{t}=\\hat{r}\\left(o_{t},a_{t}\\right)</annotation></semanti",
+      "context_before": "π\\pi",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 22,
+      "latex": "\\left(\\sigma^{1},\\sigma^{2}\\right)",
+      "mathml": "<math alttext=\"\\left(\\sigma^{1},\\sigma^{2}\\right)\" class=\"ltx_Math\" display=\"inline\" id=\"S2.I2.i2.p1.m1\" intent=\":literal\"><semantics><mrow><mo>(</mo><msup><mi>σ</mi><mn>1</mn></msup><mo>,</mo><msup><mi>σ</mi><mn>2</mn></msup><mo>)</mo></mrow><annotation encoding=\"application/x-tex\">\\left(\\sigma^{1},\\sigma^{2}\\right)</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "{τ1,…,τi}\\{\\tau^{1},\\ldots,\\tau^{i}\\}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 23,
+      "latex": "\\{\\tau^{1},\\ldots,\\tau^{i}\\}",
+      "mathml": "<math alttext=\"\\{\\tau^{1},\\ldots,\\tau^{i}\\}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.I2.i2.p1.m2\" intent=\":literal\"><semantics><mrow><mo stretchy=\"false\">{</mo><msup><mi>τ</mi><mn>1</mn></msup><mo>,</mo><mi mathvariant=\"normal\">…</mi><mo>,</mo><msup><mi>τ</mi><mi>i</mi></msup><mo stretchy=\"false\">}</mo></mrow><annotation encoding=\"application/x-tex\">\\{\\tau^{1},\\ldots,\\tau^{i}\\}</annotation></semantics></math>",
+      "context_before": "(σ1,σ2)\\left(\\sigma^{1},\\sigma^{2}\\right)",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 24,
+      "latex": "\\hat{r}",
+      "mathml": "<math alttext=\"\\hat{r}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.I2.i3.p1.m1\" intent=\":literal\"><semantics><mover accent=\"true\"><mi>r</mi><mo>^</mo></mover><annotation encoding=\"application/x-tex\">\\hat{r}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 25,
+      "latex": "\\hat{r}",
+      "mathml": "<math alttext=\"\\hat{r}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS2.p4.m1\" intent=\":literal\"><semantics><mover accent=\"true\"><mi>r</mi><mo>^</mo></mover><annotation encoding=\"application/x-tex\">\\hat{r}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 26,
+      "latex": "\\hat{r}",
+      "mathml": "<math alttext=\"\\hat{r}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS2.SSS1.p1.m1\" intent=\":literal\"><semantics><mover accent=\"true\"><mi>r</mi><mo>^</mo></mover><annotation encoding=\"application/x-tex\">\\hat{r}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "r^\\hat{r}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 27,
+      "latex": "\\hat{r}",
+      "mathml": "<math alttext=\"\\hat{r}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS2.SSS1.p1.m2\" intent=\":literal\"><semantics><mover accent=\"true\"><mi>r</mi><mo>^</mo></mover><annotation encoding=\"application/x-tex\">\\hat{r}</annotation></semantics></math>",
+      "context_before": "r^\\hat{r}",
+      "context_after": "(Ho and Ermon, 2016)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 28,
+      "latex": "\\hat{r}",
+      "mathml": "<math alttext=\"\\hat{r}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS2.SSS1.p3.m1\" intent=\":literal\"><semantics><mover accent=\"true\"><mi>r</mi><mo>^</mo></mover><annotation encoding=\"application/x-tex\">\\hat{r}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 29,
+      "latex": "\\mathcal{D}",
+      "mathml": "<math alttext=\"\\mathcal{D}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS2.SSS2.p3.m1\" intent=\":literal\"><semantics><mi class=\"ltx_font_mathcaligraphic\">𝒟</mi><annotation encoding=\"application/x-tex\">\\mathcal{D}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "(σ1,σ2,μ)\\left(\\sigma^{1},\\sigma^{2},\\mu\\right)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 30,
+      "latex": "\\left(\\sigma^{1},\\sigma^{2},\\mu\\right)",
+      "mathml": "<math alttext=\"\\left(\\sigma^{1},\\sigma^{2},\\mu\\right)\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS2.SSS2.p3.m2\" intent=\":literal\"><semantics><mrow><mo>(</mo><msup><mi>σ</mi><mn>1</mn></msup><mo>,</mo><msup><mi>σ</mi><mn>2</mn></msup><mo>,</mo><mi>μ</mi><mo>)</mo></mrow><annotation encoding=\"application/x-tex\">\\left(\\sigma^{1},\\sigma^{2},\\mu\\right)</annotation></semantics></math>",
+      "context_before": "𝒟\\mathcal{D}",
+      "context_after": "σ1\\sigma^{1}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 31,
+      "latex": "\\sigma^{1}",
+      "mathml": "<math alttext=\"\\sigma^{1}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS2.SSS2.p3.m3\" intent=\":literal\"><semantics><msup><mi>σ</mi><mn>1</mn></msup><annotation encoding=\"application/x-tex\">\\sigma^{1}</annotation></semantics></math>",
+      "context_before": "(σ1,σ2,μ)\\left(\\sigma^{1},\\sigma^{2},\\mu\\right)",
+      "context_after": "σ2\\sigma^{2}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 32,
+      "latex": "\\sigma^{2}",
+      "mathml": "<math alttext=\"\\sigma^{2}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS2.SSS2.p3.m4\" intent=\":literal\"><semantics><msup><mi>σ</mi><mn>2</mn></msup><annotation encoding=\"application/x-tex\">\\sigma^{2}</annotation></semantics></math>",
+      "context_before": "σ1\\sigma^{1}",
+      "context_after": "μ\\mu",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 33,
+      "latex": "\\mu",
+      "mathml": "<math alttext=\"\\mu\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS2.SSS2.p3.m5\" intent=\":literal\"><semantics><mi>μ</mi><annotation encoding=\"application/x-tex\">\\mu</annotation></semantics></math>",
+      "context_before": "σ2\\sigma^{2}",
+      "context_after": "{1,2}\\{1,2\\}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 34,
+      "latex": "\\{1,2\\}",
+      "mathml": "<math alttext=\"\\{1,2\\}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS2.SSS2.p3.m6\" intent=\":literal\"><semantics><mrow><mo stretchy=\"false\">{</mo><mn>1</mn><mo>,</mo><mn>2</mn><mo stretchy=\"false\">}</mo></mrow><annotation encoding=\"application/x-tex\">\\{1,2\\}</annotation></semantics></math>",
+      "context_before": "μ\\mu",
+      "context_after": "μ\\mu",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 35,
+      "latex": "\\mu",
+      "mathml": "<math alttext=\"\\mu\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS2.SSS2.p3.m7\" intent=\":literal\"><semantics><mi>μ</mi><annotation encoding=\"application/x-tex\">\\mu</annotation></semantics></math>",
+      "context_before": "{1,2}\\{1,2\\}",
+      "context_after": "μ\\mu",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 36,
+      "latex": "\\mu",
+      "mathml": "<math alttext=\"\\mu\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS2.SSS2.p3.m8\" intent=\":literal\"><semantics><mi>μ</mi><annotation encoding=\"application/x-tex\">\\mu</annotation></semantics></math>",
+      "context_before": "μ\\mu",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 37,
+      "latex": "\\hat{r}",
+      "mathml": "<math alttext=\"\\hat{r}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS2.SSS3.p1.m1\" intent=\":literal\"><semantics><mover accent=\"true\"><mi>r</mi><mo>^</mo></mover><annotation encoding=\"application/x-tex\">\\hat{r}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "r^\\hat{r}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 38,
+      "latex": "\\hat{r}",
+      "mathml": "<math alttext=\"\\hat{r}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS2.SSS3.p1.m2\" intent=\":literal\"><semantics><mover accent=\"true\"><mi>r</mi><mo>^</mo></mover><annotation encoding=\"application/x-tex\">\\hat{r}</annotation></semantics></math>",
+      "context_before": "r^\\hat{r}",
+      "context_after": "σi\\sigma^{i}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 39,
+      "latex": "\\sigma^{i}",
+      "mathml": "<math alttext=\"\\sigma^{i}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS2.SSS3.p1.m3\" intent=\":literal\"><semantics><msup><mi>σ</mi><mi>i</mi></msup><annotation encoding=\"application/x-tex\">\\sigma^{i}</annotation></semantics></math>",
+      "context_before": "r^\\hat{r}",
+      "context_after": "333Equation 1does not use discounting,\nwhich could be interpreted as modeling the human to be indifferent about when things happen in the trajectory segment.\nUsing explicit discounting or inferring th",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 40,
+      "latex": "\\hat{P}\\left[\\sigma^{1}\\succ\\sigma^{2}\\right]=\\frac{\\exp{\\sum\\hat{r}\\left(o^{1}_{t},a^{1}_{t}\\right)}}{\\exp{\\sum\\hat{r}\\left(o^{1}_{t},a^{1}_{t}\\right)}+\\exp{\\sum\\hat{r}\\left(o^{2}_{t},a^{2}_{t}\\right)}}.",
+      "mathml": "<math alttext=\"\\hat{P}\\left[\\sigma^{1}\\succ\\sigma^{2}\\right]=\\frac{\\exp{\\sum\\hat{r}\\left(o^{1}_{t},a^{1}_{t}\\right)}}{\\exp{\\sum\\hat{r}\\left(o^{1}_{t},a^{1}_{t}\\right)}+\\exp{\\sum\\hat{r}\\left(o^{2}_{t},a^{2}_{t}\\right)}}.\" class=\"ltx_math_unparsed\" display=\"block\" id=\"S2.E1.m1\" intent=\":literal\"><semantics><mrow><mover accent=\"true\"><mi>P</mi><mo>^</mo></mover><mrow><mo>[</mo><msup><mi>σ</mi><mn>1</mn></msup><mo>≻</mo><msup><mi>σ</mi><mn>2</mn></msup><mo>]</mo></mrow><mo>=</mo><mfrac><mrow><mi>exp",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 41,
+      "latex": "\\hat{r}",
+      "mathml": "<math alttext=\"\\hat{r}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS2.SSS3.p1.m4\" intent=\":literal\"><semantics><mover accent=\"true\"><mi>r</mi><mo>^</mo></mover><annotation encoding=\"application/x-tex\">\\hat{r}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 42,
+      "latex": "\\mathrm{loss}\\left(\\hat{r}\\right)=-\\sum_{\\left(\\sigma^{1},\\sigma^{2},\\mu\\right)\\in\\mathcal{D}}\\mu\\left(1\\right)\\log\\hat{P}\\left[\\sigma^{1}\\succ\\sigma^{2}\\right]+\\mu\\left(2\\right)\\log\\hat{P}\\left[\\sigma^{2}\\succ\\sigma^{1}\\right].",
+      "mathml": "<math alttext=\"\\mathrm{loss}\\left(\\hat{r}\\right)=-\\sum_{\\left(\\sigma^{1},\\sigma^{2},\\mu\\right)\\in\\mathcal{D}}\\mu\\left(1\\right)\\log\\hat{P}\\left[\\sigma^{1}\\succ\\sigma^{2}\\right]+\\mu\\left(2\\right)\\log\\hat{P}\\left[\\sigma^{2}\\succ\\sigma^{1}\\right].\" class=\"ltx_math_unparsed\" display=\"block\" id=\"S2.Ex3.m1\" intent=\":literal\"><semantics><mrow><mi>loss</mi><mrow><mo>(</mo><mover accent=\"true\"><mi>r</mi><mo>^</mo></mover><mo>)</mo></mrow><mo rspace=\"0em\">=</mo><mo lspace=\"0em\" rspace=\"0.055em\">−</mo><mund",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 43,
+      "latex": "\\left|\\mathcal{D}\\right|",
+      "mathml": "<math alttext=\"\\left|\\mathcal{D}\\right|\" class=\"ltx_Math\" display=\"inline\" id=\"S2.I3.i1.p1.m1\" intent=\":literal\"><semantics><mrow><mo>|</mo><mi class=\"ltx_font_mathcaligraphic\">𝒟</mi><mo>|</mo></mrow><annotation encoding=\"application/x-tex\">\\left|\\mathcal{D}\\right|</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "𝒟\\mathcal{D}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 44,
+      "latex": "\\mathcal{D}",
+      "mathml": "<math alttext=\"\\mathcal{D}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.I3.i1.p1.m2\" intent=\":literal\"><semantics><mi class=\"ltx_font_mathcaligraphic\">𝒟</mi><annotation encoding=\"application/x-tex\">\\mathcal{D}</annotation></semantics></math>",
+      "context_before": "|𝒟|\\left|\\mathcal{D}\\right|",
+      "context_after": "r^\\hat{r}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 45,
+      "latex": "\\hat{r}",
+      "mathml": "<math alttext=\"\\hat{r}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.I3.i1.p1.m3\" intent=\":literal\"><semantics><mover accent=\"true\"><mi>r</mi><mo>^</mo></mover><annotation encoding=\"application/x-tex\">\\hat{r}</annotation></semantics></math>",
+      "context_before": "𝒟\\mathcal{D}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 46,
+      "latex": "1/e",
+      "mathml": "<math alttext=\"1/e\" class=\"ltx_Math\" display=\"inline\" id=\"S2.I3.i2.p1.m1\" intent=\":literal\"><semantics><mrow><mn>1</mn><mo>/</mo><mi>e</mi></mrow><annotation encoding=\"application/x-tex\">1/e</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "ℓ2\\ell_{2}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 47,
+      "latex": "\\ell_{2}",
+      "mathml": "<math alttext=\"\\ell_{2}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.I3.i2.p1.m2\" intent=\":literal\"><semantics><msub><mi mathvariant=\"normal\">ℓ</mi><mn>2</mn></msub><annotation encoding=\"application/x-tex\">\\ell_{2}</annotation></semantics></math>",
+      "context_before": "1/e1/e",
+      "context_after": "1.11.1",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 48,
+      "latex": "1.1",
+      "mathml": "<math alttext=\"1.1\" class=\"ltx_Math\" display=\"inline\" id=\"S2.I3.i2.p1.m3\" intent=\":literal\"><semantics><mn>1.1</mn><annotation encoding=\"application/x-tex\">1.1</annotation></semantics></math>",
+      "context_before": "ℓ2\\ell_{2}",
+      "context_after": "1.51.5",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 49,
+      "latex": "1.5",
+      "mathml": "<math alttext=\"1.5\" class=\"ltx_Math\" display=\"inline\" id=\"S2.I3.i2.p1.m4\" intent=\":literal\"><semantics><mn>1.5</mn><annotation encoding=\"application/x-tex\">1.5</annotation></semantics></math>",
+      "context_before": "1.11.1",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 50,
+      "latex": "k",
+      "mathml": "<math alttext=\"k\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS2.SSS4.p1.m1\" intent=\":literal\"><semantics><mi>k</mi><annotation encoding=\"application/x-tex\">k</annotation></semantics></math>",
+      "context_before": "Daniel et al. (2014)",
+      "context_after": "Section 3",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 51,
+      "latex": "\\ell_{2}",
+      "mathml": "<math alttext=\"\\ell_{2}\" class=\"ltx_Math\" display=\"inline\" id=\"S3.I2.i4.p1.m1\" intent=\":literal\"><semantics><msub><mi mathvariant=\"normal\">ℓ</mi><mn>2</mn></msub><annotation encoding=\"application/x-tex\">\\ell_{2}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "no regularization",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 52,
+      "latex": "\\hat{r}",
+      "mathml": "<math alttext=\"\\hat{r}\" class=\"ltx_Math\" display=\"inline\" id=\"S3.I2.i6.p1.m1\" intent=\":literal\"><semantics><mover accent=\"true\"><mi>r</mi><mo>^</mo></mover><annotation encoding=\"application/x-tex\">\\hat{r}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "r^\\hat{r}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 53,
+      "latex": "\\hat{r}",
+      "mathml": "<math alttext=\"\\hat{r}\" class=\"ltx_Math\" display=\"inline\" id=\"S3.I2.i6.p1.m2\" intent=\":literal\"><semantics><mover accent=\"true\"><mi>r</mi><mo>^</mo></mover><annotation encoding=\"application/x-tex\">\\hat{r}</annotation></semantics></math>",
+      "context_before": "r^\\hat{r}",
+      "context_after": "target",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 54,
+      "latex": "\\gamma=0.995",
+      "mathml": "<math alttext=\"\\gamma=0.995\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS1.p2.m1\" intent=\":literal\"><semantics><mrow><mi>γ</mi><mo>=</mo><mn>0.995</mn></mrow><annotation encoding=\"application/x-tex\">\\gamma=0.995</annotation></semantics></math>",
+      "context_before": "Schulman et al., 2015",
+      "context_after": "λ=0.97\\lambda=0.97",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 55,
+      "latex": "\\lambda=0.97",
+      "mathml": "<math alttext=\"\\lambda=0.97\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS1.p2.m2\" intent=\":literal\"><semantics><mrow><mi>λ</mi><mo>=</mo><mn>0.97</mn></mrow><annotation encoding=\"application/x-tex\">\\lambda=0.97</annotation></semantics></math>",
+      "context_before": "γ=0.995\\gamma=0.995",
+      "context_after": "α=0.01\\alpha=0.01",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 56,
+      "latex": "\\alpha=0.01",
+      "mathml": "<math alttext=\"\\alpha=0.01\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS1.p2.m3\" intent=\":literal\"><semantics><mrow><mi>α</mi><mo>=</mo><mn>0.01</mn></mrow><annotation encoding=\"application/x-tex\">\\alpha=0.01</annotation></semantics></math>",
+      "context_before": "λ=0.97\\lambda=0.97",
+      "context_after": "777All of these reward functions are second degree polynomials of the input features, and so if we were concerned only with these tasks we could take a simpler approach to learning the reward function",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 57,
+      "latex": "25\\%",
+      "mathml": "<math alttext=\"25\\%\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS1.p4.m1\" intent=\":literal\"><semantics><mrow><mn>25</mn><mo>%</mo></mrow><annotation encoding=\"application/x-tex\">25\\%</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "TT",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 58,
+      "latex": "T",
+      "mathml": "<math alttext=\"T\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS1.p4.m2\" intent=\":literal\"><semantics><mi>T</mi><annotation encoding=\"application/x-tex\">T</annotation></semantics></math>",
+      "context_before": "25%25\\%",
+      "context_after": "2∗106/(T+2∗106)2*10^{6}/(T+2*10^{6})",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 59,
+      "latex": "2*10^{6}/(T+2*10^{6})",
+      "mathml": "<math alttext=\"2*10^{6}/(T+2*10^{6})\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS1.p4.m3\" intent=\":literal\"><semantics><mrow><mrow><mn>2</mn><mo lspace=\"0.222em\" rspace=\"0.222em\">∗</mo><msup><mn>10</mn><mn>6</mn></msup></mrow><mo>/</mo><mrow><mo stretchy=\"false\">(</mo><mrow><mi>T</mi><mo>+</mo><mrow><mn>2</mn><mo lspace=\"0.222em\" rspace=\"0.222em\">∗</mo><msup><mn>10</mn><mn>6</mn></msup></mrow></mrow><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">2*10^{6}/(T+2*1",
+      "context_before": "TT",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 60,
+      "latex": "[-1,1]",
+      "mathml": "<math alttext=\"[-1,1]\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS2.p1.m1\" intent=\":literal\"><semantics><mrow><mo stretchy=\"false\">[</mo><mrow><mrow><mo>−</mo><mn>1</mn></mrow><mo>,</mo><mn>1</mn></mrow><mo stretchy=\"false\">]</mo></mrow><annotation encoding=\"application/x-tex\">[-1,1]</annotation></semantics></math>",
+      "context_before": "Mnih et al. (2015)",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 61,
+      "latex": "\\beta=0.01",
+      "mathml": "<math alttext=\"\\beta=0.01\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS2.p3.m1\" intent=\":literal\"><semantics><mrow><mi>β</mi><mo>=</mo><mn>0.01</mn></mrow><annotation encoding=\"application/x-tex\">\\beta=0.01</annotation></semantics></math>",
+      "context_before": "Mnih et al. (2015)",
+      "context_after": "0.00070.0007",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 62,
+      "latex": "0.0007",
+      "mathml": "<math alttext=\"0.0007\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS2.p3.m2\" intent=\":literal\"><semantics><mn>0.0007</mn><annotation encoding=\"application/x-tex\">0.0007</annotation></semantics></math>",
+      "context_before": "β=0.01\\beta=0.01",
+      "context_after": "n=5n=5",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 63,
+      "latex": "n=5",
+      "mathml": "<math alttext=\"n=5\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS2.p3.m3\" intent=\":literal\"><semantics><mrow><mi>n</mi><mo>=</mo><mn>5</mn></mrow><annotation encoding=\"application/x-tex\">n=5</annotation></semantics></math>",
+      "context_before": "0.00070.0007",
+      "context_after": "N=16N=16",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 64,
+      "latex": "N=16",
+      "mathml": "<math alttext=\"N=16\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS2.p3.m4\" intent=\":literal\"><semantics><mrow><mi>N</mi><mo>=</mo><mn>16</mn></mrow><annotation encoding=\"application/x-tex\">N=16</annotation></semantics></math>",
+      "context_before": "n=5n=5",
+      "context_after": "γ=0.99\\gamma=0.99",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 65,
+      "latex": "\\gamma=0.99",
+      "mathml": "<math alttext=\"\\gamma=0.99\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS2.p3.m5\" intent=\":literal\"><semantics><mrow><mi>γ</mi><mo>=</mo><mn>0.99</mn></mrow><annotation encoding=\"application/x-tex\">\\gamma=0.99</annotation></semantics></math>",
+      "context_before": "N=16N=16",
+      "context_after": "α=0.99\\alpha=0.99",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 66,
+      "latex": "\\alpha=0.99",
+      "mathml": "<math alttext=\"\\alpha=0.99\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS2.p3.m6\" intent=\":literal\"><semantics><mrow><mi>α</mi><mo>=</mo><mn>0.99</mn></mrow><annotation encoding=\"application/x-tex\">\\alpha=0.99</annotation></semantics></math>",
+      "context_before": "γ=0.99\\gamma=0.99",
+      "context_after": "ϵ=10−5\\epsilon=10^{-5}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 67,
+      "latex": "\\epsilon=10^{-5}",
+      "mathml": "<math alttext=\"\\epsilon=10^{-5}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS2.p3.m7\" intent=\":literal\"><semantics><mrow><mi>ϵ</mi><mo>=</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>5</mn></mrow></msup></mrow><annotation encoding=\"application/x-tex\">\\epsilon=10^{-5}</annotation></semantics></math>",
+      "context_before": "α=0.99\\alpha=0.99",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 68,
+      "latex": "\\alpha=0.01",
+      "mathml": "<math alttext=\"\\alpha=0.01\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS2.p4.m1\" intent=\":literal\"><semantics><mrow><mi>α</mi><mo>=</mo><mn>0.01</mn></mrow><annotation encoding=\"application/x-tex\">\\alpha=0.01</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "α=0.5\\alpha=0.5",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 69,
+      "latex": "\\alpha=0.5",
+      "mathml": "<math alttext=\"\\alpha=0.5\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS2.p4.m2\" intent=\":literal\"><semantics><mrow><mi>α</mi><mo>=</mo><mn>0.5</mn></mrow><annotation encoding=\"application/x-tex\">\\alpha=0.5</annotation></semantics></math>",
+      "context_before": "α=0.01\\alpha=0.01",
+      "context_after": "ℓ2\\ell_{2}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 70,
+      "latex": "\\ell_{2}",
+      "mathml": "<math alttext=\"\\ell_{2}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS2.p4.m3\" intent=\":literal\"><semantics><msub><mi mathvariant=\"normal\">ℓ</mi><mn>2</mn></msub><annotation encoding=\"application/x-tex\">\\ell_{2}</annotation></semantics></math>",
+      "context_before": "α=0.5\\alpha=0.5",
+      "context_after": "Section 2.2.3",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 71,
+      "latex": "T",
+      "mathml": "<math alttext=\"T\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS2.p6.m1\" intent=\":literal\"><semantics><mi>T</mi><annotation encoding=\"application/x-tex\">T</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "5∗1065*10^{6}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 72,
+      "latex": "5*10^{6}",
+      "mathml": "<math alttext=\"5*10^{6}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS2.p6.m2\" intent=\":literal\"><semantics><mrow><mn>5</mn><mo lspace=\"0.222em\" rspace=\"0.222em\">∗</mo><msup><mn>10</mn><mn>6</mn></msup></mrow><annotation encoding=\"application/x-tex\">5*10^{6}</annotation></semantics></math>",
+      "context_before": "TT",
+      "context_after": "5∗106/(T+5∗106)5*10^{6}/(T+5*10^{6})",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 73,
+      "latex": "5*10^{6}/(T+5*10^{6})",
+      "mathml": "<math alttext=\"5*10^{6}/(T+5*10^{6})\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS2.p6.m3\" intent=\":literal\"><semantics><mrow><mrow><mn>5</mn><mo lspace=\"0.222em\" rspace=\"0.222em\">∗</mo><msup><mn>10</mn><mn>6</mn></msup></mrow><mo>/</mo><mrow><mo stretchy=\"false\">(</mo><mrow><mi>T</mi><mo>+</mo><mrow><mn>5</mn><mo lspace=\"0.222em\" rspace=\"0.222em\">∗</mo><msup><mn>10</mn><mn>6</mn></msup></mrow></mrow><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">5*10^{6}/(T+5*1",
+      "context_before": "5∗1065*10^{6}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    }
+  ],
+  "equation_count": 74
+}

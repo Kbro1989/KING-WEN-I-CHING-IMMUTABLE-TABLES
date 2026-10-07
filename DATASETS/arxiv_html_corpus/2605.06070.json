@@ -1,0 +1,1596 @@
+{
+  "arxiv_id": "2605.06070",
+  "version": null,
+  "url": "https://arxiv.org/html/2605.06070",
+  "structure": {
+    "title": "Arena as Offline Reward: Efficient Fine-Grained Preference Optimization for Diffusion Models",
+    "authors": [
+      "Zhikai Li",
+      "Yue Zhao",
+      "Edward Zhongwei Zhang",
+      "Xuewen Liu",
+      "Jing Zhang",
+      "Qingyi Gu",
+      "Zhen Dong"
+    ],
+    "abstract": "AbstractReinforcement learning from human feedback (RLHF) effectively promotes preference alignment of text-to-image (T2I) diffusion models.\nTo improve computational efficiency, direct preference optimization (DPO), which avoids explicit reward modeling, has been widely studied. However, its reliance on binary feedback limits it to coarse-grained modeling on chosen–rejected pairs, resulting in suboptimal optimization.\nIn this paper, we propose ArenaPO, which leverages Arena scores as offline rewards to provide refined feedback, thus achieving efficient and fine-grained optimization without a reward model.\nThis enables ArenaPO to benefit from both the rich rewards of traditional RLHF and the efficiency of DPO.\nSpecifically, we first construct a model Arena in which each model’s capability is represented as a Gaussian distribution, and infer these capabilities by traversing the annotated pairwise preferences.\nEach output image is treated as a sample from the corresponding capability distribution.\nThen, for a image pair, conditioned on the two capability distributions and the observed pairwise preference, the absolute quality gap is estimated using latent-variable inference based on truncated normal distribution, which serves as fine-grained feedback during training.\nIt does not require a reward model and can be computed offline, thus introducing no additional training overhead.\nWe conduct ArenaPO training on Pick-a-Pic v2 and HPD v3 datasets, showing that ArenaPO consistently outperforms existing baselines.",
+    "sections": [
+      {
+        "level": "h2",
+        "title": "1Introduction"
+      },
+      {
+        "level": "h2",
+        "title": "2Related Work"
+      },
+      {
+        "level": "h2",
+        "title": "3Preliminaries"
+      },
+      {
+        "level": "h2",
+        "title": "4Methodology"
+      },
+      {
+        "level": "h3",
+        "title": "4.1Model Arena Construction"
+      },
+      {
+        "level": "h3",
+        "title": "4.2Quality Gap Estimation from Arena"
+      },
+      {
+        "level": "h3",
+        "title": "4.3DPO with Fine-Grained Preference"
+      },
+      {
+        "level": "h2",
+        "title": "5Experiments"
+      },
+      {
+        "level": "h3",
+        "title": "5.1Experimental Setup"
+      },
+      {
+        "level": "h3",
+        "title": "5.2Arena Results"
+      },
+      {
+        "level": "h3",
+        "title": "5.3Main Results of Training on Pick-a-Pic v2 Dataset"
+      },
+      {
+        "level": "h3",
+        "title": "5.4Main Results of Training on HPD v3 Dataset"
+      },
+      {
+        "level": "h3",
+        "title": "5.5Ablation Studies"
+      },
+      {
+        "level": "h2",
+        "title": "6Conclusion"
+      },
+      {
+        "level": "h2",
+        "title": "References"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix ADerivation of Bayesian Updating"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix BDerivation of Expectation of Truncated Normal Distribution"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix CArena Results of Pick-a-Pic v2 and HPD v3 Datasets"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix DMore Image Visualization of Different Methods"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix EEvaluation on K-Sort Eval Benchmark"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix FComparison with RLHF Using an Explicit Reward Model"
+      },
+      {
+        "level": "h2",
+        "title": "Instructions for reporting errors"
+      }
+    ]
+  },
+  "equations": [
+    {
+      "index": 0,
+      "latex": "\\mathcal{N}(\\mu,\\sigma^{2})",
+      "mathml": "<math alttext=\"\\mathcal{N}(\\mu,\\sigma^{2})\" class=\"ltx_Math\" display=\"inline\" id=\"S1.F2.m5\" intent=\":literal\"><semantics><mrow><mi class=\"ltx_font_mathcaligraphic\">𝒩</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mi>μ</mi><mo>,</mo><msup><mi>σ</mi><mn>2</mn></msup><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">\\mathcal{N}(\\mu,\\sigma^{2})</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "μw−μl\\mu^{w}-\\mu^{l}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 1,
+      "latex": "\\mu^{w}-\\mu^{l}",
+      "mathml": "<math alttext=\"\\mu^{w}-\\mu^{l}\" class=\"ltx_Math\" display=\"inline\" id=\"S1.F2.m6\" intent=\":literal\"><semantics><mrow><msup><mi>μ</mi><mi>w</mi></msup><mo>−</mo><msup><mi>μ</mi><mi>l</mi></msup></mrow><annotation encoding=\"application/x-tex\">\\mu^{w}-\\mu^{l}</annotation></semantics></math>",
+      "context_before": "𝒩⁡(μ,σ2)\\mathcal{N}(\\mu,\\sigma^{2})",
+      "context_after": "σw\\sigma^{w}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 2,
+      "latex": "\\sigma^{w}",
+      "mathml": "<math alttext=\"\\sigma^{w}\" class=\"ltx_Math\" display=\"inline\" id=\"S1.F2.m7\" intent=\":literal\"><semantics><msup><mi>σ</mi><mi>w</mi></msup><annotation encoding=\"application/x-tex\">\\sigma^{w}</annotation></semantics></math>",
+      "context_before": "μw−μl\\mu^{w}-\\mu^{l}",
+      "context_after": "σl\\sigma^{l}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 3,
+      "latex": "\\sigma^{l}",
+      "mathml": "<math alttext=\"\\sigma^{l}\" class=\"ltx_Math\" display=\"inline\" id=\"S1.F2.m8\" intent=\":literal\"><semantics><msup><mi>σ</mi><mi>l</mi></msup><annotation encoding=\"application/x-tex\">\\sigma^{l}</annotation></semantics></math>",
+      "context_before": "σw\\sigma^{w}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 4,
+      "latex": "p_{\\text{data}}",
+      "mathml": "<math alttext=\"p_{\\text{data}}\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p1.m1\" intent=\":literal\"><semantics><msub><mi>p</mi><mtext>data</mtext></msub><annotation encoding=\"application/x-tex\">p_{\\text{data}}</annotation></semantics></math>",
+      "context_before": "[10,32]",
+      "context_after": "𝐱0∼pdata\\mathbf{x}_{0}\\sim p_{\\text{data}}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 5,
+      "latex": "\\mathbf{x}_{0}\\sim p_{\\text{data}}",
+      "mathml": "<math alttext=\"\\mathbf{x}_{0}\\sim p_{\\text{data}}\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p1.m2\" intent=\":literal\"><semantics><mrow><msub><mi>𝐱</mi><mn>0</mn></msub><mo>∼</mo><msub><mi>p</mi><mtext>data</mtext></msub></mrow><annotation encoding=\"application/x-tex\">\\mathbf{x}_{0}\\sim p_{\\text{data}}</annotation></semantics></math>",
+      "context_before": "pdatap_{\\text{data}}",
+      "context_after": "TT",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 6,
+      "latex": "T",
+      "mathml": "<math alttext=\"T\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p1.m3\" intent=\":literal\"><semantics><mi>T</mi><annotation encoding=\"application/x-tex\">T</annotation></semantics></math>",
+      "context_before": "𝐱0∼pdata\\mathbf{x}_{0}\\sim p_{\\text{data}}",
+      "context_after": "β1,…,βT\\beta_{1},\\dots,\\beta_{T}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 7,
+      "latex": "\\beta_{1},\\dots,\\beta_{T}",
+      "mathml": "<math alttext=\"\\beta_{1},\\dots,\\beta_{T}\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p1.m4\" intent=\":literal\"><semantics><mrow><msub><mi>β</mi><mn>1</mn></msub><mo>,</mo><mi mathvariant=\"normal\">…</mi><mo>,</mo><msub><mi>β</mi><mi>T</mi></msub></mrow><annotation encoding=\"application/x-tex\">\\beta_{1},\\dots,\\beta_{T}</annotation></semantics></math>",
+      "context_before": "TT",
+      "context_after": "tt",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 8,
+      "latex": "t",
+      "mathml": "<math alttext=\"t\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p1.m5\" intent=\":literal\"><semantics><mi>t</mi><annotation encoding=\"application/x-tex\">t</annotation></semantics></math>",
+      "context_before": "β1,…,βT\\beta_{1},\\dots,\\beta_{T}",
+      "context_after": "𝐱t\\mathbf{x}_{t}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 9,
+      "latex": "\\mathbf{x}_{t}",
+      "mathml": "<math alttext=\"\\mathbf{x}_{t}\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p1.m6\" intent=\":literal\"><semantics><msub><mi>𝐱</mi><mi>t</mi></msub><annotation encoding=\"application/x-tex\">\\mathbf{x}_{t}</annotation></semantics></math>",
+      "context_before": "tt",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 10,
+      "latex": "\\begin{gathered}q\\left(\\mathbf{x}_{t}\\mid\\mathbf{x}_{0}\\right)=\\mathcal{N}\\left(\\sqrt{\\bar{\\alpha}_{t}}\\mathbf{x}_{0},\\left(1-\\bar{\\alpha}_{t}\\right)I\\right),\\\\\n\\bar{\\alpha}_{t}=\\prod_{s=1}^{t}\\alpha_{s},\\quad\\alpha_{t}=1-\\beta_{t}.\\end{gathered}",
+      "mathml": "<math alttext=\"\\begin{gathered}q\\left(\\mathbf{x}_{t}\\mid\\mathbf{x}_{0}\\right)=\\mathcal{N}\\left(\\sqrt{\\bar{\\alpha}_{t}}\\mathbf{x}_{0},\\left(1-\\bar{\\alpha}_{t}\\right)I\\right),\\\\\n\\bar{\\alpha}_{t}=\\prod_{s=1}^{t}\\alpha_{s},\\quad\\alpha_{t}=1-\\beta_{t}.\\end{gathered}\" class=\"ltx_Math\" display=\"block\" id=\"S3.E1.m1\" intent=\":literal\"><semantics><mtable displaystyle=\"true\" rowspacing=\"0pt\"><mtr><mtd><mrow><mrow><mrow><mi>q</mi><mo>⁡</mo><mrow><mo>(</mo><msub><mi>𝐱</mi><mi>t</mi></msub><mo fence=\"true\" ls",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 11,
+      "latex": "\\epsilon_{\\theta}",
+      "mathml": "<math alttext=\"\\epsilon_{\\theta}\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p1.m7\" intent=\":literal\"><semantics><msub><mi>ϵ</mi><mi>θ</mi></msub><annotation encoding=\"application/x-tex\">\\epsilon_{\\theta}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "ϵt\\epsilon_{t}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 12,
+      "latex": "\\epsilon_{t}",
+      "mathml": "<math alttext=\"\\epsilon_{t}\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p1.m8\" intent=\":literal\"><semantics><msub><mi>ϵ</mi><mi>t</mi></msub><annotation encoding=\"application/x-tex\">\\epsilon_{t}</annotation></semantics></math>",
+      "context_before": "ϵθ\\epsilon_{\\theta}",
+      "context_after": "𝐱t\\mathbf{x}_{t}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 13,
+      "latex": "\\mathbf{x}_{t}",
+      "mathml": "<math alttext=\"\\mathbf{x}_{t}\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p1.m9\" intent=\":literal\"><semantics><msub><mi>𝐱</mi><mi>t</mi></msub><annotation encoding=\"application/x-tex\">\\mathbf{x}_{t}</annotation></semantics></math>",
+      "context_before": "ϵt\\epsilon_{t}",
+      "context_after": "tt",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 14,
+      "latex": "t",
+      "mathml": "<math alttext=\"t\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p1.m10\" intent=\":literal\"><semantics><mi>t</mi><annotation encoding=\"application/x-tex\">t</annotation></semantics></math>",
+      "context_before": "𝐱t\\mathbf{x}_{t}",
+      "context_after": "[10]",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 15,
+      "latex": "\\mathcal{L}_{\\mathrm{DM}}(\\theta)=\\mathbb{E}_{\\mathbf{x}_{0},\\epsilon,t,\\mathbf{x}_{t}}\\Big[\\omega(\\lambda_{t})\\,\\|\\epsilon-\\epsilon_{\\theta}(\\mathbf{x}_{t},t)\\|_{2}^{2}\\Big],",
+      "mathml": "<math alttext=\"\\mathcal{L}_{\\mathrm{DM}}(\\theta)=\\mathbb{E}_{\\mathbf{x}_{0},\\epsilon,t,\\mathbf{x}_{t}}\\Big[\\omega(\\lambda_{t})\\,\\|\\epsilon-\\epsilon_{\\theta}(\\mathbf{x}_{t},t)\\|_{2}^{2}\\Big],\" class=\"ltx_Math\" display=\"block\" id=\"S3.E2.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><msub><mi class=\"ltx_font_mathcaligraphic\">ℒ</mi><mi>DM</mi></msub><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo stretchy=\"false\">(</mo><mi>θ</mi><mo stretchy=\"false\">)</mo></mrow></mrow><mo>=</mo><mrow><msub><mi>𝔼",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 16,
+      "latex": "\\lambda_{t}=\\log(\\alpha_{t}^{2}/\\sigma_{t}^{2})",
+      "mathml": "<math alttext=\"\\lambda_{t}=\\log(\\alpha_{t}^{2}/\\sigma_{t}^{2})\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p1.m11\" intent=\":literal\"><semantics><mrow><msub><mi>λ</mi><mi>t</mi></msub><mo>=</mo><mrow><mi>log</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mrow><msubsup><mi>α</mi><mi>t</mi><mn>2</mn></msubsup><mo>/</mo><msubsup><mi>σ</mi><mi>t</mi><mn>2</mn></msubsup></mrow><mo stretchy=\"false\">)</mo></mrow></mrow></mrow><annotation encoding=\"application/x-tex\">\\lambda_{t}=\\log(\\alpha_{t}^{2}/\\sigma",
+      "context_before": "",
+      "context_after": "ω⁡(λt)\\omega(\\lambda_{t})",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 17,
+      "latex": "\\omega(\\lambda_{t})",
+      "mathml": "<math alttext=\"\\omega(\\lambda_{t})\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p1.m12\" intent=\":literal\"><semantics><mrow><mi>ω</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><msub><mi>λ</mi><mi>t</mi></msub><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">\\omega(\\lambda_{t})</annotation></semantics></math>",
+      "context_before": "λt=log⁡(αt2/σt2)\\lambda_{t}=\\log(\\alpha_{t}^{2}/\\sigma_{t}^{2})",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 18,
+      "latex": "\\mathbf{c}",
+      "mathml": "<math alttext=\"\\mathbf{c}\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p2.m1\" intent=\":literal\"><semantics><mi>𝐜</mi><annotation encoding=\"application/x-tex\">\\mathbf{c}</annotation></semantics></math>",
+      "context_before": "[26]",
+      "context_after": "(𝐱0w,𝐱0l)(\\mathbf{x}_{0}^{w},\\mathbf{x}_{0}^{l})",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 19,
+      "latex": "(\\mathbf{x}_{0}^{w},\\mathbf{x}_{0}^{l})",
+      "mathml": "<math alttext=\"(\\mathbf{x}_{0}^{w},\\mathbf{x}_{0}^{l})\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p2.m2\" intent=\":literal\"><semantics><mrow><mo stretchy=\"false\">(</mo><msubsup><mi>𝐱</mi><mn>0</mn><mi>w</mi></msubsup><mo>,</mo><msubsup><mi>𝐱</mi><mn>0</mn><mi>l</mi></msubsup><mo stretchy=\"false\">)</mo></mrow><annotation encoding=\"application/x-tex\">(\\mathbf{x}_{0}^{w},\\mathbf{x}_{0}^{l})</annotation></semantics></math>",
+      "context_before": "𝐜\\mathbf{c}",
+      "context_after": "[4]",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 20,
+      "latex": "p_{\\mathrm{BT}}\\left(\\mathbf{x}_{0}^{w}\\succ\\mathbf{x}_{0}^{l}\\mid\\mathbf{c}\\right)=\\sigma\\left(r\\left(\\mathbf{c},\\mathbf{x}_{0}^{w}\\right)-r\\left(\\mathbf{c},\\mathbf{x}_{0}^{l}\\right)\\right),",
+      "mathml": "<math alttext=\"p_{\\mathrm{BT}}\\left(\\mathbf{x}_{0}^{w}\\succ\\mathbf{x}_{0}^{l}\\mid\\mathbf{c}\\right)=\\sigma\\left(r\\left(\\mathbf{c},\\mathbf{x}_{0}^{w}\\right)-r\\left(\\mathbf{c},\\mathbf{x}_{0}^{l}\\right)\\right),\" class=\"ltx_Math\" display=\"block\" id=\"S3.E3.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><msub><mi>p</mi><mi>BT</mi></msub><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo>(</mo><mrow><msubsup><mi>𝐱</mi><mn>0</mn><mi>w</mi></msubsup><mo>≻</mo><msubsup><mi>𝐱</mi><mn>0</mn><mi>l</mi></msubsu",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 21,
+      "latex": "r(\\mathbf{c},\\mathbf{x}_{0})",
+      "mathml": "<math alttext=\"r(\\mathbf{c},\\mathbf{x}_{0})\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p2.m3\" intent=\":literal\"><semantics><mrow><mi>r</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mi>𝐜</mi><mo>,</mo><msub><mi>𝐱</mi><mn>0</mn></msub><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">r(\\mathbf{c},\\mathbf{x}_{0})</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "σ\\sigma",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 22,
+      "latex": "\\sigma",
+      "mathml": "<math alttext=\"\\sigma\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p2.m4\" intent=\":literal\"><semantics><mi>σ</mi><annotation encoding=\"application/x-tex\">\\sigma</annotation></semantics></math>",
+      "context_before": "r⁡(𝐜,𝐱0)r(\\mathbf{c},\\mathbf{x}_{0})",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 23,
+      "latex": "\\displaystyle\\mathcal{L}_{\\mathrm{DPO}}(\\theta)=-\\mathbb{E}_{\\mathbf{c},\\mathbf{x}_{0}^{w},\\mathbf{x}_{0}^{l}}\\Big[\\log\\sigma\\Big(\\beta\\log\\frac{\\pi_{\\theta}(\\mathbf{x}_{0}^{w}|c)}{\\pi_{\\mathrm{ref}}(\\mathbf{x}_{0}^{w}|c)}-\\beta\\log\\frac{\\pi_{\\theta}(\\mathbf{x}_{0}^{l}|c)}{\\pi_{\\mathrm{ref}}(\\mathbf{x}_{0}^{l}|c)}\\Big)\\Big],",
+      "mathml": "<math alttext=\"\\displaystyle\\mathcal{L}_{\\mathrm{DPO}}(\\theta)=-\\mathbb{E}_{\\mathbf{c},\\mathbf{x}_{0}^{w},\\mathbf{x}_{0}^{l}}\\Big[\\log\\sigma\\Big(\\beta\\log\\frac{\\pi_{\\theta}(\\mathbf{x}_{0}^{w}|c)}{\\pi_{\\mathrm{ref}}(\\mathbf{x}_{0}^{w}|c)}-\\beta\\log\\frac{\\pi_{\\theta}(\\mathbf{x}_{0}^{l}|c)}{\\pi_{\\mathrm{ref}}(\\mathbf{x}_{0}^{l}|c)}\\Big)\\Big],\" class=\"ltx_Math\" display=\"inline\" id=\"S3.E4X.m2\" intent=\":literal\"><semantics><mrow><mrow><mrow><msub><mi class=\"ltx_font_mathcaligraphic\">ℒ</mi><mi>DPO</mi>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 24,
+      "latex": "\\pi_{\\theta}",
+      "mathml": "<math alttext=\"\\pi_{\\theta}\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p2.m5\" intent=\":literal\"><semantics><msub><mi>π</mi><mi>θ</mi></msub><annotation encoding=\"application/x-tex\">\\pi_{\\theta}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "πref\\pi_{\\mathrm{ref}}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 25,
+      "latex": "\\pi_{\\mathrm{ref}}",
+      "mathml": "<math alttext=\"\\pi_{\\mathrm{ref}}\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p2.m6\" intent=\":literal\"><semantics><msub><mi>π</mi><mi>ref</mi></msub><annotation encoding=\"application/x-tex\">\\pi_{\\mathrm{ref}}</annotation></semantics></math>",
+      "context_before": "πθ\\pi_{\\theta}",
+      "context_after": "σ\\sigma",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 26,
+      "latex": "\\sigma",
+      "mathml": "<math alttext=\"\\sigma\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p2.m7\" intent=\":literal\"><semantics><mi>σ</mi><annotation encoding=\"application/x-tex\">\\sigma</annotation></semantics></math>",
+      "context_before": "πref\\pi_{\\mathrm{ref}}",
+      "context_after": "β\\beta",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 27,
+      "latex": "\\beta",
+      "mathml": "<math alttext=\"\\beta\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p2.m8\" intent=\":literal\"><semantics><mi>β</mi><annotation encoding=\"application/x-tex\">\\beta</annotation></semantics></math>",
+      "context_before": "σ\\sigma",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 28,
+      "latex": "\\mathcal{L}_{\\text{DM}}",
+      "mathml": "<math alttext=\"\\mathcal{L}_{\\text{DM}}\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p3.m1\" intent=\":literal\"><semantics><msub><mi class=\"ltx_font_mathcaligraphic\">ℒ</mi><mtext>DM</mtext></msub><annotation encoding=\"application/x-tex\">\\mathcal{L}_{\\text{DM}}</annotation></semantics></math>",
+      "context_before": "[35]",
+      "context_after": "tt",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 29,
+      "latex": "t",
+      "mathml": "<math alttext=\"t\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p3.m2\" intent=\":literal\"><semantics><mi>t</mi><annotation encoding=\"application/x-tex\">t</annotation></semantics></math>",
+      "context_before": "ℒDM\\mathcal{L}_{\\text{DM}}",
+      "context_after": "ϵθ\\epsilon_{\\theta}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 30,
+      "latex": "\\epsilon_{\\theta}",
+      "mathml": "<math alttext=\"\\epsilon_{\\theta}\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p3.m3\" intent=\":literal\"><semantics><msub><mi>ϵ</mi><mi>θ</mi></msub><annotation encoding=\"application/x-tex\">\\epsilon_{\\theta}</annotation></semantics></math>",
+      "context_before": "tt",
+      "context_after": "ϵref\\epsilon_{\\text{ref}}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 31,
+      "latex": "\\epsilon_{\\text{ref}}",
+      "mathml": "<math alttext=\"\\epsilon_{\\text{ref}}\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p3.m4\" intent=\":literal\"><semantics><msub><mi>ϵ</mi><mtext>ref</mtext></msub><annotation encoding=\"application/x-tex\">\\epsilon_{\\text{ref}}</annotation></semantics></math>",
+      "context_before": "ϵθ\\epsilon_{\\theta}",
+      "context_after": "xx",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 32,
+      "latex": "x",
+      "mathml": "<math alttext=\"x\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p3.m5\" intent=\":literal\"><semantics><mi>x</mi><annotation encoding=\"application/x-tex\">x</annotation></semantics></math>",
+      "context_before": "ϵref\\epsilon_{\\text{ref}}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 33,
+      "latex": "\\delta_{\\theta}(\\mathbf{c},\\mathbf{x}_{t},t)=-\\Big(\\left\\|\\epsilon-\\epsilon_{\\theta}(\\mathbf{x}_{t},\\mathbf{c},t)\\right\\|_{2}^{2}-\\left\\|\\epsilon-\\epsilon_{\\mathrm{ref}}(\\mathbf{x}_{t},\\mathbf{c},t)\\right\\|_{2}^{2}\\Big).",
+      "mathml": "<math alttext=\"\\delta_{\\theta}(\\mathbf{c},\\mathbf{x}_{t},t)=-\\Big(\\left\\|\\epsilon-\\epsilon_{\\theta}(\\mathbf{x}_{t},\\mathbf{c},t)\\right\\|_{2}^{2}-\\left\\|\\epsilon-\\epsilon_{\\mathrm{ref}}(\\mathbf{x}_{t},\\mathbf{c},t)\\right\\|_{2}^{2}\\Big).\" class=\"ltx_Math\" display=\"block\" id=\"S3.E5.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><msub><mi>δ</mi><mi>θ</mi></msub><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo stretchy=\"false\">(</mo><mi>𝐜</mi><mo>,</mo><msub><mi>𝐱</mi><mi>t</mi></msub><mo>,</mo><mi>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 34,
+      "latex": "\\displaystyle\\mathcal{L}_{\\text{Diff-DPO}}(\\theta)=-\\mathbb{E}_{\\mathbf{c},\\mathbf{x}_{0}^{w},\\mathbf{x}_{0}^{l},t}\\Big[\\log\\sigma\\Big(\\beta T\\omega(\\lambda_{t})(\\delta_{\\theta}(\\mathbf{c},\\mathbf{x}^{w},t)-\\delta_{\\theta}(\\mathbf{c},\\mathbf{x}^{l},t))\\Big)\\Big],",
+      "mathml": "<math alttext=\"\\displaystyle\\mathcal{L}_{\\text{Diff-DPO}}(\\theta)=-\\mathbb{E}_{\\mathbf{c},\\mathbf{x}_{0}^{w},\\mathbf{x}_{0}^{l},t}\\Big[\\log\\sigma\\Big(\\beta T\\omega(\\lambda_{t})(\\delta_{\\theta}(\\mathbf{c},\\mathbf{x}^{w},t)-\\delta_{\\theta}(\\mathbf{c},\\mathbf{x}^{l},t))\\Big)\\Big],\" class=\"ltx_Math\" display=\"inline\" id=\"S3.E6X.m2\" intent=\":literal\"><semantics><mrow><mrow><mrow><msub><mi class=\"ltx_font_mathcaligraphic\">ℒ</mi><mtext>Diff-DPO</mtext></msub><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 35,
+      "latex": "T",
+      "mathml": "<math alttext=\"T\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p3.m6\" intent=\":literal\"><semantics><mi>T</mi><annotation encoding=\"application/x-tex\">T</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "ω⁡(λt)\\omega(\\lambda_{t})",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 36,
+      "latex": "\\omega(\\lambda_{t})",
+      "mathml": "<math alttext=\"\\omega(\\lambda_{t})\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p3.m7\" intent=\":literal\"><semantics><mrow><mi>ω</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><msub><mi>λ</mi><mi>t</mi></msub><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">\\omega(\\lambda_{t})</annotation></semantics></math>",
+      "context_before": "TT",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 37,
+      "latex": "\\theta\\sim\\mathcal{N}(\\mu,\\sigma^{2}),",
+      "mathml": "<math alttext=\"\\theta\\sim\\mathcal{N}(\\mu,\\sigma^{2}),\" class=\"ltx_Math\" display=\"block\" id=\"S4.E7.m1\" intent=\":literal\"><semantics><mrow><mrow><mi>θ</mi><mo>∼</mo><mrow><mi class=\"ltx_font_mathcaligraphic\">𝒩</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mi>μ</mi><mo>,</mo><msup><mi>σ</mi><mn>2</mn></msup><mo stretchy=\"false\">)</mo></mrow></mrow></mrow><mo>,</mo></mrow><annotation encoding=\"application/x-tex\">\\theta\\sim\\mathcal{N}(\\mu,\\sigma^{2}),</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 38,
+      "latex": "\\mu",
+      "mathml": "<math alttext=\"\\mu\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS1.p1.m1\" intent=\":literal\"><semantics><mi>μ</mi><annotation encoding=\"application/x-tex\">\\mu</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "σ\\sigma",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 39,
+      "latex": "\\sigma",
+      "mathml": "<math alttext=\"\\sigma\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS1.p1.m2\" intent=\":literal\"><semantics><mi>σ</mi><annotation encoding=\"application/x-tex\">\\sigma</annotation></semantics></math>",
+      "context_before": "μ\\mu",
+      "context_after": "𝒩⁡(⋅)\\mathcal{N}(\\cdot)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 40,
+      "latex": "\\mathcal{N}(\\cdot)",
+      "mathml": "<math alttext=\"\\mathcal{N}(\\cdot)\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS1.p1.m3\" intent=\":literal\"><semantics><mrow><mi class=\"ltx_font_mathcaligraphic\">𝒩</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mo lspace=\"0em\" rspace=\"0em\">⋅</mo><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">\\mathcal{N}(\\cdot)</annotation></semantics></math>",
+      "context_before": "σ\\sigma",
+      "context_after": "P⁡(θ)P(\\theta)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 41,
+      "latex": "P(\\theta)",
+      "mathml": "<math alttext=\"P(\\theta)\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS1.p1.m4\" intent=\":literal\"><semantics><mrow><mi>P</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mi>θ</mi><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">P(\\theta)</annotation></semantics></math>",
+      "context_before": "𝒩⁡(⋅)\\mathcal{N}(\\cdot)",
+      "context_after": "P⁡(D|θ)P(D|\\theta)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 42,
+      "latex": "P(D|\\theta)",
+      "mathml": "<math alttext=\"P(D|\\theta)\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS1.p1.m5\" intent=\":literal\"><semantics><mrow><mi>P</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mi>D</mi><mo lspace=\"0em\" rspace=\"0em\">|</mo><mi>θ</mi><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">P(D|\\theta)</annotation></semantics></math>",
+      "context_before": "P⁡(θ)P(\\theta)",
+      "context_after": "DD",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 43,
+      "latex": "D",
+      "mathml": "<math alttext=\"D\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS1.p1.m6\" intent=\":literal\"><semantics><mi>D</mi><annotation encoding=\"application/x-tex\">D</annotation></semantics></math>",
+      "context_before": "P⁡(D|θ)P(D|\\theta)",
+      "context_after": "θ\\theta",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 44,
+      "latex": "\\theta",
+      "mathml": "<math alttext=\"\\theta\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS1.p1.m7\" intent=\":literal\"><semantics><mi>θ</mi><annotation encoding=\"application/x-tex\">\\theta</annotation></semantics></math>",
+      "context_before": "DD",
+      "context_after": "P⁡(θ|D)P(\\theta|D)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 45,
+      "latex": "P(\\theta|D)",
+      "mathml": "<math alttext=\"P(\\theta|D)\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS1.p1.m8\" intent=\":literal\"><semantics><mrow><mi>P</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mi>θ</mi><mo lspace=\"0em\" rspace=\"0em\">|</mo><mi>D</mi><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">P(\\theta|D)</annotation></semantics></math>",
+      "context_before": "θ\\theta",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 46,
+      "latex": "P(\\theta|D)=\\frac{P(D|\\theta)P(\\theta)}{\\int_{-\\infty}^{\\infty}P\\left(D|\\theta^{\\prime}\\right)P\\left(\\theta^{\\prime}\\right)d\\theta^{\\prime}}=\\frac{P(D|\\theta)P(\\theta)}{C}.",
+      "mathml": "<math alttext=\"P(\\theta|D)=\\frac{P(D|\\theta)P(\\theta)}{\\int_{-\\infty}^{\\infty}P\\left(D|\\theta^{\\prime}\\right)P\\left(\\theta^{\\prime}\\right)d\\theta^{\\prime}}=\\frac{P(D|\\theta)P(\\theta)}{C}.\" class=\"ltx_Math\" display=\"block\" id=\"S4.E8.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><mi>P</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mi>θ</mi><mo lspace=\"0em\" rspace=\"0em\">|</mo><mi>D</mi><mo stretchy=\"false\">)</mo></mrow></mrow><mo>=</mo><mfrac><mrow><mrow><mi>P</mi><mo>⁡</mo><mrow><mo stretchy",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 47,
+      "latex": "\\displaystyle\\hat{\\mu}",
+      "mathml": "<math alttext=\"\\displaystyle\\hat{\\mu}\" class=\"ltx_Math\" display=\"inline\" id=\"S4.E9X.m2\" intent=\":literal\"><semantics><mover accent=\"true\"><mi>μ</mi><mo>^</mo></mover><annotation encoding=\"application/x-tex\">\\displaystyle\\hat{\\mu}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 48,
+      "latex": "\\displaystyle=\\mathbb{E}[\\theta|D]={\\textstyle\\int_{-\\infty}^{\\infty}\\theta P(\\theta|D)d\\theta},",
+      "mathml": "<math alttext=\"\\displaystyle=\\mathbb{E}[\\theta|D]={\\textstyle\\int_{-\\infty}^{\\infty}\\theta P(\\theta|D)d\\theta},\" class=\"ltx_Math\" display=\"inline\" id=\"S4.E9X.m3\" intent=\":literal\"><semantics><mrow><mrow><mphantom></mphantom><mo>=</mo><mrow><mi>𝔼</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">[</mo><mrow><mi>θ</mi><mo fence=\"false\" rspace=\"0.167em\" stretchy=\"false\">|</mo><mi>D</mi></mrow><mo stretchy=\"false\">]</mo></mrow></mrow><mo rspace=\"0.111em\">=</mo><mrow><msubsup><mo>∫</mo><mrow><mo>−</mo><mi mat",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 49,
+      "latex": "\\displaystyle\\hat{\\sigma}^{2}",
+      "mathml": "<math alttext=\"\\displaystyle\\hat{\\sigma}^{2}\" class=\"ltx_Math\" display=\"inline\" id=\"S4.E9Xa.m2\" intent=\":literal\"><semantics><msup><mover accent=\"true\"><mi>σ</mi><mo>^</mo></mover><mn>2</mn></msup><annotation encoding=\"application/x-tex\">\\displaystyle\\hat{\\sigma}^{2}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 50,
+      "latex": "\\displaystyle=\\operatorname{Var}[\\theta|D]={\\textstyle\\int_{-\\infty}^{\\infty}(\\theta-\\mathbb{E}[\\theta|D])^{2}P(\\theta|D)d\\theta}.",
+      "mathml": "<math alttext=\"\\displaystyle=\\operatorname{Var}[\\theta|D]={\\textstyle\\int_{-\\infty}^{\\infty}(\\theta-\\mathbb{E}[\\theta|D])^{2}P(\\theta|D)d\\theta}.\" class=\"ltx_Math\" display=\"inline\" id=\"S4.E9Xa.m3\" intent=\":literal\"><semantics><mrow><mrow><mphantom></mphantom><mo>=</mo><mrow><mi>Var</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">[</mo><mrow><mi>θ</mi><mo fence=\"false\" rspace=\"0.167em\" stretchy=\"false\">|</mo><mi>D</mi></mrow><mo stretchy=\"false\">]</mo></mrow></mrow><mo rspace=\"0.111em\">=</mo><mrow><msub",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 51,
+      "latex": "\\hat{\\mu}",
+      "mathml": "<math alttext=\"\\hat{\\mu}\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS1.p1.m9\" intent=\":literal\"><semantics><mover accent=\"true\"><mi>μ</mi><mo>^</mo></mover><annotation encoding=\"application/x-tex\">\\hat{\\mu}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "σ^2\\hat{\\sigma}^{2}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 52,
+      "latex": "\\hat{\\sigma}^{2}",
+      "mathml": "<math alttext=\"\\hat{\\sigma}^{2}\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS1.p1.m10\" intent=\":literal\"><semantics><msup><mover accent=\"true\"><mi>σ</mi><mo>^</mo></mover><mn>2</mn></msup><annotation encoding=\"application/x-tex\">\\hat{\\sigma}^{2}</annotation></semantics></math>",
+      "context_before": "μ^\\hat{\\mu}",
+      "context_after": "A",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 53,
+      "latex": "\\mu",
+      "mathml": "<math alttext=\"\\mu\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS1.p1.m11\" intent=\":literal\"><semantics><mi>μ</mi><annotation encoding=\"application/x-tex\">\\mu</annotation></semantics></math>",
+      "context_before": "A",
+      "context_after": "σ\\sigma",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 54,
+      "latex": "\\sigma",
+      "mathml": "<math alttext=\"\\sigma\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS1.p1.m12\" intent=\":literal\"><semantics><mi>σ</mi><annotation encoding=\"application/x-tex\">\\sigma</annotation></semantics></math>",
+      "context_before": "μ\\mu",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 55,
+      "latex": "\\theta^{w}\\sim\\mathcal{N}(\\mu^{w},(\\sigma^{w})^{2})",
+      "mathml": "<math alttext=\"\\theta^{w}\\sim\\mathcal{N}(\\mu^{w},(\\sigma^{w})^{2})\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS2.p1.m1\" intent=\":literal\"><semantics><mrow><msup><mi>θ</mi><mi>w</mi></msup><mo>∼</mo><mrow><mi class=\"ltx_font_mathcaligraphic\">𝒩</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><msup><mi>μ</mi><mi>w</mi></msup><mo>,</mo><msup><mrow><mo stretchy=\"false\">(</mo><msup><mi>σ</mi><mi>w</mi></msup><mo stretchy=\"false\">)</mo></mrow><mn>2</mn></msup><mo stretchy=\"false\">)</mo></mrow></mrow></m",
+      "context_before": "",
+      "context_after": "θl∼𝒩⁡(μl,(σl)2)\\theta^{l}\\sim\\mathcal{N}(\\mu^{l},(\\sigma^{l})^{2})",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 56,
+      "latex": "\\theta^{l}\\sim\\mathcal{N}(\\mu^{l},(\\sigma^{l})^{2})",
+      "mathml": "<math alttext=\"\\theta^{l}\\sim\\mathcal{N}(\\mu^{l},(\\sigma^{l})^{2})\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS2.p1.m2\" intent=\":literal\"><semantics><mrow><msup><mi>θ</mi><mi>l</mi></msup><mo>∼</mo><mrow><mi class=\"ltx_font_mathcaligraphic\">𝒩</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><msup><mi>μ</mi><mi>l</mi></msup><mo>,</mo><msup><mrow><mo stretchy=\"false\">(</mo><msup><mi>σ</mi><mi>l</mi></msup><mo stretchy=\"false\">)</mo></mrow><mn>2</mn></msup><mo stretchy=\"false\">)</mo></mrow></mrow></m",
+      "context_before": "θw∼𝒩⁡(μw,(σw)2)\\theta^{w}\\sim\\mathcal{N}(\\mu^{w},(\\sigma^{w})^{2})",
+      "context_after": "𝐱0w≻𝐱0l\\mathbf{x}_{0}^{w}\\succ\\mathbf{x}_{0}^{l}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 57,
+      "latex": "\\mathbf{x}_{0}^{w}\\succ\\mathbf{x}_{0}^{l}",
+      "mathml": "<math alttext=\"\\mathbf{x}_{0}^{w}\\succ\\mathbf{x}_{0}^{l}\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS2.p1.m3\" intent=\":literal\"><semantics><mrow><msubsup><mi>𝐱</mi><mn>0</mn><mi>w</mi></msubsup><mo>≻</mo><msubsup><mi>𝐱</mi><mn>0</mn><mi>l</mi></msubsup></mrow><annotation encoding=\"application/x-tex\">\\mathbf{x}_{0}^{w}\\succ\\mathbf{x}_{0}^{l}</annotation></semantics></math>",
+      "context_before": "θl∼𝒩⁡(μl,(σl)2)\\theta^{l}\\sim\\mathcal{N}(\\mu^{l},(\\sigma^{l})^{2})",
+      "context_after": "QwQ^{w}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 58,
+      "latex": "Q^{w}",
+      "mathml": "<math alttext=\"Q^{w}\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS2.p1.m4\" intent=\":literal\"><semantics><msup><mi>Q</mi><mi>w</mi></msup><annotation encoding=\"application/x-tex\">Q^{w}</annotation></semantics></math>",
+      "context_before": "𝐱0w≻𝐱0l\\mathbf{x}_{0}^{w}\\succ\\mathbf{x}_{0}^{l}",
+      "context_after": "QlQ^{l}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 59,
+      "latex": "Q^{l}",
+      "mathml": "<math alttext=\"Q^{l}\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS2.p1.m5\" intent=\":literal\"><semantics><msup><mi>Q</mi><mi>l</mi></msup><annotation encoding=\"application/x-tex\">Q^{l}</annotation></semantics></math>",
+      "context_before": "QwQ^{w}",
+      "context_after": "θw\\theta^{w}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 60,
+      "latex": "\\theta^{w}",
+      "mathml": "<math alttext=\"\\theta^{w}\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS2.p1.m6\" intent=\":literal\"><semantics><msup><mi>θ</mi><mi>w</mi></msup><annotation encoding=\"application/x-tex\">\\theta^{w}</annotation></semantics></math>",
+      "context_before": "QlQ^{l}",
+      "context_after": "θl\\theta^{l}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 61,
+      "latex": "\\theta^{l}",
+      "mathml": "<math alttext=\"\\theta^{l}\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS2.p1.m7\" intent=\":literal\"><semantics><msup><mi>θ</mi><mi>l</mi></msup><annotation encoding=\"application/x-tex\">\\theta^{l}</annotation></semantics></math>",
+      "context_before": "θw\\theta^{w}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 62,
+      "latex": "\\theta^{w}\\sim\\mathcal{N}(\\mu^{w},(\\sigma^{w})^{2})",
+      "mathml": "<math alttext=\"\\theta^{w}\\sim\\mathcal{N}(\\mu^{w},(\\sigma^{w})^{2})\" class=\"ltx_Math\" display=\"inline\" id=\"Thmproblem1.p1.m1\" intent=\":literal\"><semantics><mrow><msup><mi>θ</mi><mi>w</mi></msup><mo>∼</mo><mrow><mi class=\"ltx_font_mathcaligraphic\">𝒩</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><msup><mi>μ</mi><mi>w</mi></msup><mo>,</mo><msup><mrow><mo stretchy=\"false\">(</mo><msup><mi>σ</mi><mi>w</mi></msup><mo stretchy=\"false\">)</mo></mrow><mn>2</mn></msup><mo stretchy=\"false\">)</mo></mrow></mro",
+      "context_before": "",
+      "context_after": "θl∼𝒩⁡(μl,(σl)2)\\theta^{l}\\sim\\mathcal{N}(\\mu^{l},(\\sigma^{l})^{2})",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 63,
+      "latex": "\\theta^{l}\\sim\\mathcal{N}(\\mu^{l},(\\sigma^{l})^{2})",
+      "mathml": "<math alttext=\"\\theta^{l}\\sim\\mathcal{N}(\\mu^{l},(\\sigma^{l})^{2})\" class=\"ltx_Math\" display=\"inline\" id=\"Thmproblem1.p1.m2\" intent=\":literal\"><semantics><mrow><msup><mi>θ</mi><mi>l</mi></msup><mo>∼</mo><mrow><mi class=\"ltx_font_mathcaligraphic\">𝒩</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><msup><mi>μ</mi><mi>l</mi></msup><mo>,</mo><msup><mrow><mo stretchy=\"false\">(</mo><msup><mi>σ</mi><mi>l</mi></msup><mo stretchy=\"false\">)</mo></mrow><mn>2</mn></msup><mo stretchy=\"false\">)</mo></mrow></mro",
+      "context_before": "θw∼𝒩⁡(μw,(σw)2)\\theta^{w}\\sim\\mathcal{N}(\\mu^{w},(\\sigma^{w})^{2})",
+      "context_after": "QwQ^{w}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 64,
+      "latex": "Q^{w}",
+      "mathml": "<math alttext=\"Q^{w}\" class=\"ltx_Math\" display=\"inline\" id=\"Thmproblem1.p1.m3\" intent=\":literal\"><semantics><msup><mi>Q</mi><mi>w</mi></msup><annotation encoding=\"application/x-tex\">Q^{w}</annotation></semantics></math>",
+      "context_before": "θl∼𝒩⁡(μl,(σl)2)\\theta^{l}\\sim\\mathcal{N}(\\mu^{l},(\\sigma^{l})^{2})",
+      "context_after": "QlQ^{l}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 65,
+      "latex": "Q^{l}",
+      "mathml": "<math alttext=\"Q^{l}\" class=\"ltx_Math\" display=\"inline\" id=\"Thmproblem1.p1.m4\" intent=\":literal\"><semantics><msup><mi>Q</mi><mi>l</mi></msup><annotation encoding=\"application/x-tex\">Q^{l}</annotation></semantics></math>",
+      "context_before": "QwQ^{w}",
+      "context_after": "θw\\theta^{w}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 66,
+      "latex": "\\theta^{w}",
+      "mathml": "<math alttext=\"\\theta^{w}\" class=\"ltx_Math\" display=\"inline\" id=\"Thmproblem1.p1.m5\" intent=\":literal\"><semantics><msup><mi>θ</mi><mi>w</mi></msup><annotation encoding=\"application/x-tex\">\\theta^{w}</annotation></semantics></math>",
+      "context_before": "QlQ^{l}",
+      "context_after": "θl\\theta^{l}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 67,
+      "latex": "\\theta^{l}",
+      "mathml": "<math alttext=\"\\theta^{l}\" class=\"ltx_Math\" display=\"inline\" id=\"Thmproblem1.p1.m6\" intent=\":literal\"><semantics><msup><mi>θ</mi><mi>l</mi></msup><annotation encoding=\"application/x-tex\">\\theta^{l}</annotation></semantics></math>",
+      "context_before": "θw\\theta^{w}",
+      "context_after": "Qw>QlQ^{w}>Q^{l}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 68,
+      "latex": "Q^{w}>Q^{l}",
+      "mathml": "<math alttext=\"Q^{w}&gt;Q^{l}\" class=\"ltx_Math\" display=\"inline\" id=\"Thmproblem1.p1.m7\" intent=\":literal\"><semantics><mrow><msup><mi>Q</mi><mi>w</mi></msup><mo>&gt;</mo><msup><mi>Q</mi><mi>l</mi></msup></mrow><annotation encoding=\"application/x-tex\">Q^{w}&gt;Q^{l}</annotation></semantics></math>",
+      "context_before": "θl\\theta^{l}",
+      "context_after": "𝔼⁡[Qw−Ql∣Qw>Ql]\\mathbb{E}[Q^{w}-Q^{l}\\mid Q^{w}>Q^{l}]",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 69,
+      "latex": "\\mathbb{E}[Q^{w}-Q^{l}\\mid Q^{w}>Q^{l}]",
+      "mathml": "<math alttext=\"\\mathbb{E}[Q^{w}-Q^{l}\\mid Q^{w}&gt;Q^{l}]\" class=\"ltx_Math\" display=\"inline\" id=\"Thmproblem1.p1.m8\" intent=\":literal\"><semantics><mrow><mi>𝔼</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">[</mo><mrow><mrow><msup><mi>Q</mi><mi>w</mi></msup><mo>−</mo><msup><mi>Q</mi><mi>l</mi></msup></mrow><mo lspace=\"0em\" rspace=\"0.167em\">∣</mo><mrow><msup><mi>Q</mi><mi>w</mi></msup><mo>&gt;</mo><msup><mi>Q</mi><mi>l</mi></msup></mrow></mrow><mo stretchy=\"false\">]</mo></mrow></mrow><annotation encoding=",
+      "context_before": "Qw>QlQ^{w}>Q^{l}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 70,
+      "latex": "Q^{w}",
+      "mathml": "<math alttext=\"Q^{w}\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS2.p2.m1\" intent=\":literal\"><semantics><msup><mi>Q</mi><mi>w</mi></msup><annotation encoding=\"application/x-tex\">Q^{w}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "QlQ^{l}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 71,
+      "latex": "Q^{l}",
+      "mathml": "<math alttext=\"Q^{l}\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS2.p2.m2\" intent=\":literal\"><semantics><msup><mi>Q</mi><mi>l</mi></msup><annotation encoding=\"application/x-tex\">Q^{l}</annotation></semantics></math>",
+      "context_before": "QwQ^{w}",
+      "context_after": "QD=Qw−QlQ^{D}=Q^{w}-Q^{l}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 72,
+      "latex": "Q^{D}=Q^{w}-Q^{l}",
+      "mathml": "<math alttext=\"Q^{D}=Q^{w}-Q^{l}\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS2.p2.m3\" intent=\":literal\"><semantics><mrow><msup><mi>Q</mi><mi>D</mi></msup><mo>=</mo><mrow><msup><mi>Q</mi><mi>w</mi></msup><mo>−</mo><msup><mi>Q</mi><mi>l</mi></msup></mrow></mrow><annotation encoding=\"application/x-tex\">Q^{D}=Q^{w}-Q^{l}</annotation></semantics></math>",
+      "context_before": "QlQ^{l}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 73,
+      "latex": "\\begin{gathered}Q^{D}\\sim\\mathcal{N}(\\mu_{Q^{D}},\\sigma_{Q^{D}}^{2}),\\\\\n\\text{where}\\quad\\mu_{Q^{D}}=\\mu^{w}-\\mu^{l},\\quad\\sigma_{Q^{D}}^{2}=(\\sigma^{w})^{2}+(\\sigma^{l})^{2}.\\end{gathered}",
+      "mathml": "<math alttext=\"\\begin{gathered}Q^{D}\\sim\\mathcal{N}(\\mu_{Q^{D}},\\sigma_{Q^{D}}^{2}),\\\\\n\\text{where}\\quad\\mu_{Q^{D}}=\\mu^{w}-\\mu^{l},\\quad\\sigma_{Q^{D}}^{2}=(\\sigma^{w})^{2}+(\\sigma^{l})^{2}.\\end{gathered}\" class=\"ltx_Math\" display=\"block\" id=\"S4.E10.m1\" intent=\":literal\"><semantics><mtable displaystyle=\"true\" rowspacing=\"0pt\"><mtr><mtd><mrow><mrow><msup><mi>Q</mi><mi>D</mi></msup><mo>∼</mo><mrow><mi class=\"ltx_font_mathcaligraphic\">𝒩</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><msub><mi>μ</mi",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 74,
+      "latex": "Q^{w}>Q^{l}",
+      "mathml": "<math alttext=\"Q^{w}&gt;Q^{l}\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS2.p2.m4\" intent=\":literal\"><semantics><mrow><msup><mi>Q</mi><mi>w</mi></msup><mo>&gt;</mo><msup><mi>Q</mi><mi>l</mi></msup></mrow><annotation encoding=\"application/x-tex\">Q^{w}&gt;Q^{l}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "QD>0Q^{D}>0",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 75,
+      "latex": "Q^{D}>0",
+      "mathml": "<math alttext=\"Q^{D}&gt;0\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS2.p2.m5\" intent=\":literal\"><semantics><mrow><msup><mi>Q</mi><mi>D</mi></msup><mo>&gt;</mo><mn>0</mn></mrow><annotation encoding=\"application/x-tex\">Q^{D}&gt;0</annotation></semantics></math>",
+      "context_before": "Qw>QlQ^{w}>Q^{l}",
+      "context_after": "𝔼⁡[QD∣QD>0]\\mathbb{E}[Q^{D}\\mid Q^{D}>0]",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 76,
+      "latex": "\\mathbb{E}[Q^{D}\\mid Q^{D}>0]",
+      "mathml": "<math alttext=\"\\mathbb{E}[Q^{D}\\mid Q^{D}&gt;0]\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS2.p2.m6\" intent=\":literal\"><semantics><mrow><mi>𝔼</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">[</mo><mrow><msup><mi>Q</mi><mi>D</mi></msup><mo lspace=\"0em\" rspace=\"0.167em\">∣</mo><mrow><msup><mi>Q</mi><mi>D</mi></msup><mo>&gt;</mo><mn>0</mn></mrow></mrow><mo stretchy=\"false\">]</mo></mrow></mrow><annotation encoding=\"application/x-tex\">\\mathbb{E}[Q^{D}\\mid Q^{D}&gt;0]</annotation></semantics></math>",
+      "context_before": "QD>0Q^{D}>0",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 77,
+      "latex": "X\\sim\\mathcal{N}(\\mu,\\sigma^{2})",
+      "mathml": "<math alttext=\"X\\sim\\mathcal{N}(\\mu,\\sigma^{2})\" class=\"ltx_Math\" display=\"inline\" id=\"Thmtheorem1.p1.m1\" intent=\":literal\"><semantics><mrow><mi>X</mi><mo>∼</mo><mrow><mi class=\"ltx_font_mathcaligraphic\">𝒩</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mi>μ</mi><mo>,</mo><msup><mi>σ</mi><mn>2</mn></msup><mo stretchy=\"false\">)</mo></mrow></mrow></mrow><annotation encoding=\"application/x-tex\">X\\sim\\mathcal{N}(\\mu,\\sigma^{2})</annotation></semantics></math>",
+      "context_before": "[12]",
+      "context_after": "X>aX>a",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 78,
+      "latex": "X>a",
+      "mathml": "<math alttext=\"X&gt;a\" class=\"ltx_Math\" display=\"inline\" id=\"Thmtheorem1.p1.m2\" intent=\":literal\"><semantics><mrow><mi>X</mi><mo>&gt;</mo><mi>a</mi></mrow><annotation encoding=\"application/x-tex\">X&gt;a</annotation></semantics></math>",
+      "context_before": "X∼𝒩⁡(μ,σ2)X\\sim\\mathcal{N}(\\mu,\\sigma^{2})",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 79,
+      "latex": "\\begin{gathered}\\mathbb{E}[X\\mid X>a]=\\mu+\\sigma\\,\\lambda(\\alpha),\\\\\n\\text{where}\\quad\\alpha=\\frac{a-\\mu}{\\sigma},\\quad\\lambda(\\alpha)=\\frac{\\phi(\\alpha)}{1-\\Phi(\\alpha)}.\\end{gathered}",
+      "mathml": "<math alttext=\"\\begin{gathered}\\mathbb{E}[X\\mid X&gt;a]=\\mu+\\sigma\\,\\lambda(\\alpha),\\\\\n\\text{where}\\quad\\alpha=\\frac{a-\\mu}{\\sigma},\\quad\\lambda(\\alpha)=\\frac{\\phi(\\alpha)}{1-\\Phi(\\alpha)}.\\end{gathered}\" class=\"ltx_Math\" display=\"block\" id=\"S4.E11.m1\" intent=\":literal\"><semantics><mtable displaystyle=\"true\" rowspacing=\"0pt\"><mtr><mtd><mrow><mrow><mrow><mi>𝔼</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">[</mo><mrow><mi>X</mi><mo lspace=\"0em\" rspace=\"0.167em\">∣</mo><mrow><mi>X</mi><mo>&gt;</mo><mi>a</",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 80,
+      "latex": "\\lambda(\\alpha)",
+      "mathml": "<math alttext=\"\\lambda(\\alpha)\" class=\"ltx_Math\" display=\"inline\" id=\"Thmtheorem1.p1.m3\" intent=\":literal\"><semantics><mrow><mi>λ</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mi>α</mi><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">\\lambda(\\alpha)</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "ϕ⁡(⋅)\\phi(\\cdot)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 81,
+      "latex": "\\phi(\\cdot)",
+      "mathml": "<math alttext=\"\\phi(\\cdot)\" class=\"ltx_Math\" display=\"inline\" id=\"Thmtheorem1.p1.m4\" intent=\":literal\"><semantics><mrow><mi>ϕ</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mo lspace=\"0em\" rspace=\"0em\">⋅</mo><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">\\phi(\\cdot)</annotation></semantics></math>",
+      "context_before": "λ⁡(α)\\lambda(\\alpha)",
+      "context_after": "Φ⁡(⋅)\\Phi(\\cdot)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 82,
+      "latex": "\\Phi(\\cdot)",
+      "mathml": "<math alttext=\"\\Phi(\\cdot)\" class=\"ltx_Math\" display=\"inline\" id=\"Thmtheorem1.p1.m5\" intent=\":literal\"><semantics><mrow><mi mathvariant=\"normal\">Φ</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mo lspace=\"0em\" rspace=\"0em\">⋅</mo><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">\\Phi(\\cdot)</annotation></semantics></math>",
+      "context_before": "ϕ⁡(⋅)\\phi(\\cdot)",
+      "context_after": "B",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 83,
+      "latex": "X=Q^{D}",
+      "mathml": "<math alttext=\"X=Q^{D}\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS2.p3.m1\" intent=\":literal\"><semantics><mrow><mi>X</mi><mo>=</mo><msup><mi>Q</mi><mi>D</mi></msup></mrow><annotation encoding=\"application/x-tex\">X=Q^{D}</annotation></semantics></math>",
+      "context_before": "Latent-Variable Inference via Truncated Normal Distribution",
+      "context_after": "a=0a=0",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 84,
+      "latex": "a=0",
+      "mathml": "<math alttext=\"a=0\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS2.p3.m2\" intent=\":literal\"><semantics><mrow><mi>a</mi><mo>=</mo><mn>0</mn></mrow><annotation encoding=\"application/x-tex\">a=0</annotation></semantics></math>",
+      "context_before": "X=QDX=Q^{D}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 85,
+      "latex": "\\displaystyle Q^{D*}",
+      "mathml": "<math alttext=\"\\displaystyle Q^{D*}\" class=\"ltx_Math\" display=\"inline\" id=\"S4.E12X.m2\" intent=\":literal\"><semantics><mrow><mi>Q</mi><msup><mrow></mrow><mrow><mi>D</mi><mo lspace=\"0.222em\">∗</mo></mrow></msup></mrow><annotation encoding=\"application/x-tex\">\\displaystyle Q^{D*}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 86,
+      "latex": "\\displaystyle=\\mathbb{E}[Q^{D}\\mid Q^{D}>0]=\\mu_{Q^{D}}+\\sigma_{Q^{D}}\\cdot\\frac{\\phi\\!\\left(\\frac{-\\mu_{Q^{D}}}{\\sigma_{Q^{D}}}\\right)}{1-\\Phi\\!\\left(\\frac{-\\mu_{Q^{D}}}{\\sigma_{Q^{D}}}\\right)}",
+      "mathml": "<math alttext=\"\\displaystyle=\\mathbb{E}[Q^{D}\\mid Q^{D}&gt;0]=\\mu_{Q^{D}}+\\sigma_{Q^{D}}\\cdot\\frac{\\phi\\!\\left(\\frac{-\\mu_{Q^{D}}}{\\sigma_{Q^{D}}}\\right)}{1-\\Phi\\!\\left(\\frac{-\\mu_{Q^{D}}}{\\sigma_{Q^{D}}}\\right)}\" class=\"ltx_Math\" display=\"inline\" id=\"S4.E12X.m3\" intent=\":literal\"><semantics><mrow><mphantom></mphantom><mo>=</mo><mrow><mi>𝔼</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">[</mo><mrow><msup><mi>Q</mi><mi>D</mi></msup><mo lspace=\"0em\" rspace=\"0.167em\">∣</mo><mrow><msup><mi>Q</mi><mi>D</mi>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 87,
+      "latex": "\\displaystyle=(\\mu^{w}-\\mu^{l})+\\sqrt{(\\sigma^{w})^{2}+(\\sigma^{l})^{2}}\\cdot\\frac{\\phi\\!\\left(\\frac{-(\\mu^{w}-\\mu^{l})}{\\sqrt{(\\sigma^{w})^{2}+(\\sigma^{l})^{2}}}\\right)}{1-\\Phi\\!\\left(\\frac{-(\\mu^{w}-\\mu^{l})}{\\sqrt{(\\sigma^{w})^{2}+(\\sigma^{l})^{2}}}\\right)}.",
+      "mathml": "<math alttext=\"\\displaystyle=(\\mu^{w}-\\mu^{l})+\\sqrt{(\\sigma^{w})^{2}+(\\sigma^{l})^{2}}\\cdot\\frac{\\phi\\!\\left(\\frac{-(\\mu^{w}-\\mu^{l})}{\\sqrt{(\\sigma^{w})^{2}+(\\sigma^{l})^{2}}}\\right)}{1-\\Phi\\!\\left(\\frac{-(\\mu^{w}-\\mu^{l})}{\\sqrt{(\\sigma^{w})^{2}+(\\sigma^{l})^{2}}}\\right)}.\" class=\"ltx_Math\" display=\"inline\" id=\"S4.E12Xa.m2\" intent=\":literal\"><semantics><mrow><mrow><mphantom></mphantom><mo>=</mo><mrow><mrow><mo stretchy=\"false\">(</mo><mrow><msup><mi>μ</mi><mi>w</mi></msup><mo>−</mo><msup><mi>μ",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 88,
+      "latex": "Q^{w}>Q^{l}",
+      "mathml": "<math alttext=\"Q^{w}&gt;Q^{l}\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS2.p4.m1\" intent=\":literal\"><semantics><mrow><msup><mi>Q</mi><mi>w</mi></msup><mo>&gt;</mo><msup><mi>Q</mi><mi>l</mi></msup></mrow><annotation encoding=\"application/x-tex\">Q^{w}&gt;Q^{l}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "μw≫μl\\mu^{w}\\gg\\mu^{l}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 89,
+      "latex": "\\mu^{w}\\gg\\mu^{l}",
+      "mathml": "<math alttext=\"\\mu^{w}\\gg\\mu^{l}\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS2.p4.m2\" intent=\":literal\"><semantics><mrow><msup><mi>μ</mi><mi>w</mi></msup><mo>≫</mo><msup><mi>μ</mi><mi>l</mi></msup></mrow><annotation encoding=\"application/x-tex\">\\mu^{w}\\gg\\mu^{l}</annotation></semantics></math>",
+      "context_before": "Qw>QlQ^{w}>Q^{l}",
+      "context_after": "μw<μl\\mu^{w}<\\mu^{l}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 90,
+      "latex": "\\mu^{w}<\\mu^{l}",
+      "mathml": "<math alttext=\"\\mu^{w}&lt;\\mu^{l}\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS2.p4.m3\" intent=\":literal\"><semantics><mrow><msup><mi>μ</mi><mi>w</mi></msup><mo>&lt;</mo><msup><mi>μ</mi><mi>l</mi></msup></mrow><annotation encoding=\"application/x-tex\">\\mu^{w}&lt;\\mu^{l}</annotation></semantics></math>",
+      "context_before": "μw≫μl\\mu^{w}\\gg\\mu^{l}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 91,
+      "latex": "Q^{D*}",
+      "mathml": "<math alttext=\"Q^{D*}\" class=\"ltx_math_unparsed\" display=\"inline\" id=\"S4.SS3.p1.m1\" intent=\":literal\"><semantics><mrow><mi>Q</mi><msup><mrow></mrow><mrow><mi>D</mi><mo lspace=\"0.222em\">∗</mo></mrow></msup></mrow><annotation encoding=\"application/x-tex\">Q^{D*}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "QD∗Q^{D*}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 92,
+      "latex": "Q^{D*}",
+      "mathml": "<math alttext=\"Q^{D*}\" class=\"ltx_math_unparsed\" display=\"inline\" id=\"S4.SS3.p1.m2\" intent=\":literal\"><semantics><mrow><mi>Q</mi><msup><mrow></mrow><mrow><mi>D</mi><mo lspace=\"0.222em\">∗</mo></mrow></msup></mrow><annotation encoding=\"application/x-tex\">Q^{D*}</annotation></semantics></math>",
+      "context_before": "QD∗Q^{D*}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 93,
+      "latex": "p_{\\mathrm{BT}}\\left(\\mathbf{x}_{0}^{w}\\succ\\mathbf{x}_{0}^{l}\\mid\\mathbf{c},Q^{D}\\right)=\\sigma\\left(r\\left(\\mathbf{c},\\mathbf{x}_{0}^{w}\\right)-r\\left(\\mathbf{c},\\mathbf{x}_{0}^{l}\\right)-Q^{D*}\\right).",
+      "mathml": "<math alttext=\"p_{\\mathrm{BT}}\\left(\\mathbf{x}_{0}^{w}\\succ\\mathbf{x}_{0}^{l}\\mid\\mathbf{c},Q^{D}\\right)=\\sigma\\left(r\\left(\\mathbf{c},\\mathbf{x}_{0}^{w}\\right)-r\\left(\\mathbf{c},\\mathbf{x}_{0}^{l}\\right)-Q^{D*}\\right).\" class=\"ltx_math_unparsed\" display=\"block\" id=\"S4.E13.m1\" intent=\":literal\"><semantics><mrow><msub><mi>p</mi><mi>BT</mi></msub><mrow><mo>(</mo><msubsup><mi>𝐱</mi><mn>0</mn><mi>w</mi></msubsup><mo>≻</mo><msubsup><mi>𝐱</mi><mn>0</mn><mi>l</mi></msubsup><mo lspace=\"0em\" rspace=\"0.16",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 94,
+      "latex": "\\displaystyle\\mathcal{L}_{\\text{ArenaPO}}(\\theta)=-\\mathbb{E}_{\\mathbf{c},\\mathbf{x}_{0}^{w},\\mathbf{x}_{0}^{l},t}\\Big[\\log\\sigma\\Big(\\beta T\\omega(\\lambda_{t})(\\delta_{\\theta}(\\mathbf{c},\\mathbf{x}^{w},t)-\\delta_{\\theta}(\\mathbf{c},\\mathbf{x}^{l},t)-\\gamma Q^{D*})\\Big)\\Big],",
+      "mathml": "<math alttext=\"\\displaystyle\\mathcal{L}_{\\text{ArenaPO}}(\\theta)=-\\mathbb{E}_{\\mathbf{c},\\mathbf{x}_{0}^{w},\\mathbf{x}_{0}^{l},t}\\Big[\\log\\sigma\\Big(\\beta T\\omega(\\lambda_{t})(\\delta_{\\theta}(\\mathbf{c},\\mathbf{x}^{w},t)-\\delta_{\\theta}(\\mathbf{c},\\mathbf{x}^{l},t)-\\gamma Q^{D*})\\Big)\\Big],\" class=\"ltx_Math\" display=\"inline\" id=\"S4.E14X.m2\" intent=\":literal\"><semantics><mrow><mi class=\"ltx_font_mathcaligraphic\">ℒ</mi><msub><mrow></mrow><mtext>ArenaPO</mtext></msub><mo stretchy=\"false\">(</mo><mi>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 95,
+      "latex": "\\gamma",
+      "mathml": "<math alttext=\"\\gamma\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS3.p1.m3\" intent=\":literal\"><semantics><mi>γ</mi><annotation encoding=\"application/x-tex\">\\gamma</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "QD∗Q^{D*}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 96,
+      "latex": "Q^{D*}",
+      "mathml": "<math alttext=\"Q^{D*}\" class=\"ltx_math_unparsed\" display=\"inline\" id=\"S4.SS3.p1.m4\" intent=\":literal\"><semantics><mrow><mi>Q</mi><msup><mrow></mrow><mrow><mi>D</mi><mo lspace=\"0.222em\">∗</mo></mrow></msup></mrow><annotation encoding=\"application/x-tex\">Q^{D*}</annotation></semantics></math>",
+      "context_before": "γ\\gamma",
+      "context_after": "δθ\\delta_{\\theta}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 97,
+      "latex": "\\delta_{\\theta}",
+      "mathml": "<math alttext=\"\\delta_{\\theta}\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS3.p1.m5\" intent=\":literal\"><semantics><msub><mi>δ</mi><mi>θ</mi></msub><annotation encoding=\"application/x-tex\">\\delta_{\\theta}</annotation></semantics></math>",
+      "context_before": "QD∗Q^{D*}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 98,
+      "latex": "1\\times 10^{-8}",
+      "mathml": "<math alttext=\"1\\times 10^{-8}\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS1.p4.m1\" intent=\":literal\"><semantics><mrow><mn>1</mn><mo lspace=\"0.222em\" rspace=\"0.222em\">×</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>8</mn></mrow></msup></mrow><annotation encoding=\"application/x-tex\">1\\times 10^{-8}</annotation></semantics></math>",
+      "context_before": "Implementation Details",
+      "context_after": "1×10−91\\times 10^{-9}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 99,
+      "latex": "1\\times 10^{-9}",
+      "mathml": "<math alttext=\"1\\times 10^{-9}\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS1.p4.m2\" intent=\":literal\"><semantics><mrow><mn>1</mn><mo lspace=\"0.222em\" rspace=\"0.222em\">×</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>9</mn></mrow></msup></mrow><annotation encoding=\"application/x-tex\">1\\times 10^{-9}</annotation></semantics></math>",
+      "context_before": "1×10−81\\times 10^{-8}",
+      "context_after": "5.5",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 100,
+      "latex": "\\gamma",
+      "mathml": "<math alttext=\"\\gamma\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS1.p4.m3\" intent=\":literal\"><semantics><mi>γ</mi><annotation encoding=\"application/x-tex\">\\gamma</annotation></semantics></math>",
+      "context_before": "5.5",
+      "context_after": "1×10−31\\times 10^{-3}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 101,
+      "latex": "1\\times 10^{-3}",
+      "mathml": "<math alttext=\"1\\times 10^{-3}\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS1.p4.m4\" intent=\":literal\"><semantics><mrow><mn>1</mn><mo lspace=\"0.222em\" rspace=\"0.222em\">×</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>3</mn></mrow></msup></mrow><annotation encoding=\"application/x-tex\">1\\times 10^{-3}</annotation></semantics></math>",
+      "context_before": "γ\\gamma",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 102,
+      "latex": "(\\mu,\\sigma^{2})",
+      "mathml": "<math alttext=\"(\\mu,\\sigma^{2})\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS2.p1.m1\" intent=\":literal\"><semantics><mrow><mo stretchy=\"false\">(</mo><mi>μ</mi><mo>,</mo><msup><mi>σ</mi><mn>2</mn></msup><mo stretchy=\"false\">)</mo></mrow><annotation encoding=\"application/x-tex\">(\\mu,\\sigma^{2})</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "C",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 103,
+      "latex": "\\mu/\\sigma",
+      "mathml": "<math alttext=\"\\mu/\\sigma\" class=\"ltx_Math\" display=\"inline\" id=\"S5.T1.m1\" intent=\":literal\"><semantics><mrow><mi>μ</mi><mo>/</mo><mi>σ</mi></mrow><annotation encoding=\"application/x-tex\">\\mu/\\sigma</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 104,
+      "latex": "\\mu/\\sigma",
+      "mathml": "<math alttext=\"\\mu/\\sigma\" class=\"ltx_Math\" display=\"inline\" id=\"S5.T1.m2\" intent=\":literal\"><semantics><mrow><mi>μ</mi><mo>/</mo><mi>σ</mi></mrow><annotation encoding=\"application/x-tex\">\\mu/\\sigma</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 105,
+      "latex": "\\mu",
+      "mathml": "<math alttext=\"\\mu\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS2.p2.m1\" intent=\":literal\"><semantics><mi>μ</mi><annotation encoding=\"application/x-tex\">\\mu</annotation></semantics></math>",
+      "context_before": "1",
+      "context_after": "μ\\mu",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 106,
+      "latex": "\\mu",
+      "mathml": "<math alttext=\"\\mu\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS2.p2.m2\" intent=\":literal\"><semantics><mi>μ</mi><annotation encoding=\"application/x-tex\">\\mu</annotation></semantics></math>",
+      "context_before": "μ\\mu",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 107,
+      "latex": "Q^{D}",
+      "mathml": "<math alttext=\"Q^{D}\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS5.p4.m1\" intent=\":literal\"><semantics><msup><mi>Q</mi><mi>D</mi></msup><annotation encoding=\"application/x-tex\">Q^{D}</annotation></semantics></math>",
+      "context_before": "5",
+      "context_after": "[19]",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 108,
+      "latex": "\\gamma",
+      "mathml": "<math alttext=\"\\gamma\" class=\"ltx_Math\" display=\"inline\" id=\"S5.F7.m2\" intent=\":literal\"><semantics><mi>γ</mi><annotation encoding=\"application/x-tex\">\\gamma</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 109,
+      "latex": "\\gamma",
+      "mathml": "<math alttext=\"\\gamma\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS5.p5.m1\" intent=\":literal\"><semantics><mi>γ</mi><annotation encoding=\"application/x-tex\">\\gamma</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 110,
+      "latex": "Q^{D}",
+      "mathml": "<math alttext=\"Q^{D}\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS5.p5.m2\" intent=\":literal\"><semantics><msup><mi>Q</mi><mi>D</mi></msup><annotation encoding=\"application/x-tex\">Q^{D}</annotation></semantics></math>",
+      "context_before": "Effect of Scaling Coefficientγ\\gamma",
+      "context_after": "γ\\gamma",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 111,
+      "latex": "\\gamma",
+      "mathml": "<math alttext=\"\\gamma\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS5.p5.m3\" intent=\":literal\"><semantics><mi>γ</mi><annotation encoding=\"application/x-tex\">\\gamma</annotation></semantics></math>",
+      "context_before": "QDQ^{D}",
+      "context_after": "γ\\gamma",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 112,
+      "latex": "\\gamma",
+      "mathml": "<math alttext=\"\\gamma\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS5.p5.m4\" intent=\":literal\"><semantics><mi>γ</mi><annotation encoding=\"application/x-tex\">\\gamma</annotation></semantics></math>",
+      "context_before": "γ\\gamma",
+      "context_after": "7",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 113,
+      "latex": "\\gamma",
+      "mathml": "<math alttext=\"\\gamma\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS5.p5.m5\" intent=\":literal\"><semantics><mi>γ</mi><annotation encoding=\"application/x-tex\">\\gamma</annotation></semantics></math>",
+      "context_before": "7",
+      "context_after": "1×10−31\\times 10^{-3}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 114,
+      "latex": "1\\times 10^{-3}",
+      "mathml": "<math alttext=\"1\\times 10^{-3}\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS5.p5.m6\" intent=\":literal\"><semantics><mrow><mn>1</mn><mo lspace=\"0.222em\" rspace=\"0.222em\">×</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>3</mn></mrow></msup></mrow><annotation encoding=\"application/x-tex\">1\\times 10^{-3}</annotation></semantics></math>",
+      "context_before": "γ\\gamma",
+      "context_after": "1×10−31\\times 10^{-3}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 115,
+      "latex": "1\\times 10^{-3}",
+      "mathml": "<math alttext=\"1\\times 10^{-3}\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS5.p5.m7\" intent=\":literal\"><semantics><mrow><mn>1</mn><mo lspace=\"0.222em\" rspace=\"0.222em\">×</mo><msup><mn>10</mn><mrow><mo>−</mo><mn>3</mn></mrow></msup></mrow><annotation encoding=\"application/x-tex\">1\\times 10^{-3}</annotation></semantics></math>",
+      "context_before": "1×10−31\\times 10^{-3}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 116,
+      "latex": "D",
+      "mathml": "<math alttext=\"D\" class=\"ltx_Math\" display=\"inline\" id=\"A1.p1.m1\" intent=\":literal\"><semantics><mi>D</mi><annotation encoding=\"application/x-tex\">D</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "M1M_{1}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 117,
+      "latex": "M_{1}",
+      "mathml": "<math alttext=\"M_{1}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.p1.m2\" intent=\":literal\"><semantics><msub><mi>M</mi><mn>1</mn></msub><annotation encoding=\"application/x-tex\">M_{1}</annotation></semantics></math>",
+      "context_before": "DD",
+      "context_after": "M2M_{2}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 118,
+      "latex": "M_{2}",
+      "mathml": "<math alttext=\"M_{2}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.p1.m3\" intent=\":literal\"><semantics><msub><mi>M</mi><mn>2</mn></msub><annotation encoding=\"application/x-tex\">M_{2}</annotation></semantics></math>",
+      "context_before": "M1M_{1}",
+      "context_after": "θi∼𝒩⁡(μi,σi2)\\theta_{i}\\sim\\mathcal{N}(\\mu_{i},\\sigma_{i}^{2})",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 119,
+      "latex": "\\theta_{i}\\sim\\mathcal{N}(\\mu_{i},\\sigma_{i}^{2})",
+      "mathml": "<math alttext=\"\\theta_{i}\\sim\\mathcal{N}(\\mu_{i},\\sigma_{i}^{2})\" class=\"ltx_Math\" display=\"inline\" id=\"A1.p1.m4\" intent=\":literal\"><semantics><mrow><msub><mi>θ</mi><mi>i</mi></msub><mo>∼</mo><mrow><mi class=\"ltx_font_mathcaligraphic\">𝒩</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><msub><mi>μ</mi><mi>i</mi></msub><mo>,</mo><msubsup><mi>σ</mi><mi>i</mi><mn>2</mn></msubsup><mo stretchy=\"false\">)</mo></mrow></mrow></mrow><annotation encoding=\"application/x-tex\">\\theta_{i}\\sim\\mathcal{N}(\\mu_{i},\\",
+      "context_before": "M2M_{2}",
+      "context_after": "θ1\\theta_{1}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 120,
+      "latex": "\\theta_{1}",
+      "mathml": "<math alttext=\"\\theta_{1}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.p1.m5\" intent=\":literal\"><semantics><msub><mi>θ</mi><mn>1</mn></msub><annotation encoding=\"application/x-tex\">\\theta_{1}</annotation></semantics></math>",
+      "context_before": "θi∼𝒩⁡(μi,σi2)\\theta_{i}\\sim\\mathcal{N}(\\mu_{i},\\sigma_{i}^{2})",
+      "context_after": "θ2\\theta_{2}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 121,
+      "latex": "\\theta_{2}",
+      "mathml": "<math alttext=\"\\theta_{2}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.p1.m6\" intent=\":literal\"><semantics><msub><mi>θ</mi><mn>2</mn></msub><annotation encoding=\"application/x-tex\">\\theta_{2}</annotation></semantics></math>",
+      "context_before": "θ1\\theta_{1}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 122,
+      "latex": "P(D\\mid\\theta_{1},\\theta_{2})=P(X_{1}>X_{2})=\\Phi\\left(\\frac{\\theta_{1}-\\theta_{2}}{\\sqrt{\\beta_{1}^{2}+\\beta_{2}^{2}}}\\right),",
+      "mathml": "<math alttext=\"P(D\\mid\\theta_{1},\\theta_{2})=P(X_{1}&gt;X_{2})=\\Phi\\left(\\frac{\\theta_{1}-\\theta_{2}}{\\sqrt{\\beta_{1}^{2}+\\beta_{2}^{2}}}\\right),\" class=\"ltx_Math\" display=\"block\" id=\"A1.Ex1.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><mi>P</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mi>D</mi><mo fence=\"true\" lspace=\"0em\" rspace=\"0em\">∣</mo><mrow><msub><mi>θ</mi><mn>1</mn></msub><mo>,</mo><msub><mi>θ</mi><mn>2</mn></msub></mrow><mo stretchy=\"false\">)</mo></mrow></mrow><mo>=</mo><mrow>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 123,
+      "latex": "\\Phi(\\cdot)",
+      "mathml": "<math alttext=\"\\Phi(\\cdot)\" class=\"ltx_Math\" display=\"inline\" id=\"A1.p1.m7\" intent=\":literal\"><semantics><mrow><mi mathvariant=\"normal\">Φ</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mo lspace=\"0em\" rspace=\"0em\">⋅</mo><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">\\Phi(\\cdot)</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "ϕ⁡(⋅)\\phi(\\cdot)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 124,
+      "latex": "\\phi(\\cdot)",
+      "mathml": "<math alttext=\"\\phi(\\cdot)\" class=\"ltx_Math\" display=\"inline\" id=\"A1.p1.m8\" intent=\":literal\"><semantics><mrow><mi>ϕ</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mo lspace=\"0em\" rspace=\"0em\">⋅</mo><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">\\phi(\\cdot)</annotation></semantics></math>",
+      "context_before": "Φ⁡(⋅)\\Phi(\\cdot)",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 125,
+      "latex": "\\Phi(x)=\\int_{-\\infty}^{x}\\phi(u)\\,du,\\qquad\\phi(x)=\\frac{1}{\\sqrt{2\\pi}}e^{-x^{2}/2}.",
+      "mathml": "<math alttext=\"\\Phi(x)=\\int_{-\\infty}^{x}\\phi(u)\\,du,\\qquad\\phi(x)=\\frac{1}{\\sqrt{2\\pi}}e^{-x^{2}/2}.\" class=\"ltx_math_unparsed\" display=\"block\" id=\"A1.Ex2.m1\" intent=\":literal\"><semantics><mrow><mi mathvariant=\"normal\">Φ</mi><mrow><mo stretchy=\"false\">(</mo><mi>x</mi><mo stretchy=\"false\">)</mo></mrow><mo rspace=\"0.111em\">=</mo><msubsup><mo>∫</mo><mrow><mo>−</mo><mi mathvariant=\"normal\">∞</mi></mrow><mi>x</mi></msubsup><mi>ϕ</mi><mrow><mo stretchy=\"false\">(</mo><mi>u</mi><mo rspace=\"0.170em\" str",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 126,
+      "latex": "\\theta_{1}\\sim\\mathcal{N}(\\mu_{1},\\sigma_{1}^{2})",
+      "mathml": "<math alttext=\"\\theta_{1}\\sim\\mathcal{N}(\\mu_{1},\\sigma_{1}^{2})\" class=\"ltx_Math\" display=\"inline\" id=\"A1.p2.m1\" intent=\":literal\"><semantics><mrow><msub><mi>θ</mi><mn>1</mn></msub><mo>∼</mo><mrow><mi class=\"ltx_font_mathcaligraphic\">𝒩</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><msub><mi>μ</mi><mn>1</mn></msub><mo>,</mo><msubsup><mi>σ</mi><mn>1</mn><mn>2</mn></msubsup><mo stretchy=\"false\">)</mo></mrow></mrow></mrow><annotation encoding=\"application/x-tex\">\\theta_{1}\\sim\\mathcal{N}(\\mu_{1},\\",
+      "context_before": "",
+      "context_after": "θ2∼𝒩⁡(μ2,σ22)\\theta_{2}\\sim\\mathcal{N}(\\mu_{2},\\sigma_{2}^{2})",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 127,
+      "latex": "\\theta_{2}\\sim\\mathcal{N}(\\mu_{2},\\sigma_{2}^{2})",
+      "mathml": "<math alttext=\"\\theta_{2}\\sim\\mathcal{N}(\\mu_{2},\\sigma_{2}^{2})\" class=\"ltx_Math\" display=\"inline\" id=\"A1.p2.m2\" intent=\":literal\"><semantics><mrow><msub><mi>θ</mi><mn>2</mn></msub><mo>∼</mo><mrow><mi class=\"ltx_font_mathcaligraphic\">𝒩</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><msub><mi>μ</mi><mn>2</mn></msub><mo>,</mo><msubsup><mi>σ</mi><mn>2</mn><mn>2</mn></msubsup><mo stretchy=\"false\">)</mo></mrow></mrow></mrow><annotation encoding=\"application/x-tex\">\\theta_{2}\\sim\\mathcal{N}(\\mu_{2},\\",
+      "context_before": "θ1∼𝒩⁡(μ1,σ12)\\theta_{1}\\sim\\mathcal{N}(\\mu_{1},\\sigma_{1}^{2})",
+      "context_after": "β\\beta",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 128,
+      "latex": "\\beta",
+      "mathml": "<math alttext=\"\\beta\" class=\"ltx_Math\" display=\"inline\" id=\"A1.p2.m3\" intent=\":literal\"><semantics><mi>β</mi><annotation encoding=\"application/x-tex\">\\beta</annotation></semantics></math>",
+      "context_before": "θ2∼𝒩⁡(μ2,σ22)\\theta_{2}\\sim\\mathcal{N}(\\mu_{2},\\sigma_{2}^{2})",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 129,
+      "latex": "P(\\theta_{1},\\theta_{2}\\mid D)\\propto\\phi\\!\\left(\\frac{\\theta_{1}-\\mu_{1}}{\\sigma_{1}}\\right)\\phi\\!\\left(\\frac{\\theta_{2}-\\mu_{2}}{\\sigma_{2}}\\right)\\Phi\\!\\left(\\frac{\\theta_{1}-\\theta_{2}}{\\sqrt{\\beta_{1}^{2}+\\beta_{2}^{2}}}\\right).",
+      "mathml": "<math alttext=\"P(\\theta_{1},\\theta_{2}\\mid D)\\propto\\phi\\!\\left(\\frac{\\theta_{1}-\\mu_{1}}{\\sigma_{1}}\\right)\\phi\\!\\left(\\frac{\\theta_{2}-\\mu_{2}}{\\sigma_{2}}\\right)\\Phi\\!\\left(\\frac{\\theta_{1}-\\theta_{2}}{\\sqrt{\\beta_{1}^{2}+\\beta_{2}^{2}}}\\right).\" class=\"ltx_Math\" display=\"block\" id=\"A1.Ex3.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><mi>P</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mrow><msub><mi>θ</mi><mn>1</mn></msub><mo>,</mo><msub><mi>θ</mi><mn>2</mn></msub></mrow><mo fence=\"tr",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 130,
+      "latex": "\\theta_{2}",
+      "mathml": "<math alttext=\"\\theta_{2}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.p3.m1\" intent=\":literal\"><semantics><msub><mi>θ</mi><mn>2</mn></msub><annotation encoding=\"application/x-tex\">\\theta_{2}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "θ1\\theta_{1}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 131,
+      "latex": "\\theta_{1}",
+      "mathml": "<math alttext=\"\\theta_{1}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.p3.m2\" intent=\":literal\"><semantics><msub><mi>θ</mi><mn>1</mn></msub><annotation encoding=\"application/x-tex\">\\theta_{1}</annotation></semantics></math>",
+      "context_before": "θ2\\theta_{2}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 132,
+      "latex": "P(\\theta_{1}\\mid D)\\propto\\phi\\!\\left(\\frac{\\theta_{1}-\\mu_{1}}{\\sigma_{1}}\\right)\\Phi\\!\\left(\\frac{\\theta_{1}-\\mu_{2}}{\\sqrt{\\beta_{1}^{2}+\\beta_{2}^{2}+\\sigma_{2}^{2}}}\\right).",
+      "mathml": "<math alttext=\"P(\\theta_{1}\\mid D)\\propto\\phi\\!\\left(\\frac{\\theta_{1}-\\mu_{1}}{\\sigma_{1}}\\right)\\Phi\\!\\left(\\frac{\\theta_{1}-\\mu_{2}}{\\sqrt{\\beta_{1}^{2}+\\beta_{2}^{2}+\\sigma_{2}^{2}}}\\right).\" class=\"ltx_Math\" display=\"block\" id=\"A1.Ex4.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><mi>P</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><msub><mi>θ</mi><mn>1</mn></msub><mo fence=\"true\" lspace=\"0em\" rspace=\"0em\">∣</mo><mi>D</mi><mo stretchy=\"false\">)</mo></mrow></mrow><mo>∝</mo><mrow><mrow><m",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 133,
+      "latex": "\\theta_{1}",
+      "mathml": "<math alttext=\"\\theta_{1}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.p4.m1\" intent=\":literal\"><semantics><msub><mi>θ</mi><mn>1</mn></msub><annotation encoding=\"application/x-tex\">\\theta_{1}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 134,
+      "latex": "\\displaystyle\\hat{\\mu}_{1}=\\mathbb{E}[\\theta_{1}\\mid D]",
+      "mathml": "<math alttext=\"\\displaystyle\\hat{\\mu}_{1}=\\mathbb{E}[\\theta_{1}\\mid D]\" class=\"ltx_Math\" display=\"inline\" id=\"A1.Ex5X.m2\" intent=\":literal\"><semantics><mrow><msub><mover accent=\"true\"><mi>μ</mi><mo>^</mo></mover><mn>1</mn></msub><mo>=</mo><mrow><mi>𝔼</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">[</mo><mrow><msub><mi>θ</mi><mn>1</mn></msub><mo lspace=\"0em\" rspace=\"0.167em\">∣</mo><mi>D</mi></mrow><mo stretchy=\"false\">]</mo></mrow></mrow></mrow><annotation encoding=\"application/x-tex\">\\displaystyle\\hat",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 135,
+      "latex": "\\displaystyle=\\mu_{1}+\\frac{\\sigma_{1}^{2}}{\\sqrt{\\sum(\\beta_{i}^{2}+\\sigma_{i}^{2})}}\\frac{\\phi\\!\\left(\\frac{\\mu_{1}-\\mu_{2}}{\\sqrt{\\sum(\\beta_{i}^{2}+\\sigma_{i}^{2})}}\\right)}{\\Phi\\!\\left(\\frac{\\mu_{1}-\\mu_{2}}{\\sqrt{\\sum(\\beta_{i}^{2}+\\sigma_{i}^{2})}}\\right)}",
+      "mathml": "<math alttext=\"\\displaystyle=\\mu_{1}+\\frac{\\sigma_{1}^{2}}{\\sqrt{\\sum(\\beta_{i}^{2}+\\sigma_{i}^{2})}}\\frac{\\phi\\!\\left(\\frac{\\mu_{1}-\\mu_{2}}{\\sqrt{\\sum(\\beta_{i}^{2}+\\sigma_{i}^{2})}}\\right)}{\\Phi\\!\\left(\\frac{\\mu_{1}-\\mu_{2}}{\\sqrt{\\sum(\\beta_{i}^{2}+\\sigma_{i}^{2})}}\\right)}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.Ex5X.m3\" intent=\":literal\"><semantics><mrow><mphantom></mphantom><mo>=</mo><mrow><msub><mi>μ</mi><mn>1</mn></msub><mo>+</mo><mrow><mstyle displaystyle=\"true\"><mfrac><msubsup><mi>σ",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 136,
+      "latex": "\\displaystyle=\\mu_{1}+\\frac{\\sigma_{1}^{2}}{c_{12}}\\,\\mathcal{V}\\!\\left(\\frac{\\mu_{1}-\\mu_{2}}{c_{12}}\\right),",
+      "mathml": "<math alttext=\"\\displaystyle=\\mu_{1}+\\frac{\\sigma_{1}^{2}}{c_{12}}\\,\\mathcal{V}\\!\\left(\\frac{\\mu_{1}-\\mu_{2}}{c_{12}}\\right),\" class=\"ltx_Math\" display=\"inline\" id=\"A1.Ex5Xa.m2\" intent=\":literal\"><semantics><mrow><mrow><mphantom></mphantom><mo>=</mo><mrow><msub><mi>μ</mi><mn>1</mn></msub><mo>+</mo><mrow><mstyle displaystyle=\"true\"><mfrac><msubsup><mi>σ</mi><mn>1</mn><mn>2</mn></msubsup><msub><mi>c</mi><mn>12</mn></msub></mfrac></mstyle><mo lspace=\"0.170em\" rspace=\"0em\">​</mo><mpadded style=\"widt",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 137,
+      "latex": "\\mathcal{V}(x)=\\frac{\\phi(x)}{\\Phi(x)},\\qquad c_{ij}^{2}=\\sum(\\beta_{i}^{2}+\\sigma_{i}^{2}).",
+      "mathml": "<math alttext=\"\\mathcal{V}(x)=\\frac{\\phi(x)}{\\Phi(x)},\\qquad c_{ij}^{2}=\\sum(\\beta_{i}^{2}+\\sigma_{i}^{2}).\" class=\"ltx_Math\" display=\"block\" id=\"A1.Ex6.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><mrow><mi class=\"ltx_font_mathcaligraphic\">𝒱</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mi>x</mi><mo stretchy=\"false\">)</mo></mrow></mrow><mo>=</mo><mfrac><mrow><mi>ϕ</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mi>x</mi><mo stretchy=\"false\">)</mo></mrow></mrow><mrow><mi mathvariant=\"nor",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 138,
+      "latex": "\\displaystyle\\hat{\\sigma}_{1}^{2}=\\mathrm{Var}[\\theta_{1}\\mid D]",
+      "mathml": "<math alttext=\"\\displaystyle\\hat{\\sigma}_{1}^{2}=\\mathrm{Var}[\\theta_{1}\\mid D]\" class=\"ltx_Math\" display=\"inline\" id=\"A1.Ex7X.m2\" intent=\":literal\"><semantics><mrow><msubsup><mover accent=\"true\"><mi>σ</mi><mo>^</mo></mover><mn>1</mn><mn>2</mn></msubsup><mo>=</mo><mrow><mi>Var</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">[</mo><mrow><msub><mi>θ</mi><mn>1</mn></msub><mo lspace=\"0em\" rspace=\"0.167em\">∣</mo><mi>D</mi></mrow><mo stretchy=\"false\">]</mo></mrow></mrow></mrow><annotation encoding=\"applicati",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 139,
+      "latex": "\\displaystyle=\\sigma_{1}^{2}\\left(1-\\frac{\\sigma_{1}^{2}}{\\sum(\\beta_{i}^{2}+\\sigma_{i}^{2})}\\mathcal{W}\\!\\left(\\frac{\\mu_{1}-\\mu_{2}}{\\sqrt{\\sum(\\beta_{i}^{2}+\\sigma_{i}^{2})}}\\right)\\right)",
+      "mathml": "<math alttext=\"\\displaystyle=\\sigma_{1}^{2}\\left(1-\\frac{\\sigma_{1}^{2}}{\\sum(\\beta_{i}^{2}+\\sigma_{i}^{2})}\\mathcal{W}\\!\\left(\\frac{\\mu_{1}-\\mu_{2}}{\\sqrt{\\sum(\\beta_{i}^{2}+\\sigma_{i}^{2})}}\\right)\\right)\" class=\"ltx_Math\" display=\"inline\" id=\"A1.Ex7X.m3\" intent=\":literal\"><semantics><mrow><mphantom></mphantom><mo>=</mo><mrow><msubsup><mi>σ</mi><mn>1</mn><mn>2</mn></msubsup><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo>(</mo><mrow><mn>1</mn><mo>−</mo><mrow><mstyle displaystyle=\"true\"><mfrac><m",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 140,
+      "latex": "\\displaystyle=\\sigma_{1}^{2}\\left(1-\\frac{\\sigma_{1}^{2}}{c_{12}^{2}}\\mathcal{W}\\!\\left(\\frac{\\mu_{1}-\\mu_{2}}{c_{12}}\\right)\\right),",
+      "mathml": "<math alttext=\"\\displaystyle=\\sigma_{1}^{2}\\left(1-\\frac{\\sigma_{1}^{2}}{c_{12}^{2}}\\mathcal{W}\\!\\left(\\frac{\\mu_{1}-\\mu_{2}}{c_{12}}\\right)\\right),\" class=\"ltx_Math\" display=\"inline\" id=\"A1.Ex7Xa.m2\" intent=\":literal\"><semantics><mrow><mrow><mphantom></mphantom><mo>=</mo><mrow><msubsup><mi>σ</mi><mn>1</mn><mn>2</mn></msubsup><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo>(</mo><mrow><mn>1</mn><mo>−</mo><mrow><mstyle displaystyle=\"true\"><mfrac><msubsup><mi>σ</mi><mn>1</mn><mn>2</mn></msubsup><msu",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 141,
+      "latex": "\\mathcal{W}(x)=\\mathcal{V}(x)\\bigl(\\mathcal{V}(x)+x\\bigr).",
+      "mathml": "<math alttext=\"\\mathcal{W}(x)=\\mathcal{V}(x)\\bigl(\\mathcal{V}(x)+x\\bigr).\" class=\"ltx_Math\" display=\"block\" id=\"A1.Ex8.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><mi class=\"ltx_font_mathcaligraphic\">𝒲</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mi>x</mi><mo stretchy=\"false\">)</mo></mrow></mrow><mo>=</mo><mrow><mrow><mi class=\"ltx_font_mathcaligraphic\">𝒱</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mi>x</mi><mo stretchy=\"false\">)</mo></mrow></mrow><mo lspace=\"0em\" rspace=\"0em\">​</m",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 142,
+      "latex": "M_{1}",
+      "mathml": "<math alttext=\"M_{1}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.p6.m1\" intent=\":literal\"><semantics><msub><mi>M</mi><mn>1</mn></msub><annotation encoding=\"application/x-tex\">M_{1}</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "M2M_{2}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 143,
+      "latex": "M_{2}",
+      "mathml": "<math alttext=\"M_{2}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.p6.m2\" intent=\":literal\"><semantics><msub><mi>M</mi><mn>2</mn></msub><annotation encoding=\"application/x-tex\">M_{2}</annotation></semantics></math>",
+      "context_before": "M1M_{1}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 144,
+      "latex": "X\\sim\\mathcal{N}(\\mu,\\sigma^{2})",
+      "mathml": "<math alttext=\"X\\sim\\mathcal{N}(\\mu,\\sigma^{2})\" class=\"ltx_Math\" display=\"inline\" id=\"A2.p1.m1\" intent=\":literal\"><semantics><mrow><mi>X</mi><mo>∼</mo><mrow><mi class=\"ltx_font_mathcaligraphic\">𝒩</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mi>μ</mi><mo>,</mo><msup><mi>σ</mi><mn>2</mn></msup><mo stretchy=\"false\">)</mo></mrow></mrow></mrow><annotation encoding=\"application/x-tex\">X\\sim\\mathcal{N}(\\mu,\\sigma^{2})</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 145,
+      "latex": "f_{X}(x)=\\frac{1}{\\sigma}\\phi\\!\\left(\\frac{x-\\mu}{\\sigma}\\right),",
+      "mathml": "<math alttext=\"f_{X}(x)=\\frac{1}{\\sigma}\\phi\\!\\left(\\frac{x-\\mu}{\\sigma}\\right),\" class=\"ltx_Math\" display=\"block\" id=\"A2.Ex9.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><msub><mi>f</mi><mi>X</mi></msub><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo stretchy=\"false\">(</mo><mi>x</mi><mo stretchy=\"false\">)</mo></mrow></mrow><mo>=</mo><mrow><mfrac><mn>1</mn><mi>σ</mi></mfrac><mo lspace=\"0em\" rspace=\"0em\">​</mo><mpadded style=\"width:0.426em;\" width=\"0.426em\"><mi>ϕ</mi></mpadded><mo lspace=\"0em",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 146,
+      "latex": "\\phi(\\cdot)",
+      "mathml": "<math alttext=\"\\phi(\\cdot)\" class=\"ltx_Math\" display=\"inline\" id=\"A2.p1.m2\" intent=\":literal\"><semantics><mrow><mi>ϕ</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mo lspace=\"0em\" rspace=\"0em\">⋅</mo><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">\\phi(\\cdot)</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 147,
+      "latex": "X",
+      "mathml": "<math alttext=\"X\" class=\"ltx_Math\" display=\"inline\" id=\"A2.p2.m1\" intent=\":literal\"><semantics><mi>X</mi><annotation encoding=\"application/x-tex\">X</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "X>aX>a",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 148,
+      "latex": "X>a",
+      "mathml": "<math alttext=\"X&gt;a\" class=\"ltx_Math\" display=\"inline\" id=\"A2.p2.m2\" intent=\":literal\"><semantics><mrow><mi>X</mi><mo>&gt;</mo><mi>a</mi></mrow><annotation encoding=\"application/x-tex\">X&gt;a</annotation></semantics></math>",
+      "context_before": "XX",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 149,
+      "latex": "f_{X\\mid X>a}(x)=\\frac{f_{X}(x)}{P(X>a)}=\\frac{\\frac{1}{\\sigma}\\phi\\!\\left(\\frac{x-\\mu}{\\sigma}\\right)}{1-\\Phi\\!\\left(\\frac{a-\\mu}{\\sigma}\\right)},\\qquad x>a.",
+      "mathml": "<math alttext=\"f_{X\\mid X&gt;a}(x)=\\frac{f_{X}(x)}{P(X&gt;a)}=\\frac{\\frac{1}{\\sigma}\\phi\\!\\left(\\frac{x-\\mu}{\\sigma}\\right)}{1-\\Phi\\!\\left(\\frac{a-\\mu}{\\sigma}\\right)},\\qquad x&gt;a.\" class=\"ltx_Math\" display=\"block\" id=\"A2.Ex10.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><mrow><msub><mi>f</mi><mrow><mi>X</mi><mo fence=\"false\">|</mo><mrow><mi>X</mi><mo>&gt;</mo><mi>a</mi></mrow></mrow></msub><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo stretchy=\"false\">(</mo><mi>x</mi><mo stretchy=\"false",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 150,
+      "latex": "\\mathbb{E}[X\\mid X>a]=\\int_{a}^{\\infty}x\\,f_{X\\mid X>a}(x)\\,dx=\\frac{1}{1-\\Phi(\\alpha)}\\int_{a}^{\\infty}x\\,\\frac{1}{\\sigma}\\phi\\!\\left(\\frac{x-\\mu}{\\sigma}\\right)dx,",
+      "mathml": "<math alttext=\"\\mathbb{E}[X\\mid X&gt;a]=\\int_{a}^{\\infty}x\\,f_{X\\mid X&gt;a}(x)\\,dx=\\frac{1}{1-\\Phi(\\alpha)}\\int_{a}^{\\infty}x\\,\\frac{1}{\\sigma}\\phi\\!\\left(\\frac{x-\\mu}{\\sigma}\\right)dx,\" class=\"ltx_Math\" display=\"block\" id=\"A2.Ex11.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><mi>𝔼</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">[</mo><mrow><mi>X</mi><mo lspace=\"0em\" rspace=\"0.167em\">∣</mo><mrow><mi>X</mi><mo>&gt;</mo><mi>a</mi></mrow></mrow><mo stretchy=\"false\">]</mo></mrow></mrow><mo rspace=\"0",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 151,
+      "latex": "\\alpha=\\frac{a-\\mu}{\\sigma}.",
+      "mathml": "<math alttext=\"\\alpha=\\frac{a-\\mu}{\\sigma}.\" class=\"ltx_Math\" display=\"block\" id=\"A2.Ex12.m1\" intent=\":literal\"><semantics><mrow><mrow><mi>α</mi><mo>=</mo><mfrac><mrow><mi>a</mi><mo>−</mo><mi>μ</mi></mrow><mi>σ</mi></mfrac></mrow><mo lspace=\"0em\">.</mo></mrow><annotation encoding=\"application/x-tex\">\\alpha=\\frac{a-\\mu}{\\sigma}.</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 152,
+      "latex": "z=\\frac{x-\\mu}{\\sigma},\\qquad x=\\mu+\\sigma z,\\qquad dx=\\sigma dz.",
+      "mathml": "<math alttext=\"z=\\frac{x-\\mu}{\\sigma},\\qquad x=\\mu+\\sigma z,\\qquad dx=\\sigma dz.\" class=\"ltx_Math\" display=\"block\" id=\"A2.Ex13.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><mi>z</mi><mo>=</mo><mfrac><mrow><mi>x</mi><mo>−</mo><mi>μ</mi></mrow><mi>σ</mi></mfrac></mrow><mo rspace=\"2.167em\">,</mo><mrow><mi>x</mi><mo>=</mo><mrow><mi>μ</mi><mo>+</mo><mrow><mi>σ</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>z</mi></mrow></mrow></mrow><mo rspace=\"2.167em\">,</mo><mrow><mrow><mi>d</mi><mo lspace=\"0em\"",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 153,
+      "latex": "\\mathbb{E}[X\\mid X>a]=\\frac{1}{1-\\Phi(\\alpha)}\\int_{\\alpha}^{\\infty}(\\mu+\\sigma z)\\,\\phi(z)\\,dz.",
+      "mathml": "<math alttext=\"\\mathbb{E}[X\\mid X&gt;a]=\\frac{1}{1-\\Phi(\\alpha)}\\int_{\\alpha}^{\\infty}(\\mu+\\sigma z)\\,\\phi(z)\\,dz.\" class=\"ltx_Math\" display=\"block\" id=\"A2.Ex14.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><mi>𝔼</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">[</mo><mrow><mi>X</mi><mo lspace=\"0em\" rspace=\"0.167em\">∣</mo><mrow><mi>X</mi><mo>&gt;</mo><mi>a</mi></mrow></mrow><mo stretchy=\"false\">]</mo></mrow></mrow><mo>=</mo><mrow><mfrac><mn>1</mn><mrow><mn>1</mn><mo>−</mo><mrow><mi mathvariant=\"nor",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 154,
+      "latex": "\\mathbb{E}[X\\mid X>a]=\\frac{1}{1-\\Phi(\\alpha)}\\left[\\mu\\int_{\\alpha}^{\\infty}\\phi(z)\\,dz+\\sigma\\int_{\\alpha}^{\\infty}z\\phi(z)\\,dz\\right].",
+      "mathml": "<math alttext=\"\\mathbb{E}[X\\mid X&gt;a]=\\frac{1}{1-\\Phi(\\alpha)}\\left[\\mu\\int_{\\alpha}^{\\infty}\\phi(z)\\,dz+\\sigma\\int_{\\alpha}^{\\infty}z\\phi(z)\\,dz\\right].\" class=\"ltx_Math\" display=\"block\" id=\"A2.Ex15.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><mi>𝔼</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">[</mo><mrow><mi>X</mi><mo lspace=\"0em\" rspace=\"0.167em\">∣</mo><mrow><mi>X</mi><mo>&gt;</mo><mi>a</mi></mrow></mrow><mo stretchy=\"false\">]</mo></mrow></mrow><mo>=</mo><mrow><mfrac><mn>1</mn><mrow><mn>1",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 155,
+      "latex": "\\int_{\\alpha}^{\\infty}\\phi(z)\\,dz=1-\\Phi(\\alpha),",
+      "mathml": "<math alttext=\"\\int_{\\alpha}^{\\infty}\\phi(z)\\,dz=1-\\Phi(\\alpha),\" class=\"ltx_Math\" display=\"block\" id=\"A2.Ex16.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><msubsup><mo>∫</mo><mi>α</mi><mi mathvariant=\"normal\">∞</mi></msubsup><mrow><mrow><mi>ϕ</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mi>z</mi><mo stretchy=\"false\">)</mo></mrow></mrow><mo lspace=\"0.170em\" rspace=\"0em\">​</mo><mrow><mo rspace=\"0em\">𝑑</mo><mi>z</mi></mrow></mrow></mrow><mo>=</mo><mrow><mn>1</mn><mo>−</mo><mrow><mi mathva",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 156,
+      "latex": "\\int_{\\alpha}^{\\infty}z\\phi(z)\\,dz=\\phi(\\alpha),",
+      "mathml": "<math alttext=\"\\int_{\\alpha}^{\\infty}z\\phi(z)\\,dz=\\phi(\\alpha),\" class=\"ltx_Math\" display=\"block\" id=\"A2.Ex17.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><msubsup><mo>∫</mo><mi>α</mi><mi mathvariant=\"normal\">∞</mi></msubsup><mrow><mi>z</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>ϕ</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo stretchy=\"false\">(</mo><mi>z</mi><mo stretchy=\"false\">)</mo></mrow><mo lspace=\"0.170em\" rspace=\"0em\">​</mo><mrow><mo rspace=\"0em\">𝑑</mo><mi>z</mi></mrow></mrow><",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 157,
+      "latex": "\\mathbb{E}[X\\mid X>a]=\\frac{1}{1-\\Phi(\\alpha)}\\left[\\mu(1-\\Phi(\\alpha))+\\sigma\\phi(\\alpha)\\right].",
+      "mathml": "<math alttext=\"\\mathbb{E}[X\\mid X&gt;a]=\\frac{1}{1-\\Phi(\\alpha)}\\left[\\mu(1-\\Phi(\\alpha))+\\sigma\\phi(\\alpha)\\right].\" class=\"ltx_Math\" display=\"block\" id=\"A2.Ex18.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><mi>𝔼</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">[</mo><mrow><mi>X</mi><mo lspace=\"0em\" rspace=\"0.167em\">∣</mo><mrow><mi>X</mi><mo>&gt;</mo><mi>a</mi></mrow></mrow><mo stretchy=\"false\">]</mo></mrow></mrow><mo>=</mo><mrow><mfrac><mn>1</mn><mrow><mn>1</mn><mo>−</mo><mrow><mi mathvariant=\"n",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 158,
+      "latex": "\\mathbb{E}[X\\mid X>a]=\\mu+\\sigma\\frac{\\phi(\\alpha)}{1-\\Phi(\\alpha)}.",
+      "mathml": "<math alttext=\"\\mathbb{E}[X\\mid X&gt;a]=\\mu+\\sigma\\frac{\\phi(\\alpha)}{1-\\Phi(\\alpha)}.\" class=\"ltx_Math\" display=\"block\" id=\"A2.Ex19.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><mi>𝔼</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">[</mo><mrow><mi>X</mi><mo lspace=\"0em\" rspace=\"0.167em\">∣</mo><mrow><mi>X</mi><mo>&gt;</mo><mi>a</mi></mrow></mrow><mo stretchy=\"false\">]</mo></mrow></mrow><mo>=</mo><mrow><mi>μ</mi><mo>+</mo><mrow><mi>σ</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo><mfrac><mrow><mi>ϕ</mi><m",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 159,
+      "latex": "\\lambda(\\alpha)=\\frac{\\phi(\\alpha)}{1-\\Phi(\\alpha)},",
+      "mathml": "<math alttext=\"\\lambda(\\alpha)=\\frac{\\phi(\\alpha)}{1-\\Phi(\\alpha)},\" class=\"ltx_Math\" display=\"block\" id=\"A2.Ex20.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><mi>λ</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mi>α</mi><mo stretchy=\"false\">)</mo></mrow></mrow><mo>=</mo><mfrac><mrow><mi>ϕ</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mi>α</mi><mo stretchy=\"false\">)</mo></mrow></mrow><mrow><mn>1</mn><mo>−</mo><mrow><mi mathvariant=\"normal\">Φ</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</m",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 160,
+      "latex": "\\mathbb{E}[X\\mid X>a]=\\mu+\\sigma\\lambda(\\alpha).",
+      "mathml": "<math alttext=\"\\mathbb{E}[X\\mid X&gt;a]=\\mu+\\sigma\\lambda(\\alpha).\" class=\"ltx_Math\" display=\"block\" id=\"A2.Ex21.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><mi>𝔼</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">[</mo><mrow><mi>X</mi><mo lspace=\"0em\" rspace=\"0.167em\">∣</mo><mrow><mi>X</mi><mo>&gt;</mo><mi>a</mi></mrow></mrow><mo stretchy=\"false\">]</mo></mrow></mrow><mo>=</mo><mrow><mi>μ</mi><mo>+</mo><mrow><mi>σ</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>λ</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 161,
+      "latex": "\\mu",
+      "mathml": "<math alttext=\"\\mu\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T6.st1.m1\" intent=\":literal\"><semantics><mi mathsize=\"0.900em\">μ</mi><annotation encoding=\"application/x-tex\">\\mu</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 162,
+      "latex": "\\sigma",
+      "mathml": "<math alttext=\"\\sigma\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T6.st1.m2\" intent=\":literal\"><semantics><mi mathsize=\"0.900em\">σ</mi><annotation encoding=\"application/x-tex\">\\sigma</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 163,
+      "latex": "\\mu",
+      "mathml": "<math alttext=\"\\mu\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T6.st2.m1\" intent=\":literal\"><semantics><mi mathsize=\"0.900em\">μ</mi><annotation encoding=\"application/x-tex\">\\mu</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 164,
+      "latex": "\\sigma",
+      "mathml": "<math alttext=\"\\sigma\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T6.st2.m2\" intent=\":literal\"><semantics><mi mathsize=\"0.900em\">σ</mi><annotation encoding=\"application/x-tex\">\\sigma</annotation></semantics></math>",
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    }
+  ],
+  "equation_count": 165
+}
