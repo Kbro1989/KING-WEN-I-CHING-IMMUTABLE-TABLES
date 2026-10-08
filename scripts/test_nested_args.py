@@ -25,6 +25,13 @@ CASES = [
     ("mathop argmax",      r"\mathop{\mathrm{arg\,max}}_{i}",           r"\mathop"),
     ("binomial nest",      r"\binom{n}{k}",                             r"\binom"),
     ("frac in frac",       r"\frac{\frac{a}{b}}{c}",                    r"\frac"),
+    # --- escaped literals and text commands (2026-10-07) ---
+    ("escaped underscore", r"\mathcal{L}_{text\_aux}",                  "\\"),
+    ("escaped amp",        r"a \& b",                                   "\\"),
+    ("bm braced",          r"\bm{u}^{k+1}",                             r"\bm"),
+    ("textup",             r"\textup{diag}",                            r"\textup"),
+    ("textnormal",         r"\textnormal{abc}",                         r"\textnormal"),
+    ("operatorname star",  r"\operatorname*{ess\,sup}",                 r"\operatorname"),
 ]
 
 print("=" * 78)
