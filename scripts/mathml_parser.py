@@ -61,7 +61,23 @@ MO_MAP = {
     "⟨": "(", "⟩": ")",
     "⌊": "floor(", "⌋": ")",
     "⌈": "ceil(", "⌉": ")",
-    "|": "|", "‖": "|", "∥": "|",
+    # CONDITIONAL / SET-BUILDER BAR.
+    # U+2223 (∣ DIVIDES) is what arxiv emits for \mid. It was MISSING from
+    # this map, so the bar vanished and the neighbouring structures
+    # CONCATENATED:  E[X \mid X>a]  ->  'E[XX>a]'.  That is worse than a
+    # missing glyph — it silently fuses two distinct subexpressions.
+    # Keep it as an explicit separator token so Conditional(value, condition)
+    # is representable downstream.
+    "∣": "|", "|": "|", "‖": "|", "∥": "|",
+    "\u2223": "|",   # ∣ DIVIDES
+    "\u2758": "|",   # ❘
+    "\u00a6": "|",   # ¦ broken bar
+    # DIFFERENTIAL: U+1D451 (𝑑 MATHEMATICAL ITALIC SMALL D) is the measure
+    # symbol in \int ... \,dz. Treating it as an unknown operator (or letting
+    # it fuse) makes 'dz' indistinguishable from a product 'd*z' and, worse,
+    # lets the differential disappear entirely:  ...\phi(z)z.
+    # Emit an explicit 'd' token so Differential(variable) is representable.
+    "𝑑": "d", "ⅆ": "d", "ⅅ": "d",
     # named constants
     "∞": "oo", "ℵ": "aleph", "ℏ": "hbar", "ℯ": "e", "ⅈ": "i",
     "∂": "partial", "∇": "grad", "Δ": "Delta", "√": "sqrt",

@@ -127,6 +127,25 @@ CASES = [
      3, "a + b"),
 
     # ── mtable: matrix/system ──
+    # ── CONDITIONAL BAR (structural separator) ──
+    ("cond_bar_expect",
+     '<math><mi>E</mi><mo>[</mo><mi>X</mi><mo>∣</mo><mi>X</mi><mo>&gt;</mo><mi>a</mi><mo>]</mo></math>',
+     6, "E[X | X>a] — bar must SEPARATE, not fuse"),
+
+    ("cond_bar_prob",
+     '<math><mi>P</mi><mo>(</mo><mi>X</mi><mo>∣</mo><mi>D</mi><mo>)</mo></math>',
+     5, "P(X | D)"),
+
+    # ── DIFFERENTIAL ──
+    ("differential_italic_d",
+     '<math><mi>d</mi><mi>z</mi></math>',
+     2, "dz — differential must not vanish"),
+
+    ("integral_with_differential",
+     '<math><msubsup><mo>∫</mo><mi>α</mi><mi>∞</mi></msubsup><mi>φ</mi>'
+     '<mo>(</mo><mi>z</mi><mo>)</mo><mi>𝑑</mi><mi>z</mi></math>',
+     2, "∫_α^∞ φ(z)dz — limits AND differential"),
+
     ("mtable_2x2",
      '<math><mtable><mtr><mtd><mi>a</mi></mtd><mtd><mi>b</mi></mtd></mtr>'
      '<mtr><mtd><mi>c</mi></mtd><mtd><mi>d</mi></mtd></mtr></mtable></math>',
@@ -183,6 +202,11 @@ for name, mml, expected_children, desc in CASES:
         "ˆ": "hat", "^": "hat", "‾": "bar", "¯": "bar",
         "˜": "tilde", "~": "tilde", "˙": "dot", "¨": "ddot",
         "′": "prime", "″": "prime",
+        "∣": "|", "𝑑": "d", "ⅆ": "d",
+        "∞": "oo", "ℵ": "aleph", "ℏ": "hbar", "∇": "grad", "∂": "partial",
+        "∑": "Sum", "∏": "Prod", "∫": "Integral", "∮": "Integral",
+        "α": "alpha", "γ": "gamma", "φ": "phi", "ω": "omega", "η": "eta",
+        "ρ": "rho", "ψ": "psi", "χ": "chi", "ξ": "xi", "κ": "kappa",
         "≔": "=", ":=": "=", "=": "_eq_",  # limits render = as _eq_ marker
         "max": "Max", "min": "Min", "lim": "Limit",
         "⟨": "(", "⟩": ")", "{": "{", "}": "}",
