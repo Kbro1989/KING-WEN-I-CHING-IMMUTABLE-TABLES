@@ -272,6 +272,78 @@ NON_EQUATION_RELATIONS = {
     "\\in", "\\notin", "\\ni", "\\forall", "\\exists", "\\mid",
 }
 
+# ---------------------------------------------------------------------------
+# ZERO-ARG COMMANDS (measured 2026-10-07 from the arxiv HTML corpus)
+#
+# These take NO brace argument. Leaving them to the generic fallback either
+# drops them (losing the operator) or fuses the following token. Each entry is
+# a (pattern, replacement) applied in order.
+#
+# Evidence:
+#   N_{\rm H}        -> 'N_ H'    fused the subscript token
+#   a\cdots b        -> 'a*s b'   ellipsis became a multiplication
+#   f^{\prime}       -> 'f**()'   empty exponent, derivative marker destroyed
+#   v_{\perp}        -> 'v_'      subscript destroyed
+#   A^{\dagger}      -> 'A**()'   conjugate marker destroyed
+#   x\uparrow 0      -> 'x 0'     limit relation destroyed
+# ---------------------------------------------------------------------------
+ZERO_ARG_RULES = [
+    # --- font switches: \rm \bf \it take no argument and switch font for the
+    #     REST of the group. They are presentation only, so they are removed
+    #     with NO replacement — not even a space. Leaving a space caused the
+    #     subscript token to split:  N_{\rm H} -> 'N_ H' instead of 'N_H'.
+    (r"\\(rm|bf|it|sf|tt|cal|frak)\b", ""),
+    # --- ellipses: a punctuation token, not an operator
+    (r"\\(ldots|dots|cdots|vdots|ddots)\b", " ... "),
+    # --- limit arrows: a relation, keep it visible
+    (r"\\uparrow\b", "->"),
+    (r"\\downarrow\b", "->"),
+    (r"\\updownarrow\b", "->"),
+    # --- binary relations / operators
+    (r"\\triangleright\b", ">"),
+    (r"\\triangleleft\b", "<"),
+    (r"\\lesssim\b", "<="),
+    (r"\\gtrsim\b", ">="),
+    (r"\\succ\b", ">"),
+    (r"\\prec\b", "<"),
+    (r"\\succsim\b", ">="),
+    (r"\\precsim\b", "<="),
+    (r"\\Longleftrightarrow\b", "="),
+    (r"\\longleftrightarrow\b", "="),
+    # --- degree / markers
+    (r"\\textdegree\b", " "),
+    (r"\\degree\b", " "),
+    (r"\\checkmark\b", " "),
+    # --- structural symbols that must become named tokens, not vanish
+    (r"\\emptyset\b", "emptyset"),
+    (r"\\infty\b", "oo"),
+    # --- colour: \color[rgb]{r,g,b} is presentation only; drop the spec
+    (r"\\color\s*\[[^\]]*\]\s*\{[^{}]*\}", " "),
+    (r"\\color\s*\{[^{}]*\}", " "),
+]
+
+# ---------------------------------------------------------------------------
+# SUPERSCRIPT MARKERS — commands valid only as a superscript. They must become
+# a NAMED exponent, never an empty group. Measured damage:
+#   f^{\prime}   -> 'f**()'   (derivative destroyed)
+#   A^{\dagger}  -> 'A**()'   (conjugate destroyed)
+# ---------------------------------------------------------------------------
+SUPERSCRIPT_MARKERS = {
+    "prime": "prime",
+    "dagger": "dag",
+    "ddagger": "ddag",
+    "ast": "ast",
+    "star": "star",
+    "perp": "perp",
+    "top": "top",
+    "bot": "bot",
+    "circ": "circ",
+    "bullet": "bullet",
+    "flat": "flat",
+    "natural": "natural",
+    "sharp": "sharp",
+}
+
 FUNC_MAP = {
     "sin": "sin", "cos": "cos", "tan": "tan", "cot": "cot", "sec": "sec", "csc": "csc",
     "arcsin": "asin", "arccos": "acos", "arctan": "atan",
@@ -302,6 +374,81 @@ STRUCTURAL_ENVS = [
     "cases", "array", "aligned", "align", "gathered", "gather", "split",
     "subarray", "smallmatrix", "equation", "multline",
 ]
+
+
+def _brace_scan(s, start):
+    """
+    From index `start` (which must point at '{'), return (inner, end_index)
+    where end_index is the index just past the balancing '}'.
+
+    Returns (None, start) if no group opens at `start`.
+    """
+    if start >= len(s) or s[start] != "{":
+        return None, start
+    depth = 0
+    k = start
+    while k < len(s):
+        if s[k] == "{":
+            depth += 1
+        elif s[k] == "}":
+            depth -= 1
+            if depth == 0:
+                return s[start + 1:k], k + 1
+        k += 1
+    return None, start
+
+
+def _apply_command(s, cmd, nargs, fn, max_passes=8):
+    """
+    Apply `fn(*args)` to every `\\cmd{...}{...}` occurrence, matching to the
+    BALANCING brace rather than using a [^{}]+ regex.
+
+    This is the structural fix: real LaTeX arguments nest, so any regex that
+    excludes braces cannot match them. `fn` receives the raw inner strings and
+    returns the replacement.
+
+    If fn returns None the occurrence is left untouched.
+    """
+    marker = "\\" + cmd
+    for _ in range(max_passes):
+        out = []
+        i = 0
+        changed = False
+        while i < len(s):
+            if s.startswith(marker, i):
+                after = i + len(marker)
+                # must not be followed by another letter (avoid \frac vs \fracfoo)
+                if after < len(s) and s[after].isalpha():
+                    out.append(s[i])
+                    i += 1
+                    continue
+                pos = after
+                while pos < len(s) and s[pos].isspace():
+                    pos += 1
+                args = []
+                ok = True
+                for _a in range(nargs):
+                    inner, pos2 = _brace_scan(s, pos)
+                    if inner is None:
+                        ok = False
+                        break
+                    args.append(inner)
+                    pos = pos2
+                    while pos < len(s) and s[pos].isspace():
+                        pos += 1
+                if ok:
+                    rep = fn(*args)
+                    if rep is not None:
+                        out.append(rep)
+                        i = pos
+                        changed = True
+                        continue
+            out.append(s[i])
+            i += 1
+        s = "".join(out)
+        if not changed:
+            break
+    return s
 
 
 def recover_latex(latex):
@@ -421,34 +568,182 @@ def recover_latex(latex):
             search_from = i  # re-scan: inner may contain further commands
     s = re.sub(r"\\operatorname\s*\{\s*([a-zA-Z]+)\s*\}", r"\1", s)
 
-    # --- Accents: \hat{x} -> x_hat
-    for cmd, tag in ACCENT_CMDS.items():
-        pat = re.compile(r"\\" + cmd + r"\s*\{([a-zA-Z0-9]+)\}")
-        s = pat.sub(lambda m, t=tag: f"{m.group(1)}_{t}", s)
+    # --- Superscript markers: \prime \dagger etc. must become a NAMED
+    # exponent. Without this, f^{\prime} -> f**() and the derivative is lost.
+    for _name, _tag in SUPERSCRIPT_MARKERS.items():
+        s = re.sub(r"\^\s*\{\s*\\" + _name + r"\s*\}", "**(" + _tag + ")", s)
+        s = re.sub(r"\^\s*\\" + _name + r"\b", "**(" + _tag + ")", s)
 
-    # --- Fractions (nested-aware via repeated passes)
-    for _ in range(6):
-        new = re.sub(r"\\[dtc]?frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}", r"((\1)/(\2))", s)
-        if new == s:
-            break
-        s = new
-    for _ in range(3):
-        new = re.sub(r"\\binom\s*\{([^{}]+)\}\s*\{([^{}]+)\}", r"binomial(\1,\2)", s)
-        if new == s:
-            break
-        s = new
+    # --- Subscript markers: the SAME commands appear as subscripts and would
+    # otherwise be destroyed. v_{\perp} -> 'v_' loses the marker entirely.
+    for _name, _tag in SUPERSCRIPT_MARKERS.items():
+        s = re.sub(r"_\s*\{\s*\\" + _name + r"\s*\}", "_" + _tag, s)
+        s = re.sub(r"_\s*\\" + _name + r"\b", "_" + _tag, s)
 
-    # --- Roots
-    for _ in range(4):
-        new = re.sub(r"\\sqrt\s*\[([^\]]+)\]\s*\{([^{}]+)\}", r"((\2)**(1/(\1)))", s)
-        if new == s:
+    # --- Zero-arg commands: font switches, ellipses, arrows, markers.
+    # Must run BEFORE the generic leftover handler, otherwise these either
+    # vanish silently or fuse the following token.
+    for _pat, _rep in ZERO_ARG_RULES:
+        s = re.sub(_pat, _rep, s)
+
+    # --- Accents: \hat{x} -> x_hat. The argument may itself be a
+    # backslash-command (\hat{\mu}, \dot{\nu}) — the old [a-zA-Z0-9]+ pattern
+    # rejected those and the literal command survived as "unknown".
+    # Command args are stripped of their backslash so the accent fuses into a
+    # single identifier: \hat{\mu} -> mu_hat.
+    #
+    # Accents ACCUMULATE: \bar{\hat{r}} must give r_hat_bar, not r_hat.
+    # Run repeated passes so an inner accent resolves before the outer one.
+    def _accent_sub(m, tag):
+        inner = m.group(1).strip()
+        if inner.startswith("\\"):
+            inner = re.sub(r"^\\+", "", inner)
+        inner = inner.replace("\\", "")
+        return f"{inner}_{tag}"
+
+    for _pass in range(4):
+        before = s
+        for cmd, tag in ACCENT_CMDS.items():
+            pat = re.compile(r"\\" + cmd + r"\s*\{([a-zA-Z0-9_\\]+)\}")
+            s = pat.sub(lambda m, t=tag: _accent_sub(m, t), s)
+        if s == before:
             break
-        s = new
+
+    # --- Fractions / roots / binomials / set-operators: BALANCING-BRACE.
+    #
+    # These previously used [^{}]+ regexes, which cannot match a nested
+    # argument. \frac{u^{(k)}}{x} and \frac{\operatorname{sgn}((e_k-\pi)_j)}{...}
+    # therefore failed and the literal \frac survived into the solver.
+    # _apply_command matches to the balancing brace instead.
+    s = _apply_command(s, "frac", 2, lambda a, b: f"(({a})/({b}))")
+    s = _apply_command(s, "dfrac", 2, lambda a, b: f"(({a})/({b}))")
+    s = _apply_command(s, "tfrac", 2, lambda a, b: f"(({a})/({b}))")
+    s = _apply_command(s, "cfrac", 2, lambda a, b: f"(({a})/({b}))")
+    s = _apply_command(s, "binom", 2, lambda a, b: f"binomial({a},{b})")
+    s = _apply_command(s, "sqrt", 1, lambda a: f"sqrt({a})")
+    # roots with an explicit index: \sqrt[3]{x} -> (x)**(1/(3))
+    # Do this as a single balancing-brace pass so the body may nest.
+    def _sqrt_indexed(s_):
+        marker = "\\sqrt"
+        out = []
+        i = 0
+        changed = False
+        while i < len(s_):
+            if s_.startswith(marker, i):
+                after = i + len(marker)
+                pos = after
+                while pos < len(s_) and s_[pos].isspace():
+                    pos += 1
+                if pos < len(s_) and s_[pos] == "[":
+                    close = s_.find("]", pos)
+                    if close > 0:
+                        idx = s_[pos + 1:close]
+                        p2 = close + 1
+                        while p2 < len(s_) and s_[p2].isspace():
+                            p2 += 1
+                        body, end = _brace_scan(s_, p2)
+                        if body is not None:
+                            out.append(f"(({body})**(1/({idx})))")
+                            i = end
+                            changed = True
+                            continue
+            out.append(s_[i])
+            i += 1
+        return "".join(out), changed
     for _ in range(4):
-        new = re.sub(r"\\sqrt\s*\{([^{}]+)\}", r"sqrt(\1)", s)
-        if new == s:
+        s, _ch = _sqrt_indexed(s)
+        if not _ch:
             break
-        s = new
+    # \underset / \overset: keep the BASE, drop the annotation
+    s = _apply_command(s, "underset", 2, lambda a, b: f"({b})")
+    s = _apply_command(s, "overset", 2, lambda a, b: f"({b})")
+    s = _apply_command(s, "stackrel", 2, lambda a, b: f"({b})")
+    # \mathop{\mathrm{arg\,max}}_{...} -> argmax
+    s = _apply_command(s, "mathop", 1, lambda a: f"({a})")
+
+    # --- Named operators that take no brace argument.
+    # \max \min \sup \Pr \det \gcd etc. are function names, not commands to
+    # delete. Dropping them loses the operator (max_{x} f -> _x f).
+    #
+    # NOTE: \b does NOT work here. '_' is a word character, so in `\max_{x}`
+    # there is no word boundary after "max" and the pattern never fires.
+    # Use a negative lookahead for a letter instead.
+    for _op in ("max", "min", "sup", "inf", "argmax", "argmin"):
+        _rep = _op.capitalize() if _op in ("max", "min") else _op
+        s = re.sub(r"\\" + _op + r"(?![a-zA-Z])", _rep, s)
+    s = re.sub(r"\\Pr(?![a-zA-Z])", "Pr", s)
+    s = re.sub(r"\\det(?![a-zA-Z])", "det", s)
+    s = re.sub(r"\\gcd(?![a-zA-Z])", "gcd", s)
+    s = re.sub(r"\\lcm(?![a-zA-Z])", "lcm", s)
+
+    # --- Norms: \| ... \|  and  \lVert ... \rVert
+    # \| survives as a backslash and reaches Python as an error.
+    s = s.replace("\\lVert", "||").replace("\\rVert", "||")
+    s = s.replace("\\lvert", "|").replace("\\rvert", "|")
+    s = s.replace("\\|", "||")
+    s = s.replace("\\Vert", "||").replace("\\vert", "|")
+
+    # --- Sums / products / integrals: drop the limits, keep the operator name.
+    #
+    # MUST run BEFORE the generic sub/superscript pass. That pass unbraces
+    # `_{...}` into `_...`, after which the limits are indistinguishable from
+    # ordinary arithmetic and leak into the expression:
+    #     \sum_{\ell=1}^{G}  ->  'Sum=1**(G)'   and left a stray ')' behind.
+    #
+    # The original patterns were `(_[^{}\s]+)?(\^[^{}\s]+)?`, which cannot
+    # match a braced limit at all. That left `_{\ell=1}^{G}` in the stream,
+    # the brace cleanup turned it into `(ell=1)^(G)`, and equations ended with
+    # UNBALANCED PARENS:
+    #     \frac{a}{\sum_{k=1}^{K}b}  ->  '((a)/(Sum'    <- 1 unclosed '('
+    # which turned 9 previously-solvable equations into TokenErrors.
+    def _bigop(s_, cmd, name):
+        marker = "\\" + cmd
+        out = []
+        i = 0
+        while i < len(s_):
+            if s_.startswith(marker, i):
+                after = i + len(marker)
+                if after < len(s_) and s_[after].isalpha():
+                    out.append(s_[i])
+                    i += 1
+                    continue
+                pos = after
+                # consume up to two limits, braced or bare
+                for _lim in range(2):
+                    p = pos
+                    while p < len(s_) and s_[p].isspace():
+                        p += 1
+                    if p < len(s_) and s_[p] in "_^":
+                        p += 1
+                        while p < len(s_) and s_[p].isspace():
+                            p += 1
+                        if p < len(s_) and s_[p] == "{":
+                            _inner, end = _brace_scan(s_, p)
+                            if _inner is not None:
+                                pos = end
+                                continue
+                        # bare limit: one token, stopping at any delimiter
+                        # ('{' included, so we never swallow a group opener)
+                        start = p
+                        while p < len(s_) and s_[p] not in " \t\n,;{)}]":
+                            p += 1
+                        if p > start:
+                            pos = p
+                            continue
+                        pos = p + 1
+                        continue
+                    break
+                out.append(name)
+                i = pos
+                continue
+            out.append(s_[i])
+            i += 1
+        return "".join(out)
+
+    for _cmd, _name in (("sum", "Sum"), ("prod", "Prod"), ("int", "Integral"),
+                        ("oint", "Integral"), ("iint", "Integral"),
+                        ("lim", "Limit"), ("bigcup", "Union"), ("bigcap", "Intersect")):
+        s = _bigop(s, _cmd, _name)
 
     # --- Superscripts / subscripts
     for _ in range(4):
@@ -462,13 +757,6 @@ def recover_latex(latex):
         if new == s:
             break
         s = new
-
-    # --- Sums / products / integrals (with limits -> plain functions)
-    s = re.sub(r"\\sum\s*(_[^{}\s]+)?\s*(\^[^{}\s]+)?", "Sum", s)
-    s = re.sub(r"\\prod\s*(_[^{}\s]+)?\s*(\^[^{}\s]+)?", "Prod", s)
-    s = re.sub(r"\\int\s*(_[^{}\s]+)?\s*(\^[^{}\s]+)?", "Integral", s)
-    s = re.sub(r"\\oint\s*(_[^{}\s]+)?\s*(\^[^{}\s]+)?", "Integral", s)
-    s = re.sub(r"\\lim\s*(_[^{}\s]+)?", "Limit", s)
 
     # --- Operators / relations / functions
     for k, v in OPERATOR_MAP.items():
@@ -500,6 +788,19 @@ def recover_latex(latex):
 
     # --- Final brace cleanup
     s = s.replace("{", "(").replace("}", ")")
+
+    # --- Subscript/superscript space repair.
+    # Removing a zero-arg font switch inside a subscript leaves a gap:
+    #   N_{\rm H}  ->  N_\rm H  ->  N_ H
+    # A space directly after _ or ^ is never valid math, so re-join it.
+    s = re.sub(r"_\s+([A-Za-z0-9])", r"_\1", s)
+    s = re.sub(r"\^\s+([A-Za-z0-9])", r"^\1", s)
+    # Same hazard from a dropped command inside a group: "( x)" -> "(x)".
+    s = re.sub(r"\(\s+", "(", s)
+    s = re.sub(r"\s+\)", ")", s)
+    # A subscript left with nothing after it (v_) is a lost marker, not math.
+    s = re.sub(r"[_^]\s*(?=[,)\]}])", "", s)
+
     s = re.sub(r"\s+", " ", s).strip()
 
     return s, notes
