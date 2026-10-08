@@ -238,8 +238,9 @@ def learn_dictionary(equations):
 # Learned/default command definitions. Order matters: multi-char before single.
 TEXT_CMDS = [
     "text", "mbox", "textrm", "textbf", "textit", "texttt", "textsf",
+    "textup", "textnormal", "textsc", "textsl", "textmd", "textsuperscript",
     "mathrm", "mathbf", "mathit", "mathsf", "mathtt", "mathcal", "mathbb",
-    "mathfrak", "mathscr", "boldsymbol", "operatorname", "mathrm",
+    "mathfrak", "mathscr", "boldsymbol", "bm", "operatorname", "mathnormal",
 ]
 
 ACCENT_CMDS = {
@@ -515,6 +516,21 @@ def recover_latex(latex):
     s = re.sub(r"\\overbrace\s*\{", "(", s)
     s = re.sub(r"\\underbrace\s*\{", "(", s)
 
+    # --- Escaped characters: \_ \& \% \# \$ are LITERAL characters, not
+    # commands. arxiv emits them inside \text{} for identifiers like
+    # \mathcal{L}_{text\_aux}. If \_ survives it reaches Python as a
+    # line-continuation and the whole equation is lost.
+    #   \text\_aux  ->  text_aux   (one identifier, not an operator)
+    s = s.replace("\\_", "_")
+    s = s.replace("\\&", "&")
+    s = s.replace("\\%", "%")
+    s = s.replace("\\#", "#")
+    s = s.replace("\\$", "$")
+    s = s.replace("\\{", "{").replace("\\}", "}")
+    # Collapse a subscript marker that is now adjacent to a literal underscore,
+    # so `text_\_aux` style output does not become `text__aux`.
+    s = re.sub(r"__+", "_", s)
+
     # --- Math-mode delimiters ($ ... $) are presentation-only and carry no
     # mathematical meaning. arxiv emits unit exponents as \mbox{ cm${}^{-2}$};
     # if the $ survives it reaches Python as a syntax error and the entire
@@ -528,6 +544,11 @@ def recover_latex(latex):
         s = s.replace("{}", "")
 
     # --- Text commands: \text{foo} -> foo, BRACE-AWARE.
+    #
+    # NOTE: a trailing '*' is the starred form (\operatorname*{ess sup}) and
+    # must be consumed, or it is left behind as a multiplication operator:
+    #   \operatorname*{ess\,sup}  ->  '*(ess sup)'    WRONG
+    marker_suffix = "*"
     #
     # The previous implementation used \{([^{}]*)\}, which cannot match a
     # nested group. \mbox{ cm${}^{-2}$} therefore never matched and the literal
@@ -547,6 +568,11 @@ def recover_latex(latex):
             j = i + len(marker)
             while j < len(s) and s[j].isspace():
                 j += 1
+            # consume a starred form: \operatorname*{...}
+            if j < len(s) and s[j] == "*":
+                j += 1
+                while j < len(s) and s[j].isspace():
+                    j += 1
             if j >= len(s) or s[j] != "{":
                 # not this command (e.g. \textbf seen while scanning \text)
                 search_from = i + len(marker)
