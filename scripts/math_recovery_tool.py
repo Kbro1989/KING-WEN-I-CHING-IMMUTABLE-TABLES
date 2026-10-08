@@ -620,17 +620,28 @@ def recover_latex(latex):
     #
     # Accents ACCUMULATE: \bar{\hat{r}} must give r_hat_bar, not r_hat.
     # Run repeated passes so an inner accent resolves before the outer one.
+    #
+    # The replacement is SPACE-PADDED. Without it the accent fuses with a
+    # preceding command name and destroys it:
+    #   \log\bar{\pi}  ->  '\log' + 'pi_bar'  =  '\logpi_bar'
+    #   then \b fails (next char 'p' is a word char), \log is never matched as
+    #   a function, and the generic handler deletes '\logpi' as an unknown
+    #   command -> '_bar'.  The logarithm was silently destroyed.
     def _accent_sub(m, tag):
         inner = m.group(1).strip()
         if inner.startswith("\\"):
             inner = re.sub(r"^\\+", "", inner)
         inner = inner.replace("\\", "")
-        return f"{inner}_{tag}"
+        return f" {inner}_{tag} "
 
     for _pass in range(4):
         before = s
         for cmd, tag in ACCENT_CMDS.items():
-            pat = re.compile(r"\\" + cmd + r"\s*\{([a-zA-Z0-9_\\]+)\}")
+            # The argument may contain SPACES introduced by an inner accent
+            # that already resolved: \bar{\hat{r}} -> \bar{ r_hat }.
+            # A pattern excluding whitespace cannot match that and \bar
+            # survives to be reported unknown.
+            pat = re.compile(r"\\" + cmd + r"\s*\{([a-zA-Z0-9_\s\\]+)\}")
             s = pat.sub(lambda m, t=tag: _accent_sub(m, t), s)
         if s == before:
             break
@@ -794,7 +805,40 @@ def recover_latex(latex):
     for k in NON_EQUATION_RELATIONS:
         s = s.replace(k, " ")
     for k, v in FUNC_MAP.items():
-        s = re.sub(r"\\" + k + r"\b", v, s)
+        # (?![a-zA-Z]) not \b: after "log" in "\log_2" or "\logpi" the next
+        # char is a word char, so \b never fires and the function is missed.
+        s = re.sub(r"\\" + k + r"(?![a-zA-Z])", v, s)
+
+    # --- Function application: join a function name to its argument.
+    # An accent replacement is space-padded, which can leave
+    #     log pi_bar (y)
+    # Python then reads `log` as a Symbol and `pi_bar` as another, producing a
+    # TYPE error (Symbol * Symbol) rather than a clean application.
+    # Join `fname arg` -> `fname(arg)` for known function names only.
+    _FUNCS = ("log", "exp", "sin", "cos", "tan", "asin", "acos", "atan",
+              "sinh", "cosh", "tanh", "sqrt", "abs", "det", "Min", "Max")
+    for _fn in _FUNCS:
+        # fname <space> <identifier-or-paren-group>
+        s = re.sub(r"\b" + _fn + r"\s+([A-Za-z_][A-Za-z0-9_]*(?:\([^()]*\))?)",
+                   _fn + r"(\1)", s)
+        # fname <space> (expr)
+        s = re.sub(r"\b" + _fn + r"\s+\(", _fn + "(", s)
+        # fname(...) <space> (y)  ->  fname(..., y)
+        # The argument may already be parenthesised, so a following group is
+        # an ADDITIONAL argument, not a detached product:
+        #   log(pi_bar) (y)  ->  log(pi_bar, y)
+        # The existing group's OUTER parens are stripped so we do not produce
+        # log((pi_bar), y).
+        def _join_paren(m, _f=_fn):
+            first = m.group(1)[1:-1]
+            return f"{_f}({first}, {m.group(2)})"
+        s = re.sub(r"\b" + _fn + r"(\([^()]*\))\s+\(([^()]*)\)", _join_paren, s)
+        # fname(...) <space> identifier  ->  fname(..., identifier)
+        def _join_ident(m, _f=_fn):
+            first = m.group(1)[1:-1]
+            return f"{_f}({first}, {m.group(2)})"
+        s = re.sub(r"\b" + _fn + r"(\([^()]*\))\s+([A-Za-z_][A-Za-z0-9_]*)",
+                   _join_ident, s)
     for k, v in GREEK_MAP.items():
         s = s.replace(k, v)
 
@@ -821,6 +865,10 @@ def recover_latex(latex):
     # A space directly after _ or ^ is never valid math, so re-join it.
     s = re.sub(r"_\s+([A-Za-z0-9])", r"_\1", s)
     s = re.sub(r"\^\s+([A-Za-z0-9])", r"^\1", s)
+    # An accent replacement is space-padded to protect a preceding command
+    # name (\log\bar{\pi} -> 'log pi_bar'). That padding must not split an
+    # identifier from its subscript: 'alpha_bar _t' -> 'alpha_bar_t'.
+    s = re.sub(r"([A-Za-z0-9])\s+(_[A-Za-z0-9])", r"\1\2", s)
     # Same hazard from a dropped command inside a group: "( x)" -> "(x)".
     s = re.sub(r"\(\s+", "(", s)
     s = re.sub(r"\s+\)", ")", s)
