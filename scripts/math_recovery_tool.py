@@ -129,21 +129,38 @@ def extract_equations(html, arxiv_id=None, display_only=False):
     # --- ALL-MATH PATH (inline + display)
     soup = BeautifulSoup(html, "html.parser")
     equations = []
-    seen = set()
 
-    for math_tag in soup.find_all("math"):
+    # OCCURRENCE IDENTITY (2026-10-07).
+    #
+    # This previously deduped by CONTENT (`key = tree_expr or latex; if key in
+    # seen: continue`). On 2605.00155 that discarded 340 of 991 occurrences:
+    # the paper uses `\ell_{1}` 25 times, `\delta` 20 times, and so on. The
+    # recovery files therefore contained 651 records for 991 source equations.
+    #
+    # Consequence: "651 matched" never meant 651 of 991 occurrences were
+    # handled — it meant 651 unique STRINGS were represented. Any per-occurrence
+    # question ("did occurrence #417 regress while #691 did not?") was
+    # unanswerable, and aggregate rates were computed over a silently reduced
+    # denominator.
+    #
+    # The witness needs a LOCATION dimension. Every <math> tag is now recorded
+    # with its document order, and duplicates are preserved. A content hash is
+    # kept so duplicates remain GROUPABLE without being COLLAPSED.
+    import hashlib
+
+    for occ_index, math_tag in enumerate(soup.find_all("math")):
         alttext = math_tag.get("alttext") or ""
         ann = math_tag.find("annotation")
         latex = ann.get_text().strip() if ann else alttext
 
-        # Dedup key prefers the tree expression, falls back to latex
         parser = MathMLParser()
         tree_expr, unsupported = parser.parse(math_tag)
 
         key = tree_expr if tree_expr else latex
-        if not key or len(key) < 2 or key in seen:
+        if not key or len(key) < 2:
             continue
-        seen.add(key)
+
+        content_sha = hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
 
         # Context: nearest sibling text
         ctx_before = ""
@@ -168,6 +185,12 @@ def extract_equations(html, arxiv_id=None, display_only=False):
             "latex": latex,
             "expr": tree_expr,
             "tree_unsupported": unsupported,
+            # --- occurrence identity: the witness has a LOCATION dimension.
+            # `occurrence` is document order across ALL <math> tags (stable
+            # across runs for a fixed paper version). `content_sha` lets
+            # duplicates be GROUPED without being COLLAPSED.
+            "occurrence": occ_index,
+            "content_sha": content_sha,
             "context_before": ctx_before,
             "context_after": ctx_after,
             "is_display": is_display,
@@ -1416,6 +1439,8 @@ def process_paper(arxiv_id, output_dir=None, verbose=True, display_only=False):
 
         results.append({
             "latex": eq["latex"],
+            "occurrence": eq.get("occurrence"),
+            "content_sha": eq.get("content_sha"),
             "recovered": recovered,
             "notes": notes,
             "is_display": eq["is_display"],
@@ -1479,9 +1504,36 @@ def process_corpus(corpus_dir, output_dir=None):
 
         arxiv_id = data.get("arxiv_id", jf.stem)
         equations = []
-        for eq in data.get("equations", []):
+        for _pos, eq in enumerate(data.get("equations", [])):
+            # PATH A: re-derive the tree expression from the STORED MathML.
+            #
+            # This loader previously dropped `mathml` entirely, so PATH A
+            # could never run on the corpus and every equation fell through
+            # to regex-on-LaTeX — discarding the placement data (munder,
+            # msubsup, mrow nesting) that MathML already encodes.
+            tree_expr = None
+            tree_unsupported = []
+            mml = eq.get("mathml")
+            if mml and HAS_BS4:
+                try:
+                    from mathml_parser import MathMLParser as _MMLP
+                    _soup = BeautifulSoup(mml, "html.parser")
+                    _mt = _soup.find("math")
+                    if _mt is not None:
+                        _p = _MMLP()
+                        tree_expr, tree_unsupported = _p.parse(_mt)
+                except Exception:
+                    tree_expr = None
+
             equations.append({
                 "latex": eq.get("latex", ""),
+                "expr": tree_expr,
+                "tree_unsupported": tree_unsupported,
+                # Preserve occurrence identity from the corpus file when
+                # present; otherwise use document order so every occurrence
+                # remains a separate witness.
+                "occurrence": eq.get("occurrence", _pos),
+                "content_sha": eq.get("content_sha"),
                 "context_before": eq.get("context_before", ""),
                 "context_after": eq.get("context_after", ""),
                 "is_display": eq.get("is_display", False),
@@ -1499,7 +1551,20 @@ def process_corpus(corpus_dir, output_dir=None):
         results = []
 
         for eq in equations:
-            recovered, notes = recover_latex(eq["latex"])
+            # PATH A: tree-derived expression from MathML (preferred).
+            # This loop previously ALWAYS used recover_latex, so the corpus
+            # run never exercised the structural path even when the MathML
+            # tree was available.
+            tree_expr = eq.get("expr")
+            if tree_expr:
+                recovered = tree_expr
+                notes = ["path:tree"]
+                if eq.get("tree_unsupported"):
+                    notes.extend(eq["tree_unsupported"])
+            else:
+                recovered, notes = recover_latex(eq["latex"])
+                notes = ["path:latex_fallback"] + notes
+
             ok, solution, error, variables, trivial = solve_recovered(recovered, original=eq["latex"])
 
             has_unknown = any(n.startswith("unknown:") for n in notes)
@@ -1512,6 +1577,8 @@ def process_corpus(corpus_dir, output_dir=None):
 
             results.append({
                 "latex": eq["latex"],
+                "occurrence": eq.get("occurrence"),
+                "content_sha": eq.get("content_sha"),
                 "recovered": recovered,
                 "notes": notes,
                 "solvable": ok,

@@ -62,6 +62,16 @@ MO_MAP = {
     "⌊": "floor(", "⌋": ")",
     "⌈": "ceil(", "⌉": ")",
     "|": "|", "‖": "|", "∥": "|",
+    # named constants
+    "∞": "oo", "ℵ": "aleph", "ℏ": "hbar", "ℯ": "e", "ⅈ": "i",
+    "∂": "partial", "∇": "grad", "Δ": "Delta", "√": "sqrt",
+    # big operators (limits, extrema) — must be named tokens, not dropped
+    "max": "Max", "min": "Min", "sup": "sup", "inf": "inf",
+    "lim": "Limit", "argmax": "argmax", "argmin": "argmin",
+    "limsup": "limsup", "liminf": "liminf",
+    # accent operators (hat, bar, tilde, etc.) — must be preserved as markers
+    "^": "^", "‾": "bar", "˜": "tilde", "¯": "bar", "ˆ": "hat",
+    "˙": "dot", "¨": "ddot", "˚": "ring", "˘": "breve", "ˇ": "check",
     # misc
     "!": "", "%": "/100", ",": ",", ";": ";", ":": ":",
     ".": ".", "…": "", "⋯": "", "⋮": "", "⋱": "",
@@ -69,6 +79,17 @@ MO_MAP = {
     # invisible operators -> drop
     "\u2061": "", "\u200b": "", "\u2060": "", "\u200c": "", "\u200d": "",
     "\ufeff": "", "\u00ad": "",
+}
+
+# Bases that take under/over LIMITS rather than ordinary sub/superscripts.
+# A node whose base is in this set must never fall through to `return base`
+# — that silently discards the limit and loses the summation index, the
+# constraint set, or the bound.
+BIG_OP_BASES = {
+    "Sum", "Prod", "Integral", "Limit",
+    "Max", "Min", "sup", "inf",
+    "argmax", "argmin", "limsup", "liminf",
+    "Union", "Intersect",
 }
 
 # Relation tokens that are NOT equality. If one of these appears in a
@@ -265,6 +286,17 @@ class MathMLParser:
             # A prime is a derivative marker, not an exponent
             if raw in ("′", "\\prime", "'"):
                 return f"{base}_prime"
+            # OPTIMALITY / DUALITY markers: \ast and \star in a superscript
+            # mean "optimal" or "dual", NOT multiplication.
+            # MO_MAP turns ∗ and ⋆ into '*', so without this branch the exponent
+            # becomes '**()' after tidy strips the bare operator, destroying it:
+            #   p^{\ast}      ->  '((p)**())'   WRONG
+            #   \Delta_j^{\star} -> 'Delta_j**()' WRONG
+            if raw in ("∗", "⋆", "\\ast", "\\star", "*"):
+                return f"{base}_star"
+            # INFINITY as an exponent is a genuine value, not an operator
+            if raw in ("∞", "\\infty"):
+                return f"(({base})**(oo))"
             return f"(({base})**({exp}))"
 
         if tag == "msub":
@@ -291,7 +323,9 @@ class MathMLParser:
 
             # Big operator with limits: sum/prod/integral from lo to hi.
             # These are bound operators, not variable subscripts.
-            if base in ("Sum", "Prod", "Integral"):
+            # Max/Min/Limit/argmax also take limits and MUST be included —
+            # omitting them dropped the constraint: max_{beta in Delta_n} -> "Max".
+            if base in BIG_OP_BASES:
                 return f"{base}_{self._limit_token(sub)}_{self._limit_token(sup)}"
 
             # OPERATOR SUPERSCRIPT on a subscripted symbol:
@@ -305,6 +339,13 @@ class MathMLParser:
                 return f"{base}_{self._subscript_token(sub)}_perp"
             if raw in ("′", "\\prime", "'"):
                 return f"{base}_{self._subscript_token(sub)}_prime"
+            # \ast / \star as an OPERATOR SUPERSCRIPT are optimality/duality
+            # markers, not multiplication. Without this branch msubsup emits
+            # an empty exponent:  \Delta_j^{\star} -> 'Delta_j**()'.
+            if raw in ("∗", "⋆", "\\ast", "\\star", "*"):
+                return f"{base}_{self._subscript_token(sub)}_star"
+            if raw in ("∞", "\\infty"):
+                return f"{base}_{self._subscript_token(sub)}**({sup})"
 
             return f"{base}_{self._subscript_token(sub)}**({sup})"
 
@@ -351,6 +392,23 @@ class MathMLParser:
                 if acc in ("⊥",):
                     return f"{base}_perp"
 
+                # BIG OPERATOR WITH UNDERNEATH LIMITS: \\sum_{y\\in\\mathcal{Y}}
+                # In display mode, limits sit UNDER the operator, encoded as
+                # <munder> or <munderover> — NOT <msub>. Falling through to
+                # `return base` here silently DROPS the limits, which is exactly
+                # the "missing nodes" symptom: the summation index and domain
+                # vanish from the recovered expression.
+                if base in BIG_OP_BASES:
+                    if tag == "munderover" and len(kids) >= 3:
+                        lo = self._walk(kids[1])
+                        hi = self._walk(kids[2])
+                        if lo is not None and hi is not None:
+                            return f"{base}_{self._limit_token(lo)}_{self._limit_token(hi)}"
+                    if tag == "munder" and len(kids) >= 2:
+                        lo = self._walk(kids[1])
+                        if lo is not None:
+                            return f"{base}_{self._limit_token(lo)}"
+
                 # Accent characters: tag the symbol.
                 tag_name = self._accent_name(acc)
                 if tag_name:
@@ -361,9 +419,28 @@ class MathMLParser:
             return base
 
         if tag == "mtable":
-            # system of equations / matrix -> not a single solvable equation
+            # STRUCTURAL CONSERVATION: a table is not a single solvable
+            # equation, but returning None DISCARDS every row and cell —
+            # information loss, not a backend limitation.
+            #
+            # Instead, walk the table and preserve its contents in a readable
+            # bracketed form, and record the flag so the solver stage can
+            # still refuse to treat it as one equation.
+            rows = []
+            for tr in node.find_all("mtr", recursive=False):
+                cells = []
+                for td in tr.find_all("mtd", recursive=False):
+                    cell = "".join(
+                        filter(None, (self._walk(k) for k in self._children(td)))
+                    )
+                    cells.append(cell)
+                rows.append(cells)
             self.unsupported.append("mtable_system")
-            return None
+            if not rows:
+                return ""
+            # matrix-like rendering: [ a, b ; c, d ]
+            body = " ; ".join(", ".join(c for c in row) for row in rows)
+            return f"[{body}]"
 
         if tag == "mspace":
             return ""
@@ -507,9 +584,18 @@ class MathMLParser:
 
     @staticmethod
     def _limit_token(lim):
-        """Normalise a big-operator limit like 'i=1' or 'n' into a token."""
+        """
+        Normalise a big-operator limit like 'i=1' or 'n' into a token.
+
+        The equality must NOT be flattened to '_' — that makes `i=1` and `i_1`
+        indistinguishable, so the bound is lost as a relation and survives only
+        as a separator. Use a distinct 'eq' marker so the limit reads
+        unambiguously:  Sum_i=1^n  ->  Sum_i_eq_1_n
+        """
         s = lim.strip().replace(" ", "")
-        s = s.replace("=", "_")
+        s = s.replace("=", "_eq_")
+        s = s.replace("\le", "_le_").replace("\ge", "_ge_")
+        s = s.replace("\in", "_in_").replace("\to", "_to_")
         s = s.replace(",", "_")
         s = re.sub(r"_+", "_", s)
         s = s.strip("_")
@@ -517,9 +603,19 @@ class MathMLParser:
 
     @staticmethod
     def _accent_name(ch):
+        # Both the combining/macron forms AND the standalone MathML operator
+        # codepoints must be present. arxiv emits U+203E (overline) for \\bar,
+        # not U+00AF (macron) — omitting it silently dropped every overline.
         return {
-            "^": "hat", "¯": "bar", "~": "tilde", "→": "vec",
-            "˙": "dot", "¨": "ddot", "ˇ": "check", "˘": "breve",
+            "^": "hat", "ˆ": "hat",            # U+005E, U+02C6
+            "¯": "bar", "‾": "bar",            # U+00AF macron, U+203E overline
+            "~": "tilde", "˜": "tilde",        # U+007E, U+02DC
+            "→": "vec", "⟶": "vec",            # arrows used as vector accent
+            "˙": "dot", "¨": "ddot",
+            "ˇ": "check", "˘": "breve",
+            "˚": "ring", "°": "deg",
+            "⌢": "frown", "⌣": "smile",
+            "⏞": "overbrace", "⏟": "underbrace",
         }.get(ch)
 
     @staticmethod
