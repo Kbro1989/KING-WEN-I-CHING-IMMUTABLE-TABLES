@@ -32,6 +32,7 @@ GENS = [
     ("v6 regex",  "math_recovery_v6"),
     ("v12 tree",  "math_recovery_v12"),
     ("v13 tree",  "math_recovery_v13"),
+    ("v14 relid", "math_recovery_v14"),
 ]
 
 # ── relation tokens that must NEVER become '=' ──────────────────────────
@@ -76,10 +77,69 @@ def classify(src_latex: str, recovered: str, error: str, solvable: bool):
     if not recovered:
         return "UNRECOVERED"
 
-    # --- FALSE RECOVERY: solver accepted, but a relation was turned into '=' ---
+    # --- FALSE RECOVERY: solver accepted, but the TOP-LEVEL relation was
+    # turned into '='.
+    #
+    # The relation must be at the TOP LEVEL. A relation inside a subscript or
+    # argument does not make the equation a relation:
+    #   \Delta \coloneqq s(x) - E_{R \sim P_0}[R(x)]
+    # Here the top-level relation is \coloneqq (a true equality/definition) and
+    # \sim sits inside a subscript. Flagging this was a false positive.
+    # Strip subscript/superscript groups before testing.
+    def _top_level(s):
+        """
+        Remove subscript/superscript GROUPS so only the top-level relation
+        remains testable.
+
+        Must handle NESTED braces: `\mathbb{E}_{R\sim P_{0}}[R(x)]` contains a
+        subscript whose body has its own group. A flat `[^{}]*` regex leaves the
+        inner `\sim` behind and reports a false positive.
+
+        Uses a balancing-brace scan (same discipline as the parser).
+        """
+        out = []
+        i = 0
+        while i < len(s):
+            ch = s[i]
+            if ch in "_^" and i + 1 < len(s):
+                j = i + 1
+                while j < len(s) and s[j].isspace():
+                    j += 1
+                if j < len(s) and s[j] == "{":
+                    # balancing scan
+                    depth = 0
+                    k = j
+                    while k < len(s):
+                        if s[k] == "{":
+                            depth += 1
+                        elif s[k] == "}":
+                            depth -= 1
+                            if depth == 0:
+                                break
+                        k += 1
+                    i = k + 1
+                    continue
+                if j < len(s) and (s[j].isalnum() or s[j] == "\\"):
+                    # bare sub/superscript token (possibly a command)
+                    k = j
+                    if s[k] == "\\":
+                        k += 1
+                        while k < len(s) and s[k].isalpha():
+                            k += 1
+                    else:
+                        while k < len(s) and s[k].isalnum():
+                            k += 1
+                    i = k
+                    continue
+            out.append(ch)
+            i += 1
+        return "".join(out)
+
+    src_top = _top_level(src_latex)
+
     if solvable:
         for name, pat in NON_EQ_RELATIONS.items():
-            if has(pat, src_latex):
+            if has(pat, src_top):
                 # source has this relation; did the recovered form lose it?
                 if name == "~=" and "~=" not in recovered and "≈" not in recovered:
                     return "FALSE_RECOVERY"
@@ -175,12 +235,31 @@ print(tot_row)
 
 print()
 print("=" * 92)
+print("OCCURRENCE CONSERVATION")
+print("=" * 92)
+print()
+# The scoreboard itself must conserve occurrences. A classification that drops
+# equations is the same class of defect it is meant to detect.
+conservation_ok = True
+for label, (n, counts) in results.items():
+    classified = sum(counts.get(c, 0) for c in ORDER)
+    if classified != n:
+        conservation_ok = False
+        print(f"  FAIL {label}: classified={classified} != occurrences={n} "
+              f"(drift {classified - n:+d})")
+    else:
+        print(f"  ok   {label}: {classified}/{n} classified")
+assert conservation_ok, "classification conservation failure"
+print()
+
+print("=" * 92)
 print("HEADLINE")
 print("=" * 92)
 print()
 for label, (n, counts) in results.items():
     false_rec = counts.get("FALSE_RECOVERY", 0)
-    honest = counts.get("EXACT", 0) + counts.get("STRUCTURAL_EQUIV", 0)
+    # computed FROM the buckets so it can never disagree with them
+    honest = sum(counts.get(c, 0) for c in ("EXACT", "STRUCTURAL_EQUIV"))
     print(f"  {label}:")
     print(f"    structurally faithful : {honest:>5}  ({100*honest/max(n,1):.1f}%)")
     print(f"    lossy but recognisable: {counts.get('LOSSY',0):>5}")
