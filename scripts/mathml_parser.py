@@ -37,14 +37,28 @@ MO_MAP = {
     "×": "*", "⋅": "*", "·": "*", "∗": "*", "⋆": "*",
     "÷": "/", "∕": "/",
     # --- EQUALITY: only true equality operators map to '='
-    "=": "=", "≡": "=", "≔": "=", "≕": "=", ":=": "=", "≝": "=",
+    # ONLY true equality maps to '='. '≡' is IDENTITY (a stronger, different
+    # claim than equality) and must not collapse into '='.
+    "=": "=", "≔": "=", "≕": "=", ":=": "=", "≝": "=",
+    "≡": "equiv",
     # --- NON-EQUALITY RELATIONS -------------------------------------------
     # These are NOT equality. Mapping them to '=' fabricates solutions the
     # paper never stated (x ~ q(x) is NOT x = q(x)). Each keeps its own
     # marker token so the relation survives into the expression.
     "≠": "!=",
-    "≈": "~=", "≃": "~=", "≅": "~=", "∼": "~=", "∽": "~=",
-    "∝": "propto", "≍": "~=",
+    # RELATION IDENTITY (2026-10-07).
+    # These were ALL mapped to the same '~=' token, conflating four distinct
+    # mathematical relations. ~= is enough to prevent '=' fabrication, but it
+    # is not relation IDENTITY preservation:
+    #     \sim  (distributed as / asymptotically equal)
+    #     \approx (approximately equal)
+    #     \simeq (asymptotically equal)
+    #     \cong (congruent / isomorphic)
+    #     \asymp (asymptotic)
+    # Each now keeps its own token so the relation kind survives.
+    "≈": "approx", "≃": "simeq", "≅": "cong", "∼": "sim", "∽": "sim",
+    "≍": "asymp", "≐": "doteq",
+    "∝": "propto",
     "≤": "<=", "⩽": "<=", "≥": ">=", "⩾": ">=", "<": "<", ">": ">",
     "≪": "<<", "≫": ">>", "≺": "prec", "≻": "succ",
     # logic / sets -- membership is NOT equality
@@ -112,7 +126,10 @@ BIG_OP_BASES = {
 # recovered expression, the expression is a RELATION, not an equation, and
 # must never be handed to a solver as 'lhs = rhs'.
 NON_EQUALITY_TOKENS = {
-    "~=", "!=", "propto", "prec", "succ", "<<", ">>", "<", ">", "<=", ">=",
+    # typed relations (relation identity is now first-class)
+    "sim", "approx", "simeq", "cong", "asymp", "doteq", "propto", "equiv",
+    "~=",  # legacy alias, kept so older artifacts still guard correctly
+    "!=", "prec", "succ", "<<", ">>", "<", ">", "<=", ">=",
     "in", "notin", "ni", "subset", "supset", "subseteq", "supseteq",
     "and", "or", "not", "forall", "exists", "cap", "cup", "setminus",
     "->", "<-", "<->", "=>", "<=>", "|->",
@@ -609,10 +626,23 @@ class MathMLParser:
         unambiguously:  Sum_i=1^n  ->  Sum_i_eq_1_n
         """
         s = lim.strip().replace(" ", "")
+        # Preserve MULTI-CHAR relation tokens BEFORE splitting on single
+        # chars, or ">=" becomes ">_eq_" and the relation is destroyed.
+        # Verified failure: inf_{t >= t_0}  ->  "inf_t>_eq_t_0"
+        for rel, tag in ((">=", "_ge_"), ("<=", "_le_"), ("!=", "_ne_"),
+                         ("<->", "_iff_"), ("->", "_to_"),
+                         ("equiv", "_equiv_"), ("approx", "_approx_"),
+                         ("simeq", "_simeq_"), ("cong", "_cong_"),
+                         ("sim", "_sim_"), ("propto", "_propto_"),
+                         ("in", "_in_"), ("prec", "_prec_"), ("succ", "_succ_")):
+            s = s.replace(rel, tag)
         s = s.replace("=", "_eq_")
-        s = s.replace("\le", "_le_").replace("\ge", "_ge_")
-        s = s.replace("\in", "_in_").replace("\to", "_to_")
         s = s.replace(",", "_")
+        # Strip the implicit-product '*' the walker inserts next to a relation:
+        #   beta*_in_*Delta  ->  beta_in_Delta
+        # A relation token is not a multiplicand.
+        s = re.sub(r"\*\s*(_[a-z]+_)", r"\1", s)
+        s = re.sub(r"(_[a-z]+_)\s*\*", r"\1", s)
         s = re.sub(r"_+", "_", s)
         s = s.strip("_")
         return s or "n"
