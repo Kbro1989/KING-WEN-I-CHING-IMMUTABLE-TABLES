@@ -18,6 +18,7 @@ Classes (from the corpus work):
     FALSE_RECOVERY     solver accepted while the mathematics is wrong
     UNRECOVERED        no recovery produced
 """
+import argparse
 import json
 import re
 import sys
@@ -33,6 +34,7 @@ GENS = [
     ("v12 tree",  "math_recovery_v12"),
     ("v13 tree",  "math_recovery_v13"),
     ("v14 relid", "math_recovery_v14"),
+    ("v15 honest", "math_recovery_v15"),
 ]
 
 # ── relation tokens that must NEVER become '=' ──────────────────────────
@@ -193,9 +195,27 @@ print("SEMANTIC HONESTY SCOREBOARD")
 print("=" * 92)
 print()
 
+ap = argparse.ArgumentParser(description=__doc__)
+ap.add_argument("--corpus", default="DATASETS/arxiv_html_corpus",
+                help="corpus dir (informational; recovery dirs are the input)")
+ap.add_argument("--recovery", default=None,
+                help="single recovery dir to score as the newest generation")
+ap.add_argument("--output", default=None, help="write scoreboard JSON here")
+ap.add_argument("--gens", nargs="*", default=None,
+                help="override generation list, e.g. v15=math_recovery_v15")
+args = ap.parse_args()
+
+gens = GENS
+if args.gens:
+    gens = [(g.split("=", 1)[0], g.split("=", 1)[1]) for g in args.gens]
+elif args.recovery:
+    # score the named dir as the newest column alongside the known history
+    label = Path(args.recovery).name.replace("math_recovery_", "")
+    gens = GENS + [(f"{label} honest", args.recovery)]
+
 results = {}
-for label, sub in GENS:
-    d = ROOT / "DATASETS" / sub
+for label, sub in gens:
+    d = ROOT / sub if Path(sub).is_absolute() else ROOT / "DATASETS" / sub
     if not d.exists():
         continue
     counts = Counter()
@@ -265,3 +285,23 @@ for label, (n, counts) in results.items():
     print(f"    lossy but recognisable: {counts.get('LOSSY',0):>5}")
     print(f"    FALSE RECOVERY        : {false_rec:>5}   <- must be 0")
     print()
+
+if args.output:
+    out = ROOT / args.output if not Path(args.output).is_absolute() else Path(args.output)
+    payload = {
+        "corpus": args.corpus,
+        "total_occurrences": {lbl: n for lbl, (n, _) in results.items()},
+        "generations": {
+            lbl: {
+                "occurrences": n,
+                "classes": dict(counts),
+                "structurally_faithful": sum(
+                    counts.get(c, 0) for c in ("EXACT", "STRUCTURAL_EQUIV")),
+                "false_recovery": counts.get("FALSE_RECOVERY", 0),
+            }
+            for lbl, (n, counts) in results.items()
+        },
+    }
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    print(f"Wrote {out}")
