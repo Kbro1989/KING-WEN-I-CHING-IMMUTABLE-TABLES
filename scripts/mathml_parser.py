@@ -116,8 +116,8 @@ MO_MAP = {
 # — that silently discards the limit and loses the summation index, the
 # constraint set, or the bound.
 BIG_OP_BASES = {
-    "Sum", "Prod", "Integral", "Limit",
-    "Max", "Min", "sup", "inf",
+    "Sum", "Prod", "Integral", "ContourIntegral", "DoubleIntegral", "TripleIntegral",
+    "Limit", "Max", "Min", "sup", "inf",
     "argmax", "argmin", "limsup", "liminf",
     "Union", "Intersect",
 }
@@ -138,7 +138,8 @@ NON_EQUALITY_TOKENS = {
 # Multi-char operators that appear as a single <mo>.
 # NOTE: must NOT contain equality substitutions for non-equality relations.
 MO_MULTI = {
-    "∑": "Sum", "∏": "Prod", "∫": "Integral", "∮": "Integral",
+    "∑": "Sum", "∏": "Prod", "∫": "Integral", "∮": "ContourIntegral",
+    "∬": "DoubleIntegral", "∭": "TripleIntegral",
     "∂": "d", "∇": "grad", "∞": "oo",
     "√": "sqrt",
 }
