@@ -475,6 +475,29 @@ def _apply_command(s, cmd, nargs, fn, max_passes=8):
     return s
 
 
+def count_equalities(expr):
+    """
+    Count TRUE equality operators in a recovered expression.
+
+    `expr.count("=")` is WRONG: the relation tokens contain '=' as a substring
+    ('~=' contains '='), so relations were miscounted as equations. v13's
+    'recoverable' figure was inflated by 78 such cases.
+
+    A true equality is an '=' that is NOT part of a longer relation token.
+    """
+    if not expr:
+        return 0
+    # strip known multi-char relation tokens first
+    cleaned = expr
+    for tok in ("~=", "!=", "<=", ">=", "=>", "<=>", "<->", "|->", "_eq_"):
+        cleaned = cleaned.replace(tok, "\x00")
+    # also strip the typed relation tokens (they never contain '=' but be safe)
+    for tok in ("sim", "approx", "simeq", "cong", "asymp", "propto",
+                "equiv", "prec", "succ"):
+        cleaned = re.sub(r"\b" + tok + r"\b", "\x00", cleaned)
+    return cleaned.count("=")
+
+
 def recover_latex(latex):
     """
     Convert a LaTeX equation into a solver-ready string.
@@ -1262,8 +1285,8 @@ def solve_recovered(recovered, original=None):
             return False, None, f"not_an_equation:relation:{tok}", [], False
 
     # Must have exactly one top-level '='
-    if recovered.count("=") != 1:
-        if recovered.count("=") == 0:
+    if count_equalities(recovered) != 1:
+        if count_equalities(recovered) == 0:
             return False, None, "no_equality", [], False
         # Chained equality a = b = c: reduce to the FIRST relation a = b,
         # which is a real, solvable relation the paper states.
@@ -1423,7 +1446,7 @@ def process_paper(arxiv_id, output_dir=None, verbose=True, display_only=False):
         # Count as "recoverable" if it converted to something parseable-looking
         # (i.e. has an '=' and no unknown-command residue)
         has_unknown = any(n.startswith("unknown:") for n in notes)
-        is_eq = recovered.count("=") == 1
+        is_eq = count_equalities(recovered) == 1
         if is_eq and not has_unknown:
             recoverable += 1
 
@@ -1568,7 +1591,7 @@ def process_corpus(corpus_dir, output_dir=None):
             ok, solution, error, variables, trivial = solve_recovered(recovered, original=eq["latex"])
 
             has_unknown = any(n.startswith("unknown:") for n in notes)
-            if recovered.count("=") == 1 and not has_unknown:
+            if count_equalities(recovered) == 1 and not has_unknown:
                 recoverable += 1
             if ok:
                 solved += 1
