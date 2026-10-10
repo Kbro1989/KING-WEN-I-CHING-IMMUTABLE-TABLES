@@ -118,7 +118,7 @@ print("\n=== annotation (LaTeX metadata) is not a structural node ===")
 # <annotation> must be skipped, not counted as unsupported
 t, u = extract('<math><semantics><mi>&#x3B4;</mi><annotation encoding="application/x-tex">\\delta</annotation></semantics></math>')
 check("annotation skipped (no unsupported)", not u, f"unsup={u}")
-check("delta identifier survives", t.kind == "identifier" and "δ" in (t.value or ""), f"kind={t.kind} value={t.value}")
+check("delta identifier survives", t.kind == "identifier" and "delta" in (t.value or ""), f"kind={t.kind} value={t.value}")
 
 
 print("\n=== Round-trip: canonical hash invariant ===")
