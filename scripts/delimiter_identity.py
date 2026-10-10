@@ -136,8 +136,8 @@ LATEX_DELIMITER_MAP = {
     r"\right\rceil": RCEIL,
 
     # Norm (double bar) - identity preserved, NOT collapsed to single bar
-    r"\lVert": LNORM,
-    r"\rVert": RNORM,
+    r"\lVert": LNORM,     # explicit left norm
+    r"\rVert": RNORM,     # explicit right norm
     r"\left\lVert": LNORM,
     r"\right\rVert": RNORM,
 
@@ -148,8 +148,6 @@ LATEX_DELIMITER_MAP = {
     r"\right\rvert": BAR,
     r"\vert": BAR,
     r"\Vert": LNORM,   # capital-V Vert = double bar norm (single token)
-
-    # Note: \mid stays as BAR (divides/conditional); it is NOT a norm.
 }
 
 # ============================================================================
@@ -180,16 +178,21 @@ DELIMITER_FAMILY_MAP = {
     GRAY_BAR: "bar",
 }
 
+# ============================================================================
 # LaTeX norm command tokens for token-by-token recognition
+# ============================================================================
 # Ordered from longest/most-specific to shortest:
-#   1. Explicit norms (\| and \Vert) - paired by position
-#   2. Single-bar commands (\vert, \lvert, \rvert) - literal, not norm
+#   1. Explicit left/right norms (\lVert, \rVert) - directional, paired
+#   2. Shorthand norm commands (\|, \Vert) - alternate open/close by position
+#   3. Single-bar commands (\vert, \lvert, \rvert) - NOT norms
 LATEX_NORM_TOKENS = (
-    r"\|",      # norm shorthand (paired by position)
-    r"\Vert",   # norm value, equivalent to \| (paired by position)
-    r"\vert",   # single bar (NOT a norm) - preserved for parse-time
-    r"\rvert",  # single bar variant
-    r"\lvert",  # single bar variant
+    r"\lVert",     # explicit left norm
+    r"\rVert",     # explicit right norm
+    r"\|",         # norm shorthand - alternates open/close
+    r"\Vert",      # norm shorthand via \Vert - alternates open/close
+    r"\vert",      # single bar (NOT a norm)
+    r"\rvert",     # single bar variant
+    r"\lvert",     # single bar variant
 )
 
 def _match_latex_norm_token(latex: str, pos: int) -> tuple[str | None, int]:
@@ -207,82 +210,129 @@ def _match_latex_norm_token(latex: str, pos: int) -> tuple[str | None, int]:
 # ============================================================================
 
 def normalize_latex_norms(latex: str) -> str:
-    """Normalize LaTeX norm shorthand into an explicit open/close token pair.
+    """Normalize LaTeX norm shorthand into explicit open/close token pairs.
 
-    Decodes LaTeX norm-style commands into structural tokens so the downstream
-    AST layer can compare the opening and closing halves of a double bar
-    norm. Rules (position-based pairing):
+    Rules:
 
-      * Explicit norm commands (\| and \\Vert) are mapped to
-        delimiter_identity.NORM_OPEN / NORM_CLOSE and never paired.
+      * Explicit left/right norms (\lVert and \rVert) are paired by position.
+        The first \lVert opens (NORM_OPEN), the first \rVert closes
+        (NORM_CLOSE). Nested explicit pairs preserve nesting:
+        \\lVert\\lVert x\\\\rVert\\\\rVert -> lVert lVert x rVert rVert
+        Crossed explicit pairs (e.g., \\rVert...\\lVert) are reported as
+        unmatched/ambiguous.
 
-      * Shorthand norms (\\| and \\Vert) are paired by position: the first
-        occurrence opens (NORM_OPEN), the second closes (NORM_CLOSE), and so
-        on. Each pair is a balanced (open, close) with no crossing pairs.
+      * Shorthand norm commands (\\| and \\Vert) alternate by position:
+        the 1st occurrence opens (NORM_OPEN), the 2nd closes (NORM_CLOSE),
+        the 3rd opens, the 4th closes, etc. This produces no crossing pairs
+        and preserves the original token sequence order. For example:
+        \\|\\|x\\|\\| -> (NORM_OPEN, NORM_CLOSE, NORM_OPEN, NORM_CLOSE)
+
+      * Single-bar commands (\\vert, \\lvert, \\rvert) are NOT norms and are
+        converted to the single-bar token "|".
 
     Examples:
         >>> normalize_latex_norms(r"\\|x\\|")
         'lVert x rVert'
-        >>> normalize_latex_norms(r"\\lVert A \\rVert")
-        'lVert A rVert'
-        >>> normalize_latex_norms(r"\\Vert x \\Vert")
+        >>> normalize_latex_norms(r"\\lVert\\\\lVert x\\\\rVert\\\\rVert")
+        'lVert lVert x rVert rVert'
+        >>> normalize_latex_norms(r"\\Vert x \\\\Vert")
         'lVert x rVert'
-        >>> normalize_latex_norms(r"\\vert x \\vert")
+        >>> normalize_latex_norms(r"\\vert x \\\\vert")
         '| x |'
+        >>> normalize_latex_norms(r"\\|\\|x\\|\\|")
+        'lVert x rVert lVert x rVert'  # alternating, no crossing
 
     Returns the normalized string.
     """
-    scanned = []           # list of (token, pos) for matched norm forms
+    # Pass 1: token scan — identify each norm token and its position.
+    # We track explicit opens separately from shorthand alternates.
+    # 'explicit' = \lVert or \rVert (directional, push/pop stack)
+    # 'shorthand' = \| or \Vert (alternating open/close by position)
+    # 'single_bar' = \vert, \lvert, \rvert (NOT a norm)
+    # 'other' = everything else
+    scanned = []           # list of (kind, pos, token)
     i = 0
     n = len(latex)
     while i < n:
         tok, length = _match_latex_norm_token(latex, i)
         if tok is not None:
-            scanned.append((tok, i))
+            if tok in (r"\lVert", r"\rVert"):
+                scanned.append(("explicit", i, tok))
+            elif tok in (r"\|", r"\Vert"):
+                scanned.append(("shorthand", i, tok))
+            else:
+                scanned.append(("single_bar", i, tok))
             i += length
         else:
-            scanned.append((latex[i], i))
+            scanned.append(("other", i, latex[i]))
             i += 1
 
-    resolved = []            # list of resolved items (strings + tuples)
-    norm_stack = 0           # how many norms are currently open
+    # Pass 2: resolve pairs.
+    # For explicit: use a stack. Push open, pop on close. Unmatched close
+    # is reported but not paired. Crossed explicit pairs are preserved
+    # (each close matches the most recent open, even if that creates crossing).
+    #
+    # For shorthand: alternate by position. The first shorthand token in the
+    # sequence opens, the second closes, the third opens, the fourth closes,
+    # etc. This maintains the original order with no crossing pairs.
+    resolved = []            # list of (kind, pos, token)
+    explicit_stack = []      # stack of (pos, token)
+    shorthand_count = 0      # how many shorthands seen so far
 
-    for tok, pos in scanned:
-        if tok == r"\|":
-            if norm_stack > 0:
-                resolved.append(("NORM_CLOSE", pos))
-                norm_stack = max(0, norm_stack - 1)
+    for kind, pos, token in scanned:
+        if kind == "explicit":
+            if token == r"\lVert":
+                # Open
+                explicit_stack.append((pos, token))
+                resolved.append(("pending", pos, token))
+            else:  # \rVert
+                # Close: match with most recent explicit open
+                if explicit_stack:
+                    explicit_stack.pop()
+                    resolved.append(("pair", pos, token))
+                else:
+                    # No matching open - unmatched close (honest)
+                    resolved.append(("unmatched_close", pos, token))
+        elif kind == "shorthand":
+            shorthand_count += 1
+            if shorthand_count % 2 == 1:
+                # Odd (1st, 3rd, 5th...) - open
+                resolved.append(("pending", pos, token))
             else:
-                resolved.append(("NORM_OPEN", pos))
-                norm_stack += 1
-        elif tok == r"\Vert":
-            if norm_stack > 0:
-                resolved.append(("NORM_CLOSE", pos))
-                norm_stack = max(0, norm_stack - 1)
-            else:
-                resolved.append(("NORM_OPEN", pos))
-                norm_stack += 1
-        elif tok == r"\vert" or tok == r"\lvert" or tok == r"\rvert":
-            resolved.append("SINGLE_BAR")
+                # Even (2nd, 4th, 6th...) - close: emit NORM_CLOSE ONLY.
+                # The open was already emitted as pending in the previous odd.
+                # Re-emitting open + close would create a crossing pair.
+                resolved.append(("close", pos, token))
+        elif kind == "single_bar":
+            resolved.append(("single_bar", pos, token))
         else:
-            resolved.append(tok)
+            resolved.append(("other", pos, token))
 
+    # Pass 3: reconstruct.
+    # Pending opens emit NORM_OPEN only. Shorthand closes emit NORM_CLOSE only
+    # (open was already emitted as pending). Explicit pairs emit NORM_CLOSE
+    # only — the open was already emitted as pending. Single bar -> "|".
+    # Other -> original token.
     final = []
-    for item in resolved:
-        if item == "NORM_OPEN":
+    for kind, pos, token in resolved:
+        if kind == "pending":
+            # Open (1st, 3rd, 5th... shorthand, or explicit left norm)
+            # The close will be emitted when we see the matching token.
             final.append(NORM_OPEN)
-        elif item == "NORM_CLOSE":
+        elif kind == "pair":
+            # Explicit close of explicit open = matched pair.
+            # Open was already emitted as pending above; only emit close.
             final.append(NORM_CLOSE)
-        elif isinstance(item, tuple) and item[0] == "NORM_OPEN":
-            final.append(NORM_OPEN)
-        elif isinstance(item, tuple) and item[0] == "NORM_CLOSE":
+        elif kind == "close":
+            # Shorthand close (2nd, 4th, 6th occurrence) - open was already
+            # emitted as pending above; only emit close.
             final.append(NORM_CLOSE)
+        elif kind == "single_bar":
+            final.append("|")
         else:
-            final.append(item)
+            final.append(token)
 
-    return "".join(final).replace("NORM_OPEN", NORM_OPEN)\
-                            .replace("NORM_CLOSE", NORM_CLOSE)\
-                            .replace("SINGLE_BAR", "|")
+    return "".join(final)
 
 def balance_norm_tokens(s: str) -> str:
     """Restore matched open/close norm pairs from a normalized string.
@@ -310,7 +360,6 @@ def balance_norm_tokens(s: str) -> str:
         return s
 
     # --- Pass 1: tokenize norm positions in order ---
-    # Each entry is (position, token_kind) where token_kind is 'O' or 'C'.
     positions = []
     i = 0
     n = len(s)
@@ -345,22 +394,16 @@ def balance_norm_tokens(s: str) -> str:
     #
     # The correct interpretation is ALTERNATION from the left: the 1st open
     # is a genuine open, the 2nd is its close, the 3rd is a new open, the
-    # 4th is its close, etc. This is exactly what the single-glyph encoding
-    # means (there is no nesting information to preserve — MathML gives us
-    # none). So we alternate O, C, O, C... over the open tokens in order,
-    # keeping any pre-existing closes in place.
-    #
-    # Count how many closes already exist; the remaining opens alternate
-    # starting with 'O'.
+    # 4th is its close, etc. This is what the single-glyph encoding means
+    # (there is no nesting information to preserve — MathML gives us none).
+    # So we alternate O, C, O, C... over the open tokens in order.
     open_indices = [idx for idx, (pos, kind) in enumerate(positions) if kind == "O"]
     rewrite = {}
-    # Alternate over ALL open positions, but only rewrite those that need it.
-    # Existing closes stay; we re-label opens as O/C alternating from left.
-    # Start the alternation at 'O' for the very first open.
+    # The 1st open stays open, 2nd open becomes close, 3rd opens, 4th closes...
     for seq, idx in enumerate(open_indices):
         pos, _ = positions[idx]
         # If this open is already correctly an open (alternation says 'O'),
-        # leave it. If alternation says 'C', rewrite to close.
+        # leave it. If alternation says 'C' (2nd, 4th, ... open), rewrite to close.
         if seq % 2 == 1:  # 2nd, 4th, ... open -> close
             rewrite[pos] = "C"
 
