@@ -124,13 +124,20 @@ def main() -> int:
             if not roundtrip_ok:
                 roundtrip_failures.append(okey)
 
-            # structural status per contract dimensions
+            # structural status per contract dimensions.
+            # FINDING 1: 'no unsupported nodes' is NOT the same as contract
+            # 'verified' (all source children accounted for). We label the
+            # extractor-coverage metric honestly and keep a SEPARATE slot for
+            # a future source-fidelity check.
             if has_unsupported:
-                struct_status = "partial"   # some nodes preserved, some unsupported
+                extractor_status = "partial"       # some nodes unsupported
+                struct_status = "partial"
                 m["partial"] += 1
             else:
-                struct_status = "verified"
-                m["verified"] += 1
+                extractor_status = "fully_supported_by_extractor"
+                # NOT yet 'verified' — that requires a source-fidelity check.
+                struct_status = "unverified"
+                m["fully_supported_by_extractor"] += 1
             if roundtrip_ok:
                 m["roundtrip_ok"] += 1
             else:
@@ -145,6 +152,7 @@ def main() -> int:
                 "source_locator": occ.source_locator,
                 "source_hash": occ.source_hash,
                 "extraction_hash": extraction_hash(latex, mathml),
+                "extractor_status": extractor_status,
                 "structural_status": struct_status,
                 "ast_hash": pre_hash,
                 "roundtrip_ok": roundtrip_ok,
@@ -193,11 +201,13 @@ def main() -> int:
         "roundtrip_gate": m["roundtrip_failed"] == 0,
         "structural_survival_gate": gate_ok,
         "note": (
-            "ast_hash is the canonical hash of the typed ExprNode. roundtrip_ok "
-            "verifies to_dict->from_dict->hash invariance. 'verified' means no "
-            "unsupported nodes; 'partial' means some source nodes preserved as "
-            "kind=unsupported (never dropped). Missing/malformed trees are "
-            "explicit failures, never silent success."
+            "extractor_status='fully_supported_by_extractor' means no unsupported "
+            "nodes were emitted; it is NOT contract 'verified' (which requires a "
+            "source-fidelity check that every source child is accounted for). "
+            "structural_status stays 'unverified' until that check exists. "
+            "ast_hash is the canonical hash of the typed ExprNode; roundtrip_ok "
+            "verifies to_dict->from_dict->hash invariance. Bounded operators "
+            "carry explicit lower_bound/upper_bound child roles."
         ),
     }
 
@@ -210,9 +220,11 @@ def main() -> int:
     out_report.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
 
     print("=== STRUCTURAL SURVIVAL ===")
-    for k in ("total", "verified", "partial", "extract_failed",
+    for k in ("total", "fully_supported_by_extractor", "partial", "extract_failed",
               "roundtrip_ok", "roundtrip_failed", "has_unsupported_tokens"):
-        print(f"  {k:24s} {m.get(k,0)}")
+        print(f"  {k:32s} {m.get(k,0)}")
+    print("  (note: 'fully_supported_by_extractor' = no unsupported nodes;")
+    print("   contract 'verified' requires a separate source-fidelity check)")
     print("\n=== CONSERVATION ===")
     for k, v in conservation.items():
         print(f"  {k:24s} {v}")
