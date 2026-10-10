@@ -76,34 +76,61 @@ def run_test(name: str, cmd: list[str]) -> dict[str, Any]:
         }
 
 
+def load_pinned_versions() -> dict[str, str]:
+    """
+    Load pinned paper versions from pinned_versions.txt.
+    Format: "<arxiv_id> <version>" per line.
+    Falls back to empty dict if file absent (versions then read from corpus or 'unpinned').
+    """
+    pins: dict[str, str] = {}
+    path = BASELINE_DIR / "pinned_versions.txt"
+    if not path.exists():
+        return pins
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = line.split()
+        if len(parts) >= 2:
+            pins[parts[0]] = parts[1]
+    return pins
+
+
 def build_manifest() -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """
     Build a manifest of all papers in the corpus with source hashes.
     Also returns the occurrence ledger (one entry per equation occurrence).
 
+    Paper version resolution order:
+      1. pinned_versions.txt (offline, reproducible — authoritative)
+      2. corpus JSON 'version' field
+      3. 'unpinned' (explicit marker, never silently None)
+
     Returns (manifest_dict, occurrence_ledger_list).
     """
-    manifest = {
+    manifest: dict[str, Any] = {
         "corpus_dir": str(CORPUS_DIR.relative_to(ROOT)),
         "papers": [],
     }
     occurrences: list[dict[str, Any]] = []
+    pins = load_pinned_versions()
 
     if not CORPUS_DIR.exists():
         return manifest, occurrences
 
     for jf in sorted(CORPUS_DIR.glob("*.json")):
         try:
-            data = json.loads(jf.read_text(encoding="utf-8"))
+            data: dict[str, Any] = json.loads(jf.read_text(encoding="utf-8"))
         except Exception:
             continue
 
-        paper_id = data.get("arxiv_id", jf.stem)
-        paper_version = data.get("version", "latest")
-        url = data.get("url", "")
-        equations = data.get("equations", [])
+        paper_id: str = data.get("arxiv_id", jf.stem)
+        # Version resolution: pin > corpus > explicit unpinned marker
+        paper_version: str = pins.get(paper_id) or data.get("version") or "unpinned"
+        url: str = data.get("url", "")
+        equations: list[dict[str, Any]] = data.get("equations", [])
 
-        eq_manifest = []
+        eq_manifest: list[dict[str, Any]] = []
         for i, eq in enumerate(equations):
             mathml = eq.get("mathml", "") or None
             latex = eq.get("latex", "") or None
@@ -192,7 +219,7 @@ def main():
         ("test_mbox_dollar_recovery", [sys.executable, "scripts/test_mbox_dollar_recovery.py"]),
         ("test_munder_fix", [sys.executable, "scripts/test_munder_fix.py"]),
     ]
-    test_results = []
+    test_results: list[dict[str, Any]] = []
     for name, cmd in tests:
         result = run_test(name, cmd)
         test_results.append(result)
@@ -222,7 +249,7 @@ def main():
 
     # 6. Run metadata
     print("6. Writing run_metadata.json")
-    metadata = {
+    metadata: dict[str, Any] = {
         "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "contract_version": CONTRACT_VERSION,
         "python_version": sys.version,
