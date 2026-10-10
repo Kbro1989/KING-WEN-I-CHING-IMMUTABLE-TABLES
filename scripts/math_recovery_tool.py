@@ -23,6 +23,8 @@ import urllib.request
 from pathlib import Path
 from collections import Counter, defaultdict
 
+from delimiter_identity import normalize_latex_norms
+
 import sympy
 from sympy.parsing.sympy_parser import (
     parse_expr, standard_transformations, implicit_multiplication_application
@@ -758,16 +760,20 @@ def recover_latex(latex):
     s = re.sub(r"\\gcd(?![a-zA-Z])", "gcd", s)
     s = re.sub(r"\\lcm(?![a-zA-Z])", "lcm", s)
 
-    # --- Norms: \\| ... \\|  and  \\lVert ... \\rVert
-    # \\| survives as a backslash and reaches Python as an error.
-    # IDENTITY PRESERVATION: lVert/rVert keep their own tokens (lVert/rVert),
-    # NOT collapsed to || or |. The AST layer pairs them into Norm(x).
-    # \\| (double-backslash-bar) is the LaTeX shorthand for \\lVert — it must
-    # map to the same lVert/rVert tokens the MathML path emits, not to "||".
-    s = s.replace("\\lVert", "lVert").replace("\\rVert", "rVert")
-    s = s.replace("\\lvert", "|").replace("\\rvert", "|")
-    s = s.replace("\\|", "lVert")  # open — paired with next \\
-    s = s.replace("\\Vert", "lVert").replace("\\vert", "|")
+    # --- Norms: \\| ... \\|  and  \\\\lVert ... \\\\Vert
+    # Recovery from LaTeX is ambiguous: \\| may be an absolute value,
+    # a control bar, or a norm just like \\|. The safest approach is to
+    # route the raw passed string through delimiter_identity and let
+    # normalize_latex_norms() pair open and close norms by position, and
+    # keep explicit directives intact.
+    #
+    # IMPORTANT: normalization is the LAST step before we hand the string to
+    # the solver/recovery stages. Do not normalize bars earlier in the
+    # pipeline—normalize_latex_norms() cannot tell a control bar from an
+    # absolute-value bar, and operating on an already-interpreted string
+    # would double-rewrite or drop the instruction. Leave the string exactly
+    # as LaTeX received it.
+    s = normalize_latex_norms(s)
 
     # --- Sums / products / integrals: drop the limits, keep the operator name.
     #
