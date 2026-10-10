@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT))
 
-from math_contract import source_hash, extraction_hash, occurrence_key, CONTRACT_VERSION
+from math_contract import source_hash, extraction_hash, occurrence_key, CONTRACT_VERSION, SourceOccurrence
 
 BASELINE_DIR = ROOT / "DATASETS" / "baseline_2026-10-09"
 CORPUS_DIR = ROOT / "DATASETS" / "arxiv_html_corpus"
@@ -76,15 +76,21 @@ def run_test(name: str, cmd: list[str]) -> dict[str, Any]:
         }
 
 
-def build_manifest() -> dict[str, Any]:
-    """Build a manifest of all papers in the corpus with source hashes."""
+def build_manifest() -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """
+    Build a manifest of all papers in the corpus with source hashes.
+    Also returns the occurrence ledger (one entry per equation occurrence).
+
+    Returns (manifest_dict, occurrence_ledger_list).
+    """
     manifest = {
         "corpus_dir": str(CORPUS_DIR.relative_to(ROOT)),
         "papers": [],
     }
+    occurrences: list[dict[str, Any]] = []
 
     if not CORPUS_DIR.exists():
-        return manifest
+        return manifest, occurrences
 
     for jf in sorted(CORPUS_DIR.glob("*.json")):
         try:
@@ -93,29 +99,45 @@ def build_manifest() -> dict[str, Any]:
             continue
 
         paper_id = data.get("arxiv_id", jf.stem)
+        paper_version = data.get("version", "latest")
         url = data.get("url", "")
         equations = data.get("equations", [])
 
-        # Compute source hashes for each equation
         eq_manifest = []
         for i, eq in enumerate(equations):
-            mathml = eq.get("mathml", "") or ""
-            latex = eq.get("latex", "") or ""
+            mathml = eq.get("mathml", "") or None
+            latex = eq.get("latex", "") or None
+            locator = f"math[{i}]"
+
+            occ = SourceOccurrence(
+                paper_id=paper_id,
+                paper_version=paper_version,
+                source_locator=locator,
+                occurrence_index=i,
+                source_hash=source_hash(mathml) if mathml else "",
+                latex=latex,
+                mathml=mathml,
+            )
+            okey = occurrence_key(occ)
+
             eq_manifest.append({
                 "index": i,
-                "source_hash": source_hash(mathml) if mathml else None,
+                "occurrence_key": okey,
+                "source_hash": occ.source_hash,
                 "extraction_hash": extraction_hash(latex, mathml),
-                "mathml_len": len(mathml),
+                "mathml_len": len(mathml) if mathml else 0,
             })
+            occurrences.append(occ.to_dict())
 
         manifest["papers"].append({
             "paper_id": paper_id,
+            "paper_version": paper_version,
             "url": url,
             "equation_count": len(equations),
             "equations": eq_manifest,
         })
 
-    return manifest
+    return manifest, occurrences
 
 
 def main():
@@ -142,15 +164,23 @@ def main():
         encoding="utf-8",
     )
 
-    # 3. Manifest
+    # 3. Manifest + occurrence ledger
     print("3. Building corpus manifest")
-    manifest = build_manifest()
+    manifest, occurrences = build_manifest()
     (BASELINE_DIR / "manifest.json").write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
     print(f"   Papers: {len(manifest['papers'])}")
     print(f"   Total equations: {sum(p['equation_count'] for p in manifest['papers'])}")
+
+    # 3b. Occurrence ledger (JSONL — one SourceOccurrence per line)
+    print("3b. Writing occurrence ledger")
+    ledger_path = BASELINE_DIR / "occurrences.jsonl"
+    with open(ledger_path, "w", encoding="utf-8") as f:
+        for occ in occurrences:
+            f.write(json.dumps(occ, ensure_ascii=False) + "\n")
+    print(f"   Occurrences: {len(occurrences)}")
 
     # 4. Test results
     print("4. Running current test suite")
