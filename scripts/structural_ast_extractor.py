@@ -71,8 +71,66 @@ _DECORATIONS = {"⊤": "top", "T": "top", "†": "dagger", "⊥": "perp",
                 "ˆ": "hat", "˜": "tilde", "¯": "bar", "→": "vec",
                 "˚": "ring", "¨": "ddot", "˙": "dot"}
 
-# Differential markers (measure of integration). Ordered children.
-_DIFFERENTIAL_RE = None  # built lazily; 𝑑 and italic d followed by a symbol
+# Wolfram/Greek alphanumeric mappings (from mathml_parser.py) — NFKD does NOT
+# decompose these, so map manually. Bold/italic/bold-italic Greek used for
+# vectors/matrices in ML papers. Plain Greek lowercase (U+03B1-U+03C9).
+_GREEK_MATH_ALPHANUM = {
+    # bold italic (U+1D6E2 block variants commonly used)
+    "𝜶": "alpha", "𝜷": "beta", "𝜸": "gamma", "𝜹": "delta", "𝜺": "epsilon",
+    "𝜻": "zeta", "𝜼": "eta", "𝜽": "theta", "𝜾": "iota", "𝜿": "kappa",
+    "𝝀": "lambda", "𝝁": "mu", "𝝂": "nu", "𝝃": "xi", "𝝅": "pi",
+    "𝝆": "rho", "𝝈": "sigma", "𝝉": "tau", "𝝊": "upsilon", "𝝋": "phi",
+    "𝝌": "chi", "𝝍": "psi", "𝝎": "omega",
+    # bold
+    "𝜶": "alpha", "𝜷": "beta", "𝜸": "gamma", "𝜹": "delta",
+    "𝝁": "mu", "𝝂": "nu", "𝝈": "sigma", "𝝉": "tau", "𝝎": "omega",
+    "𝚺": "Sigma", "𝚲": "Lambda", "𝚯": "Theta", "𝚽": "Phi", "𝚿": "Psi",
+    "𝛀": "Omega", "𝚷": "Pi", "𝚵": "Xi", "𝚫": "Delta", "𝚪": "Gamma",
+    # italic
+    "𝛂": "alpha", "𝛃": "beta", "𝛄": "gamma", "𝛅": "delta",
+    "𝛉": "theta", "𝛌": "lambda", "𝛍": "mu", "𝛑": "pi", "𝛔": "sigma",
+    "𝛕": "tau", "𝛚": "omega", "𝚹": "Theta", "𝚲": "Lambda", "𝚺": "Sigma",
+}
+# Upright/blackboard/fraktur single letters -> ASCII equivalents
+_SPECIAL_LETTERS = {
+    "𝔼": "E", "ℝ": "R", "ℕ": "N", "ℤ": "Z", "ℚ": "Q", "ℂ": "C",
+    "𝕀": "I", "ℙ": "P", "𝔽": "F", "𝕏": "X", "𝕐": "Y",
+    "𝒜": "A", "ℬ": "B", "𝒞": "C", "𝒟": "D", "ℰ": "E", "ℱ": "F",
+    "𝒢": "G", "ℋ": "H", "ℐ": "I", "𝒥": "J", "𝒦": "K", "ℒ": "L",
+    "ℳ": "M", "𝒩": "N", "𝒪": "O", "𝒫": "P", "𝒬": "Q", "ℛ": "R",
+    "𝒮": "S", "ℛ": "T", "𝒰": "U", "𝒱": "V", "𝒲": "W", "𝒳": "X",
+    "𝒴": "Y", "𝒵": "Z",
+    "ℓ": "l", "ℏ": "hbar", "ℵ": "aleph",
+    "∞": "oo", "⊤": "T", "⊥": "perp", "∘": "*", "†": "dagger",
+    "∠": "angle", "△": "triangle", "□": "square", "◇": "diamond",
+    # plain Greek lowercase (U+03B1-U+03C9)
+    "α": "alpha", "β": "beta", "γ": "gamma", "δ": "delta", "ε": "epsilon",
+    "ζ": "zeta", "η": "eta", "θ": "theta", "ι": "iota", "κ": "kappa",
+    "λ": "lambda", "μ": "mu", "ν": "nu", "ξ": "xi", "π": "pi",
+    "ρ": "rho", "σ": "sigma", "τ": "tau", "υ": "upsilon", "φ": "phi",
+    "χ": "chi", "ψ": "psi", "ω": "omega",
+    # Greek uppercase
+    "Α": "Alpha", "Β": "Beta", "Γ": "Gamma", "Δ": "Delta", "Ε": "Epsilon",
+    "Ζ": "Zeta", "Η": "Eta", "Θ": "Theta", "Ι": "Iota", "Κ": "Kappa",
+    "Λ": "Lambda", "Μ": "Mu", "Ν": "Nu", "Ξ": "Xi", "Ο": "Omicron",
+    "Π": "Pi", "Ρ": "Rho", "Σ": "Sigma", "Τ": "Tau", "Υ": "Upsilon",
+    "Φ": "Phi", "Χ": "Chi", "Ψ": "Psi", "Ω": "Omega",
+}
+# Function names (multi-char <mi> that are operators, not symbols)
+_FUNCTION_NAMES = {
+    "sin", "cos", "tan", "cot", "sec", "csc",
+    "arcsin", "arccos", "arctan", "arccot",
+    "sinh", "cosh", "tanh", "coth", "sech", "csch",
+    "log", "ln", "exp", "lg",
+    "det", "dim", "ker", "deg", "gcd", "lcm", "arg", "mod",
+    "min", "max", "sup", "inf", "lim", "Pr", "tr", "diag", "rank",
+    "argmax", "argmin", "softmax", "sigmoid", "relu", "ReLU",
+    "Var", "Cov", "Corr",
+}
+# Mapping of _mi text to normalized identifier value
+_MI_NORMALIZE = {}
+_MI_NORMALIZE.update(_GREEK_MATH_ALPHANUM)
+_MI_NORMALIZE.update(_SPECIAL_LETTERS)
 
 
 class StructuralASTExtractor:
@@ -219,6 +277,10 @@ class StructuralASTExtractor:
                 return ExprNode(kind="differential", value=text,
                                 attributes={"measure": text})
             return ExprNode(kind="operator", value=text)
+        # mi: normalize Greek/special letters to canonical ASCII names
+        if tag == "mi":
+            norm = _MI_NORMALIZE.get(text, text)
+            return ExprNode(kind="identifier", value=norm)
         kind = _TAG_KIND.get(tag, "identifier")
         return ExprNode(kind=kind, value=text)
 
@@ -313,9 +375,10 @@ class StructuralASTExtractor:
         rows = []
         for tr in self._children(node):
             if self._tag(tr) in ("mtr",):
-                cells = [self._walk(td) for td in self._children(tr)]
+                cells = [self._walk(c) for c in self._children(tr)]
                 cells = [c for c in cells if c is not None]
-                rows.append(ExprNode(kind="group", children=tuple(cells)))
+                rows.append(ExprNode(kind="group", children=tuple(cells),
+                                    attributes={"row": True}))
             else:
                 c = self._walk(tr)
                 if c is not None:
