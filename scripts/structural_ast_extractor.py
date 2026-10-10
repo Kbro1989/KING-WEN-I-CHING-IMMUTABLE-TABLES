@@ -125,14 +125,21 @@ class StructuralASTExtractor:
         if tag is None:
             return None
         if tag in ("mstyle", "mpadded", "mphantom", "merror", "menclose", "semantics"):
-            # transparent wrappers: extract the single meaningful child
-            kids = [self._walk(k) for k in self._children(node)]
-            kids = [k for k in kids if k is not None]
-            if len(kids) == 1:
-                return kids[0]
-            if not kids:
-                return None
-            return ExprNode(kind="group", children=tuple(kids))
+            # DECLARED normalization (Finding 5): these wrappers are transparent
+            # for mathematical structure, but we RECORD the original wrapper tag
+            # as an attribute so the normalization is auditable, never implicit.
+            # mphantom/menclose/merror still carry source structure in their
+            # children, which we extract; only the visual/error annotation is
+            # normalized away, and the source tag is preserved on the node.
+            inner = self._walk_children(node)
+            wrapper_note = {"normalized_wrapper": tag}
+            if inner is None:
+                return ExprNode(kind="group", attributes=dict(wrapper_note))
+            # attach the wrapper provenance to the resulting node
+            merged = dict(inner.attributes)
+            merged.update(wrapper_note)
+            return ExprNode(kind=inner.kind, value=inner.value,
+                            children=inner.children, attributes=merged)
 
         if tag == "math":
             kids = [self._walk(k) for k in self._children(node)]
@@ -173,6 +180,18 @@ class StructuralASTExtractor:
 
         if tag == "mtable":
             return self._matrix(node)
+
+        if tag == "mtr":
+            # a row: each cell (mtd) is a child
+            cells = [self._walk(c) for c in self._children(node)]
+            cells = [c for c in cells if c is not None]
+            return ExprNode(kind="group", children=tuple(cells),
+                            attributes={"row": True})
+
+        if tag == "mtd":
+            # a cell: transparent wrapper, extract contents (preserve boundaries
+            # via the parent mtr). Multiple children stay grouped.
+            return self._group(node)
 
         if tag == "mrow":
             return self._group(node)
@@ -250,21 +269,30 @@ class StructuralASTExtractor:
         is_bounded = base_kind in ("sum", "product", "integral", "limit")
 
         if is_bounded:
-            # limits are children, preserving which bound is lower vs upper
+            # Limits are REAL children with explicit roles (lower_bound /
+            # upper_bound), never dropped. A <mover> on a big operator is an
+            # UPPER bound, not a decoration — dropping it loses the limit.
             if tag == "munderover" and len(kids) >= 3:
                 lower, upper = kids[1], kids[2]
-                base.attributes["lower"] = lower.to_dict()
-                base.attributes["upper"] = upper.to_dict()
+                base.attributes["lower_bound"] = lower.to_dict()
+                base.attributes["upper_bound"] = upper.to_dict()
                 return ExprNode(kind=base_kind, value=base.value,
                                 attributes=base.attributes,
                                 children=base.children + (lower, upper))
-            if tag in ("munder", "munderover") and len(kids) >= 2:
+            if tag == "munder" and len(kids) >= 2:
                 lower = kids[1]
-                base.attributes["lower"] = lower.to_dict()
+                base.attributes["lower_bound"] = lower.to_dict()
                 return ExprNode(kind=base_kind, value=base.value,
                                 attributes=base.attributes,
                                 children=base.children + (lower,))
-            # mover on a big op with no numeric limit: treat as decoration
+            if tag == "mover" and len(kids) >= 2:
+                # upper bound (e.g. <mover><mo>∑</mo><mi>n</mi></mover>)
+                upper = kids[1]
+                base.attributes["upper_bound"] = upper.to_dict()
+                return ExprNode(kind=base_kind, value=base.value,
+                                attributes=base.attributes,
+                                children=base.children + (upper,))
+            # bare bounded operator with no limit child
             return base
 
         # accent/decoration on an identifier
