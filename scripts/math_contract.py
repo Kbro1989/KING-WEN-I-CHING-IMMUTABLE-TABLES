@@ -48,6 +48,7 @@ StructuralStatus = Literal[
     "lossy",          # some source structure was lost
     "corrupted",      # output does not represent the source
     "unverified",     # not yet checked against source
+    "partial",        # extractor found unsupported content; source not fully covered
 ]
 
 BackendStatus = Literal[
