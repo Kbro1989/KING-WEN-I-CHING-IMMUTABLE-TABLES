@@ -28,6 +28,12 @@ No fabrication: unsupported constructs return (None, reason) instead of guessing
 import re
 import unicodedata
 
+from delimiter_identity import (
+    MO_MAP_DELIMITERS, LANGLE, RANGLE, LNORM, RNORM,
+    LFLOOR, RFLOOR, LCEIL, RCEIL, BAR,
+    balance_norm_tokens,
+)
+
 # ---------------------------------------------------------------------------
 # Operator mapping: MathML <mo> content -> ASCII
 # ---------------------------------------------------------------------------
@@ -69,28 +75,22 @@ MO_MAP = {
     # arrows are relations/maps, NOT equality
     "→": "->", "←": "<-", "↔": "<->", "⇒": "=>", "⇐": "<=", "⇔": "<=>",
     "↦": "|->", "⟶": "->", "⟵": "<-", "⟹": "=>", "⟸": "<=", "⟺": "<=>",
-    # grouping (kept as literal brackets)
-    "(": "(", ")": ")", "[": "[", "]": "]",
+    # --- GROUPING (kept as literal brackets; no collapse of identity) ---
+    # IDENTITY PRESERVATION: angle/floor/ceil/norm keep their OWN tokens.
+    # They are structural markers, NOT a synonym for '(' or '|'.
+    "(": "(", ")": ")",
+    "[": "[", "]": "]",
     "{": "{", "}": "}",
-    "⟨": "(", "⟩": ")",
-    "⌊": "floor(", "⌋": ")",
-    "⌈": "ceil(", "⌉": ")",
+    "⟨": LANGLE, "⟩": RANGLE,
+    "⌊": LFLOOR, "⌋": RFLOOR,
+    "⌈": LCEIL, "⌉": RCEIL,
     # CONDITIONAL / SET-BUILDER BAR.
-    # U+2223 (∣ DIVIDES) is what arxiv emits for \mid. It was MISSING from
+    # U+2223 (∣ DIVIDES) is what arxiv emits for \\mid. It was MISSING from
     # this map, so the bar vanished and the neighbouring structures
-    # CONCATENATED:  E[X \mid X>a]  ->  'E[XX>a]'.  That is worse than a
+    # CONCATENATED:  E[X \\mid X>a]  ->  'E[XX>a]'.  That is worse than a
     # missing glyph — it silently fuses two distinct subexpressions.
-    # Keep it as an explicit separator token so Conditional(value, condition)
-    # is representable downstream.
-    "∣": "|", "|": "|", "‖": "|", "∥": "|",
-    "\u2223": "|",   # ∣ DIVIDES
-    "\u2758": "|",   # ❘
-    "\u00a6": "|",   # ¦ broken bar
-    # DIFFERENTIAL: U+1D451 (𝑑 MATHEMATICAL ITALIC SMALL D) is the measure
-    # symbol in \int ... \,dz. Treating it as an unknown operator (or letting
-    # it fuse) makes 'dz' indistinguishable from a product 'd*z' and, worse,
-    # lets the differential disappear entirely:  ...\phi(z)z.
-    # Emit an explicit 'd' token so Differential(variable) is representable.
+    "∣": BAR, "|": BAR,
+    "‖": LNORM, "∥": LNORM,
     "𝑑": "d", "ⅆ": "d", "ⅅ": "d",
     # named constants
     "∞": "oo", "ℵ": "aleph", "ℏ": "hbar", "ℯ": "e", "ⅈ": "i",
@@ -675,6 +675,8 @@ class MathMLParser:
         if expr is None:
             return None
         s = expr
+        # Restore paired norm tokens from MathML's single-glyph encoding
+        s = balance_norm_tokens(s)
         s = re.sub(r"\s+", " ", s)
         s = s.replace("()", "")
         s = re.sub(r"\(\s*\)", "", s)

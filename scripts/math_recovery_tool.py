@@ -527,31 +527,30 @@ def recover_latex(latex):
     s = s.replace("\\\\", " ")
     s = s.replace("\\cr", " ")
 
-    # --- Auto-sizing delimiters: \left( -> (  \right) -> )
-    #     Must handle \left\langle, \left\|, \left\{ etc.
-    s = re.sub(r"\\left\s*\\\{", "(", s)
-    s = re.sub(r"\\right\s*\\\}", ")", s)
-    s = re.sub(r"\\left\s*\\\|", "|", s)
-    s = re.sub(r"\\left\s*\\\|", "|", s)
-    s = re.sub(r"\\left\s*\\langle", "(", s)
-    s = re.sub(r"\\right\s*\\rangle", ")", s)
-    s = re.sub(r"\\left\s*\\lfloor", "floor(", s)
-    s = re.sub(r"\\right\s*\\rfloor", ")", s)
-    s = re.sub(r"\\left\s*\\lceil", "ceil(", s)
-    s = re.sub(r"\\right\s*\\rceil", ")", s)
-    s = re.sub(r"\\left\s*\\lvert", "|", s)
-    s = re.sub(r"\\right\s*\\rvert", "|", s)
-    s = re.sub(r"\\left\s*\\lVert", "|", s)
-    s = re.sub(r"\\right\s*\\rVert", "|", s)
-    # plain \left( etc
-    s = re.sub(r"\\left\s*", "", s)
-    s = re.sub(r"\\right\s*", "", s)
-    # bare angle/floor/ceil
-    s = s.replace("\\langle", "(").replace("\\rangle", ")")
-    s = s.replace("\\lfloor", "floor(").replace("\\rfloor", ")")
-    s = s.replace("\\lceil", "ceil(").replace("\\rceil", ")")
+    # --- Auto-sizing delimiters: \\left( -> (  \\right) -> )
+    #     Must handle \\left\\langle, \\left\\|, \\left\\{ etc.
+    #     IDENTITY PRESERVATION: angle/floor/ceil/norm keep their OWN tokens.
+    s = re.sub(r"\\left\\s*\\\{", "(", s)
+    s = re.sub(r"\\right\\s*\\\}", ")", s)
+    s = re.sub(r"\\left\\s*\\lvert", "|", s)
+    s = re.sub(r"\\right\\s*\\rvert", "|", s)
+    s = re.sub(r"\\left\\s*\\lVert", "lVert", s)
+    s = re.sub(r"\\right\\s*\\rVert", "rVert", s)
+    s = re.sub(r"\\left\\s*\\langle", "langle", s)
+    s = re.sub(r"\\right\\s*\\rangle", "rangle", s)
+    s = re.sub(r"\\left\\s*\\lfloor", "lfloor", s)
+    s = re.sub(r"\\right\\s*\\rfloor", "rfloor", s)
+    s = re.sub(r"\\left\\s*\\lceil", "lceil", s)
+    s = re.sub(r"\\right\\s*\\rceil", "rceil", s)
+    # plain \\left( etc
+    s = re.sub(r"\\left\\s*", "", s)
+    s = re.sub(r"\\right\\s*", "", s)
+    # bare angle/floor/ceil — identity tokens, NOT ( or |
+    s = s.replace("\\langle", "langle").replace("\\rangle", "rangle")
+    s = s.replace("\\lfloor", "lfloor").replace("\\rfloor", "rfloor")
+    s = s.replace("\\lceil", "lceil").replace("\\rceil", "rceil")
     s = s.replace("\\lvert", "|").replace("\\rvert", "|")
-    s = s.replace("\\lVert", "|").replace("\\rVert", "|")
+    s = s.replace("\\lVert", "lVert").replace("\\rVert", "rVert")
 
     # --- Sizing commands (no semantic content)
     s = re.sub(r"\\(bigg|Bigg|bigl|bigr|Bigl|Bigr|big|Big)\s*", "", s)
@@ -759,12 +758,16 @@ def recover_latex(latex):
     s = re.sub(r"\\gcd(?![a-zA-Z])", "gcd", s)
     s = re.sub(r"\\lcm(?![a-zA-Z])", "lcm", s)
 
-    # --- Norms: \| ... \|  and  \lVert ... \rVert
-    # \| survives as a backslash and reaches Python as an error.
-    s = s.replace("\\lVert", "||").replace("\\rVert", "||")
+    # --- Norms: \\| ... \\|  and  \\lVert ... \\rVert
+    # \\| survives as a backslash and reaches Python as an error.
+    # IDENTITY PRESERVATION: lVert/rVert keep their own tokens (lVert/rVert),
+    # NOT collapsed to || or |. The AST layer pairs them into Norm(x).
+    # \\| (double-backslash-bar) is the LaTeX shorthand for \\lVert — it must
+    # map to the same lVert/rVert tokens the MathML path emits, not to "||".
+    s = s.replace("\\lVert", "lVert").replace("\\rVert", "rVert")
     s = s.replace("\\lvert", "|").replace("\\rvert", "|")
-    s = s.replace("\\|", "||")
-    s = s.replace("\\Vert", "||").replace("\\vert", "|")
+    s = s.replace("\\|", "lVert")  # open — paired with next \\
+    s = s.replace("\\Vert", "lVert").replace("\\vert", "|")
 
     # --- Sums / products / integrals: drop the limits, keep the operator name.
     #
