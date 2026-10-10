@@ -132,28 +132,34 @@ def _pair_tokens(s: str, tokens: List[Tuple[str, int]]) -> Tuple[List[DelimiterN
             stack.append((tok, pos, expected))
         elif tok in CLOSE_TOKENS:
             actual = CLOSE_TOKENS[tok]
-            # Find matching open in stack (most recent unmatched open of same type)
-            found = False
-            for idx in range(len(stack) - 1, -1, -1):
-                open_tok, open_pos, expected_type = stack[idx]
-                if expected_type == actual:
-                    # Found match
-                    content = s[open_pos + len(open_tok):pos]
-                    paired.append(DelimiterNode(
-                        open_token=open_tok,
-                        close_token=tok,
-                        content=content,
-                        delim_type=actual,
-                        start_pos=open_pos,
-                        end_pos=pos + len(tok),
-                    ))
-                    stack.pop(idx)
-                    found = True
-                    break
-            if not found:
+            # PROPER NESTING ONLY: a close matches the open on TOP of the
+            # stack, and only if their types agree. If the top is a
+            # different type, this is a CROSSED or mismatched structure and
+            # must NOT be paired — popping through the stack to find a
+            # matching type would fabricate a nesting that does not exist
+            # in the source (lVert a lfloor b rVert c rfloor is crossed).
+            if stack and stack[-1][2] == actual:
+                open_tok, open_pos, _ = stack.pop()
+                content = s[open_pos + len(open_tok):pos]
+                paired.append(DelimiterNode(
+                    open_token=open_tok,
+                    close_token=tok,
+                    content=content,
+                    delim_type=actual,
+                    start_pos=open_pos,
+                    end_pos=pos + len(tok),
+                    confidence=1.0,
+                ))
+            else:
+                # No matching open on top: crossed or mismatched. Record as
+                # unmatched rather than manufacturing a pair.
+                reason = (
+                    "crossed or mismatched: no matching open on stack top"
+                    if stack else "no open delimiter on stack"
+                )
                 unmatched.append(UnmatchedDelimiter(
                     token=tok, pos=pos,
-                    reason=f"no matching open for {tok}"
+                    reason=reason,
                 ))
 
     # Remaining stack items are unmatched opens
@@ -298,17 +304,35 @@ class DelimiterInferer:
                 node.delim_type = _infer_bar_type(node, context_before, context_after)
                 node.notes.append(f"bar resolved to {node.delim_type} from context")
 
-        # Handle unmatched lVert/rVert pairs (MathML single-glyph norm): if the
-        # token is unmatched and we have the opening half, report as norm with
-        # reduced confidence since we inferred the close from alternation.
-        for unmatched_item in unmatched:
-            if unmatched_item.token in ("lVert", "rVert"):
-                # Only report if we have a balance hint; otherwise skip
+        # Handle unmatched lVert/rVert pairs (MathML single-glyph norm).
+        #
+        # This fallback exists ONLY for the MathML glyph case, where a norm
+        # is encoded as two identical ‖ glyphs and the tree walk emits two
+        # `lVert` opens with no close (e.g. "lVert*x*lVert"). It must NOT
+        # fire for arbitrary unmatched opens — that would fabricate a norm
+        # over a crossed/mismatched structure (lVert a lfloor b rVert c
+        # rfloor) and manufacture a pair the source never expressed.
+        #
+        # Guard: only emit the fallback when the expression contains NO
+        # close token at all AND every norm-family token is `lVert` (i.e.
+        # the pure single-glyph pattern). Otherwise the unmatched open is a
+        # genuine crossing and is left in `unmatched` for honest reporting.
+        has_any_norm_close = any(u.token == "rVert" for u in unmatched)
+        all_norm_tokens_are_open = all(
+            u.token == "lVert" for u in unmatched if u.token in ("lVert", "rVert")
+        )
+        single_glyph_pattern = (
+            not has_any_norm_close
+            and all_norm_tokens_are_open
+            and any(u.token == "lVert" for u in unmatched)
+        )
+        if single_glyph_pattern:
+            for unmatched_item in unmatched:
                 if unmatched_item.token == "lVert":
                     paired.append(DelimiterNode(
                         open_token="lVert",
                         close_token="rVert",
-                        content=unmatched_item.pos and s[unmatched_item.pos:],
+                        content=s[unmatched_item.pos + len("lVert"):],
                         delim_type="norm",
                         start_pos=unmatched_item.pos,
                         end_pos=unmatched_item.pos + len("lVert"),
