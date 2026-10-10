@@ -126,18 +126,18 @@ class StructuralASTExtractor:
             return None
         if tag in ("mstyle", "mpadded", "mphantom", "merror", "menclose", "semantics"):
             # DECLARED normalization (Finding 5): these wrappers are transparent
-            # for mathematical structure, but we RECORD the original wrapper tag
-            # as an attribute so the normalization is auditable, never implicit.
-            # mphantom/menclose/merror still carry source structure in their
-            # children, which we extract; only the visual/error annotation is
-            # normalized away, and the source tag is preserved on the node.
+            # for mathematical structure, but we RECORD the wrapper chain.
+            # Each level of nesting appends to a list — no silent overwrite.
             inner = self._walk_children(node)
-            wrapper_note = {"normalized_wrapper": tag}
             if inner is None:
-                return ExprNode(kind="group", attributes=dict(wrapper_note))
-            # attach the wrapper provenance to the resulting node
+                return ExprNode(kind="group", attributes={"normalized_wrappers": [tag]})
+            # merge the wrapper chain: extend existing list or start new one
             merged = dict(inner.attributes)
-            merged.update(wrapper_note)
+            existing = merged.get("normalized_wrappers")
+            if existing:
+                merged["normalized_wrappers"] = [tag] + list(existing)
+            else:
+                merged["normalized_wrappers"] = [tag]
             return ExprNode(kind=inner.kind, value=inner.value,
                             children=inner.children, attributes=merged)
 

@@ -134,8 +134,8 @@ print("\n=== F5: wrappers recorded as declared normalization ===")
 
 for wrap in ("mphantom", "menclose", "mstyle", "merror"):
     t, u = extract(f'<math><{wrap}><mi>x</mi></{wrap}></math>')
-    check(f"{wrap} records normalized_wrapper",
-          t.attributes.get("normalized_wrapper") == wrap,
+    check(f"{wrap} records normalized_wrappers chain",
+          t.attributes.get("normalized_wrappers") == [wrap],
           f"attrs={t.attributes}")
     check(f"{wrap} inner 'x' survives", "x" in (t.value or "") or find_first(t, "identifier") is not None)
     check(f"{wrap} not unsupported", not u, f"unsup={u}")
@@ -143,7 +143,13 @@ for wrap in ("mphantom", "menclose", "mstyle", "merror"):
 # semantics + annotation: annotation skipped, structure kept, wrapper noted
 t, u = extract('<math><semantics><mi>&#x3B4;</mi><annotation encoding="application/x-tex">\\delta</annotation></semantics></math>')
 check("semantics skips annotation (no unsupported)", not u, f"unsup={u}")
-check("semantics records normalized_wrapper", t.attributes.get("normalized_wrapper") == "semantics")
+check("semantics records normalized_wrappers chain", t.attributes.get("normalized_wrappers") == ["semantics"])
+
+# nested wrappers: chain preserved
+t, u = extract('<math><mstyle><mphantom><mi>x</mi></mphantom></mstyle></math>')
+check("nested wrappers chain preserved", t.attributes.get("normalized_wrappers") == ["mstyle", "mphantom"],
+      f"attrs={t.attributes.get('normalized_wrappers')}")
+check("inner x survives", "x" in (t.value or "") or find_first(t, "identifier") is not None)
 
 
 # ── F1: metric honesty — no-unsupported != verified ───────────────────────
