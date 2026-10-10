@@ -98,7 +98,7 @@ _SPECIAL_LETTERS = {
     "𝒜": "A", "ℬ": "B", "𝒞": "C", "𝒟": "D", "ℰ": "E", "ℱ": "F",
     "𝒢": "G", "ℋ": "H", "ℐ": "I", "𝒥": "J", "𝒦": "K", "ℒ": "L",
     "ℳ": "M", "𝒩": "N", "𝒪": "O", "𝒫": "P", "𝒬": "Q", "ℛ": "R",
-    "𝒮": "S", "ℛ": "T", "𝒰": "U", "𝒱": "V", "𝒲": "W", "𝒳": "X",
+    "𝒮": "S", "𝒰": "U", "𝒱": "V", "𝒲": "W", "𝒳": "X",
     "𝒴": "Y", "𝒵": "Z",
     "ℓ": "l", "ℏ": "hbar", "ℵ": "aleph",
     "∞": "oo", "⊤": "T", "⊥": "perp", "∘": "*", "†": "dagger",
@@ -280,7 +280,30 @@ class StructuralASTExtractor:
         # mi: normalize Greek/special letters to canonical ASCII names
         if tag == "mi":
             norm = _MI_NORMALIZE.get(text, text)
-            return ExprNode(kind="identifier", value=norm)
+            # Preserve source glyph and variant for auditability
+            attrs = {"source_glyph": text, "source_tag": "mi"}
+            # Classify named mathematical functions vs ordinary identifiers
+            if text in _FUNCTION_NAMES:
+                attrs["function_name"] = True
+            # Detect mathvariant from Unicode character name (reliable)
+            try:
+                import unicodedata
+                name = unicodedata.name(text, "")
+                if "BOLD ITALIC" in name:
+                    attrs["mathvariant"] = "bold-italic"
+                elif "BOLD" in name:
+                    attrs["mathvariant"] = "bold"
+                elif "ITALIC" in name:
+                    attrs["mathvariant"] = "italic"
+                elif "SCRIPT" in name:
+                    attrs["mathvariant"] = "script"
+                elif "FRAKTUR" in name:
+                    attrs["mathvariant"] = "fraktur"
+                elif "DOUBLE-STRUCK" in name:
+                    attrs["mathvariant"] = "double-struck"
+            except (ValueError, TypeError):
+                pass
+            return ExprNode(kind="identifier", value=norm, attributes=attrs)
         kind = _TAG_KIND.get(tag, "identifier")
         return ExprNode(kind=kind, value=text)
 
