@@ -107,6 +107,8 @@ class ExprNode:
       - children is a tuple (immutable, hashable)
       - attributes is a dict with string keys and JSON-serializable values
       - an unsupported node must preserve the source representation
+      - attributes are defensively copied on construction; post-construction
+        mutation of the original dict does not affect the node
     """
     kind: str
     value: str | None = None
@@ -116,6 +118,8 @@ class ExprNode:
     def __post_init__(self):
         if self.kind not in NODE_KINDS:
             raise ValueError(f"Unknown node kind: {self.kind}")
+        # Defensive copy — caller's dict mutations after construction are isolated
+        object.__setattr__(self, "attributes", dict(self.attributes))
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to JSON-compatible dict."""
@@ -294,9 +298,11 @@ def extraction_hash(latex: str | None, mathml: str | None) -> str:
     """
     Hash of the extracted (latex, mathml) pair.
 
-    Encoding: canonical_json of {"latex": latex or "", "mathml": mathml or ""}
+    Encoding: canonical_json of {"latex": latex, "mathml": mathml}.
+    None and "" are distinct — None means the field was absent from source,
+    "" means it was present but empty.
     """
-    return hash_bytes(canonical_json({"latex": latex or "", "mathml": mathml or ""}).encode("utf-8"))
+    return hash_bytes(canonical_json({"latex": latex, "mathml": mathml}).encode("utf-8"))
 
 
 def backend_input_hash(tree: ExprNode) -> str:
@@ -374,6 +380,19 @@ def validate_record(record: RecoveryRecord) -> list[str]:
     if record.backend_status != "not_attempted" and record.backend_input_hash is None:
         violations.append("backend_status is set but backend_input_hash is missing")
 
+    # Backend hash integrity — the stored hash must match the actual tree
+    if record.backend_status != "not_attempted" and record.canonical_tree is not None:
+        actual_hash = backend_input_hash(record.canonical_tree)
+        if record.backend_input_hash != actual_hash:
+            violations.append(
+                f"backend_input_hash mismatch: stored={record.backend_input_hash[:12]}... "
+                f"actual={actual_hash[:12]}..."
+            )
+
+    # Solution/backend consistency
+    if record.solution_status in ("solved", "evaluated", "no_solution") and record.backend_status == "not_attempted":
+        violations.append(f"solution_status={record.solution_status} but backend_status=not_attempted")
+
     if record.structural_status == "verified" and record.unsupported_nodes:
         violations.append("structural_status=verified but unsupported_nodes is non-empty")
 
@@ -384,8 +403,8 @@ def validate_record(record: RecoveryRecord) -> list[str]:
 
 
 def validate_occurrence_set(
-    source_keys: set[str],
-    record_keys: set[str],
+    source_keys: list[str],
+    record_keys: list[str],
 ) -> list[str]:
     """
     Validate occurrence conservation.
@@ -393,19 +412,44 @@ def validate_occurrence_set(
     Every source occurrence key must have exactly one recovery record key.
     No duplicate keys, no missing keys, no extra keys.
 
+    Accepts lists (not sets) so duplicate detection is possible.
+
     Returns a list of violation strings. Empty list = conserved.
     """
     violations: list[str] = []
 
-    missing = source_keys - record_keys
-    if record_keys:
+    src_set = set(source_keys)
+    rec_set = set(record_keys)
+
+    missing = src_set - rec_set
+    if missing:
         violations.append(f"Missing recovery records for {len(missing)} source occurrences: {sorted(missing)[:5]}")
 
-    extra = record_keys - source_keys
+    extra = rec_set - src_set
     if extra:
         violations.append(f"Extra recovery records for {len(extra)} unknown source keys: {sorted(extra)[:5]}")
 
+    # Duplicate detection — requires the original sequences
+    src_dupes = _find_duplicates(source_keys)
+    if src_dupes:
+        violations.append(f"Duplicate source occurrence keys: {src_dupes[:5]}")
+
+    rec_dupes = _find_duplicates(record_keys)
+    if rec_dupes:
+        violations.append(f"Duplicate recovery record keys: {rec_dupes[:5]}")
+
     return violations
+
+
+def _find_duplicates(keys: list[str]) -> list[str]:
+    """Return keys that appear more than once in the sequence."""
+    seen: set[str] = set()
+    dupes: list[str] = []
+    for k in keys:
+        if k in seen and k not in dupes:
+            dupes.append(k)
+        seen.add(k)
+    return dupes
 
 
 # ---------------------------------------------------------------------------
