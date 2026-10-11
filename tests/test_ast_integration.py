@@ -45,11 +45,36 @@ def test_ac1_occurrence_identity_attached():
 
     assert rec.canonical_tree is not None
     assert rec.canonical_tree.attributes["occurrence_key"] == occurrence_key(src)
-    assert rec.canonical_tree.attributes["source_locator"] == "math[0]" or "source_locator" in rec.canonical_tree.attributes
-    assert rec.source.to_dict()["source_hash"] != "sha256-not-checked"
+    # Exact locator assertion — not a permissive 'in'.
+    assert rec.canonical_tree.attributes["source_locator"] == "math[0]"
+    assert rec.canonical_tree.attributes["occurrence_index"] == 0
 
     rec2 = build_recovery_record(src, "<math><mi>a</mi><mo>\u2248</mo><mi>b</mi></math>")
     assert rec.canonical_tree.attributes["occurrence_key"] == rec2.canonical_tree.attributes["occurrence_key"]
+
+
+def test_ac1_source_hash_matches_sha256_of_mathml():
+    """make_source_occurrence() must hash the exact MathML it was given."""
+    import hashlib
+
+    from math_ast_integration import make_source_occurrence
+
+    mml = "<math><mi>a</mi><mo>=</mo><mi>b</mi></math>"
+    src = make_source_occurrence(
+        paper_id="2605.00155", paper_version="v4",
+        source_locator="math[0]", occurrence_index=0,
+        mathml=mml, latex="a = b",
+    )
+    assert src.source_hash == hashlib.sha256(mml.encode("utf-8")).hexdigest()
+
+    # A different MathML string must produce a different hash.
+    other = "<math><mi>a</mi><mo>=</mo><mi>c</mi></math>"
+    src2 = make_source_occurrence(
+        paper_id="2605.00155", paper_version="v4",
+        source_locator="math[0]", occurrence_index=0,
+        mathml=other, latex="a = c",
+    )
+    assert src2.source_hash != src.source_hash
 
 
 def test_ac1_occurrence_identity_unique_per_occurrence():
@@ -89,8 +114,11 @@ def test_ac2_typed_relations_survive():
         ("\u2265", "geq"),      # geq
         ("\u2260", "neq"),      # neq
         ("=", "eq"),            # eq
-        ("\u21D2", "to"),       # rightarrow
-        ("\u21D0", "Leftarrow"),  # leftarrow
+        ("→", "rightarrow"),       # plain transition arrow
+        ("⇒", "Rightarrow"),       # logical implication
+        ("⇐", "Leftarrow"),
+        ("⇔", "Leftrightarrow"),
+        ("↦", "mapsto"),           # mapping / assignment
     ]:
         latex = f"a {glyph} b"
         src = _sample_source("2605.00155", "v4", "math[0]", 0, latex, f"<math>a{glyph}b</math>")
@@ -101,6 +129,32 @@ def test_ac2_typed_relations_survive():
             f"{glyph!r}: got relation_type={rel.attributes.get('relation_type')!r}, "
             f"expected {expected_type!r}"
         )
+
+
+def test_ac2_arrow_roles_are_distinct():
+    """Implication, mapping, equivalence and plain arrow are NOT the same type.
+
+    Collapsing them into one token would lose the distinction the relation
+    ontology exists to preserve.
+    """
+    seen = {}
+    for glyph, expected in [
+        ("→", "rightarrow"),
+        ("⇒", "Rightarrow"),
+        ("↦", "mapsto"),
+        ("⇔", "Leftrightarrow"),
+        ("⇐", "Leftarrow"),
+    ]:
+        src = _sample_source("p", "v1", "math[0]", 0, "x", f"<math>a{glyph}b</math>")
+        rec = build_recovery_record(src, f"<math><mi>a</mi><mo>{glyph}</mo><mi>b</mi></math>")
+        rel = next(n for n in rec.canonical_tree.children if n.kind == "relation")
+        got = rel.attributes["relation_type"]
+        assert got == expected, f"{glyph!r}: expected {expected!r}, got {got!r}"
+        seen[expected] = seen.get(expected, 0) + 1
+
+    # Every arrow role must be its own type.
+    assert len(seen) == 5, f"arrow roles collapsed: {seen}"
+    assert len(set(seen.values())) == 1 and set(seen.values()) == {1}
 
 
 def test_ac2_fraction_and_root_preserved():
@@ -171,13 +225,35 @@ def test_ac3_equality_not_fabricated():
 # AC4 — backend safety
 # ---------------------------------------------------------------------------
 
-def test_ac4_no_fabricated_equality_from_partial():
-    """Partial/unsupported trees must not be fed to a solver as-is."""
-    src = _sample_source("2605.00155", "v4", "math[0]", 0, r"a = b", "<math><mspace width=\"1em\"/><mi>b</mi></math>")
-    rec = build_recovery_record(src, "<math><mspace width=\"1em\"/><mi>b</mi></math>")
-    assert rec.canonical_tree is None or any(
-        n.kind == "unsupported" for n in (rec.canonical_tree.children if rec.canonical_tree else [])
-    )
+# ---------------------------------------------------------------------------
+# AC4 — backend safety (BOUNDARY GUARANTEE, not proven solver rejection)
+#
+# P2 deliberately does NOT modify solve_recovered(). No tree-to-backend route
+# exists yet. What these tests establish is the boundary: the integration layer
+# does not submit anything anywhere, and it flags partial trees so that a future
+# gate has the signal it needs. A claim that a backend *rejects* a partial AST
+# would require an actual gate — that is NOT implemented and NOT claimed here.
+# ---------------------------------------------------------------------------
+
+def test_ac4_integration_submits_nothing_to_any_backend():
+    """build_recovery_record() must leave both backend statuses untouched."""
+    src = _sample_source("2605.00155", "v4", "math[0]", 0, r"a = b", "<math>ab</math>")
+    rec = build_recovery_record(src, "<math><mi>a</mi><mo>=</mo><mi>b</mi></math>")
+    assert rec.backend_status == "not_attempted"
+    assert rec.solution_status == "not_attempted"
+    assert rec.backend_input_hash is None
+
+
+def test_ac4_partial_tree_is_flagged_for_a_future_gate():
+    """A partial tree is marked so a future backend gate can refuse it.
+
+    This is the boundary signal, not proof that any backend refuses it.
+    """
+    src = _sample_source("2605.00155", "v4", "math[0]", 0, r"x", "<math><mspace width=\"1em\"/><mi>x</mi></math>")
+    rec = build_recovery_record(src, "<math><mspace width=\"1em\"/><mi>x</mi></math>")
+    assert rec.structural_status == "partial"
+    assert rec.parse_status == "partial"
+    assert rec.unsupported_nodes
 
 
 def test_ac4_kind_equalities_only_from_source():
@@ -227,12 +303,30 @@ def test_ac5_run_on_corrupted_mathml():
     assert rec.canonical_tree is None
 
 
-def test_ac5_hash_consistency():
-    """Backend_input_hash deterministic for the same tree."""
-    src = _sample_source("2605.00155", "v4", "math[0]", 0, r"a = b", "<math><mi>a</mi><mo>=</mo><mi>b</mi></math>")
+def test_ac5_tree_hash_is_deterministic_and_sensitive():
+    """backend_input_hash of the TREE is deterministic and changes with the tree.
+
+    Note: build_recovery_record() deliberately leaves record.backend_input_hash
+    as None — no tree has been submitted to a backend yet. This test hashes the
+    tree directly, which is the honest measurement.
+    """
+    src = _sample_source("2605.00155", "v4", "math[0]", 0, r"a = b", "<math>ab</math>")
     r1 = build_recovery_record(src, "<math><mi>a</mi><mo>=</mo><mi>b</mi></math>")
     r2 = build_recovery_record(src, "<math><mi>a</mi><mo>=</mo><mi>b</mi></math>")
-    assert r1.backend_input_hash == r2.backend_input_hash
+
+    # The record's backend hash stays unset until a backend is actually used.
+    assert r1.backend_input_hash is None
+    assert r2.backend_input_hash is None
+
+    # Identical trees -> identical hash.
+    h1 = backend_input_hash(r1.canonical_tree)
+    h2 = backend_input_hash(r2.canonical_tree)
+    assert h1 == h2
+
+    # A different tree must produce a different hash.
+    r3 = build_recovery_record(src, "<math><mi>a</mi><mo>\u2248</mo><mi>b</mi></math>")
+    h3 = backend_input_hash(r3.canonical_tree)
+    assert h3 != h1, "different relation types must not hash identically"
 
 
 def test_ac5_structural_status_reflected_in_record():
