@@ -29,7 +29,7 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass, field
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 # ---------------------------------------------------------------------------
 # Status types — four independent dimensions
@@ -363,7 +363,7 @@ def validate_record(record: RecoveryRecord) -> list[str]:
     if record.parse_status not in ("complete", "partial", "unsupported", "failed"):
         violations.append(f"Invalid parse_status: {record.parse_status}")
 
-    if record.structural_status not in ("verified", "equivalent", "lossy", "corrupted", "unverified"):
+    if record.structural_status not in get_args(StructuralStatus):
         violations.append(f"Invalid structural_status: {record.structural_status}")
 
     if record.backend_status not in ("not_attempted", "accepted", "rejected", "error"):

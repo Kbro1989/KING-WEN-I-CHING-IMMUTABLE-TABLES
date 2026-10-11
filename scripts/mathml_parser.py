@@ -128,6 +128,8 @@ BIG_OP_BASES = {
 NON_EQUALITY_TOKENS = {
     # typed relations (relation identity is now first-class)
     "sim", "approx", "simeq", "cong", "asymp", "doteq", "propto", "equiv",
+    "Rightarrow", "Leftarrow", "Leftrightarrow",
+    "rightarrow", "leftarrow", "mapsto", "to", "gets", "implies", "iff",
     "~=",  # legacy alias, kept so older artifacts still guard correctly
     "!=", "prec", "succ", "<<", ">>", "<", ">", "<=", ">=",
     "in", "notin", "ni", "subset", "supset", "subseteq", "supseteq",
