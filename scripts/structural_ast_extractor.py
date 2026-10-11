@@ -12,14 +12,17 @@ recursive ExprNode (scripts/math_contract.py), preserving:
   - operator identity   (sum/prod/integral/limit, not a bare token)
   - limits as children  (munder/mover/munderover -> bounds, never dropped)
   - differentials       (dx/dy/dz as ordered measure children)
-  - relations           (sim/approx/propto/to as typed relation nodes)
+  - relations           (sim/approx/rightarrow/Rightarrow/mapsto as typed nodes)
   - decorations         (accent/hat/bar/vec fused into the identifier)
   - fractions/roots     (numerator/denominator, radicand/index)
   - unsupported nodes   (preserved with source tag + reason, never dropped)
 
-Every emitted node is bound to its source occurrence via occurrence_key, so
-the persisted AST is attributable to a specific <math> element, not just a
-document-order index.
+OCCURRENCE IDENTITY: this extractor emits a bare typed tree and does NOT bind
+occurrence identity itself. Attribution is attached by the integration layer
+(scripts/math_ast_integration.py), which sets occurrence_key / source_locator /
+occurrence_index as attributes on the ROOT node of the tree it persists. Per-node
+occurrence identity is not implemented; the root binding is what makes a
+persisted AST attributable to a specific <math> element.
 
 Design rule: a node the extractor cannot represent becomes an ExprNode of
 kind='unsupported' carrying its source tag and raw text — it is NEVER omitted.
@@ -59,11 +62,19 @@ _LIMIT_WORD = {"lim": "limit", "limsup": "limit", "liminf": "limit",
                "argmax": "limit", "argmin": "limit"}
 
 # Relation glyph/word -> typed relation (never collapsed to '=').
+#
+# Arrow roles are deliberately DISTINCT. Implication (=>), mapping (|->),
+# equivalence (<=>) and a plain transition arrow (->) are different
+# mathematical claims and are not normalised into one another. Collapsing
+# them would lose the distinction the ontology exists to preserve.
 _RELATIONS = {
     "=": "eq", "∼": "sim", "~": "sim", "≈": "approx", "≃": "simeq",
-    "≅": "cong", "→": "to", "⟶": "to", "⇒": "to", "⟹": "to",
-    "⇐": "Leftarrow", "⟸": "Leftarrow", "⇔": "Leftrightarrow", "⟺": "Leftrightarrow",
-    "≡": "equiv", "∝": "propto",
+    "≅": "cong", "≡": "equiv", "∝": "propto",
+    "→": "rightarrow", "⟶": "rightarrow",   # plain transition / tends-to
+    "⇒": "Rightarrow", "⟹": "Rightarrow",   # logical implication
+    "⇐": "Leftarrow", "⟸": "Leftarrow",
+    "⇔": "Leftrightarrow", "⟺": "Leftrightarrow",
+    "↦": "mapsto", "⟼": "mapsto",          # mapping / assignment
     "≤": "leq", "≥": "geq", "≠": "neq", "∈": "in", "∣": "conditional",
     ":=": "define", "≔": "define", "coloneqq": "define",
 }
