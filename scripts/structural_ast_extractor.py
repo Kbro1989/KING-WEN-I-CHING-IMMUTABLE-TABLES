@@ -61,7 +61,9 @@ _LIMIT_WORD = {"lim": "limit", "limsup": "limit", "liminf": "limit",
 # Relation glyph/word -> typed relation (never collapsed to '=').
 _RELATIONS = {
     "=": "eq", "∼": "sim", "~": "sim", "≈": "approx", "≃": "simeq",
-    "≅": "cong", "→": "to", "⟶": "to", "≡": "equiv", "∝": "propto",
+    "≅": "cong", "→": "to", "⟶": "to", "⇒": "to", "⟹": "to",
+    "⇐": "Leftarrow", "⟸": "Leftarrow", "⇔": "Leftrightarrow", "⟺": "Leftrightarrow",
+    "≡": "equiv", "∝": "propto",
     "≤": "leq", "≥": "geq", "≠": "neq", "∈": "in", "∣": "conditional",
     ":=": "define", "≔": "define", "coloneqq": "define",
 }
