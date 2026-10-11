@@ -283,17 +283,23 @@ OPERATOR_MAP = {
 }
 
 RELATION_MAP = {
-    "\\leq": "<=", "\\geq": ">=", "\\neq": "!=", "\\approx": "=", "\\equiv": "=",
-    "\\sim": "=", "\\simeq": "=", "\\cong": "=", "\\propto": "=", "\\ll": "<",
-    "\\gg": ">", "\\subset": "=", "\\supset": "=",
-    "\\subseteq": "=", "\\supseteq": "=",
-    "\\Rightarrow": "=", "\\Leftarrow": "=",
-    "\\Leftrightarrow": "=", "\\rightarrow": "=", "\\leftarrow": "=", "\\mapsto": "=",
-    "\\to": "=", "\\gets": "=", "\\implies": "=", "\\iff": "=",
+    # Inequalities: solver-compatible
+    "\\leq": "<=", "\\geq": ">=", "\\neq": "!=",
+    "\\ll": "<", "\\gg": ">",
+    # Non-equality relations: PRESERVED as typed tokens, NOT collapsed to '='.
+    # The solver adapter (solve_recovered) detects these and refuses to solve.
+    "\\approx": "approx", "\\equiv": "equiv",
+    "\\sim": "sim", "\\simeq": "simeq", "\\cong": "cong",
+    "\\propto": "propto",
+    "\\subseteq": "subseteq", "\\supseteq": "supseteq",
+    "\\subset": "subset", "\\supset": "supset",
+    "\\Rightarrow": "Rightarrow", "\\Leftarrow": "Leftarrow",
+    "\\Leftrightarrow": "Leftrightarrow",
+    "\\rightarrow": "rightarrow", "\\leftarrow": "leftarrow",
+    "\\mapsto": "mapsto",
+    "\\to": "to", "\\gets": "gets",
+    "\\implies": "implies", "\\iff": "iff",
 }
-
-# Relations that are NOT equations. Mapping these to '=' fabricates equations
-# that do not exist in the paper. They are membership/set relations.
 NON_EQUATION_RELATIONS = {
     "\\in", "\\notin", "\\ni", "\\forall", "\\exists", "\\mid",
 }
@@ -853,8 +859,14 @@ def recover_latex(latex):
     # --- Operators / relations / functions
     for k, v in OPERATOR_MAP.items():
         s = s.replace(k, v)
-    for k, v in RELATION_MAP.items():
-        s = s.replace(k, v)
+    # Single-pass replacement to prevent substring conflicts.
+    # Sort by key length (longest first) so longer commands are replaced first.
+    # A single regex pass ensures already-replaced text is not re-scanned.
+    # Use a function replacement to avoid backslash-escape interpretation.
+    _relation_pattern = re.compile(
+        '|'.join(re.escape(k) for k, _ in sorted(RELATION_MAP.items(), key=lambda x: -len(x[0])))
+    )
+    s = _relation_pattern.sub(lambda m: RELATION_MAP[m.group(0)], s)
     # Membership/set relations: remove them (they are not equations and
     # mapping them to '=' fabricates equations the paper never wrote)
     for k in NON_EQUATION_RELATIONS:
