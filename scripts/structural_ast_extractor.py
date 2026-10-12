@@ -139,6 +139,14 @@ _FUNCTION_NAMES = {
     "min", "max", "sup", "inf", "lim", "Pr", "tr", "diag", "rank",
     "argmax", "argmin", "softmax", "sigmoid", "relu", "ReLU",
     "Var", "Cov", "Corr",
+    # P4: named operators from \operatorname{}
+    "sgn", "sign",
+}
+
+# P4: Named operators — functions that appear via \operatorname{} in LaTeX
+# These MUST be distinguished from ordinary identifiers with the same name.
+_NAMED_OPERATORS = {
+    "sgn", "sign", "reg", "Reg",
 }
 # Mapping of _mi text to normalized identifier value
 _MI_NORMALIZE = {}
@@ -156,11 +164,15 @@ class StructuralASTExtractor:
 
     def __init__(self) -> None:
         self.unsupported: list[str] = []
+        self._latex_source: str | None = None  # P4: annotation text for disambiguation
 
     # -- public ------------------------------------------------------------
     def extract(self, math_node: Any) -> ExprNode:
         """Extract a typed AST from a <math> element. Never returns None."""
         self.unsupported = []
+        # P4: extract LaTeX source from annotation for disambiguation.
+        # The annotation may be nested inside <semantics>, not a direct child.
+        self._latex_source = self._find_annotation(math_node)
         node = self._walk(math_node)
         if node is None:
             # A <math> that produced nothing is itself an unsupported outcome.
@@ -174,6 +186,16 @@ class StructuralASTExtractor:
     # -- internals ---------------------------------------------------------
     def _tag(self, n: Any) -> str | None:
         return getattr(n, "name", None)
+
+    def _find_annotation(self, node: Any) -> str | None:
+        """Recursively find <annotation> anywhere in the tree."""
+        if self._tag(node) == "annotation":
+            return self._text(node)
+        for c in getattr(node, "children", []):
+            result = self._find_annotation(c)
+            if result is not None:
+                return result
+        return None
 
     def _children(self, node: Any) -> list[Any]:
         # <annotation> carries the LaTeX source, not presentation structure.
@@ -298,6 +320,22 @@ class StructuralASTExtractor:
             # Classify named mathematical functions vs ordinary identifiers
             if text in _FUNCTION_NAMES:
                 attrs["function_name"] = True
+            # P4: limit words as <mi> (max, min, sup, inf, lim, ...)
+            if text in _LIMIT_WORD:
+                return ExprNode(kind=_LIMIT_WORD[text], value=text,
+                                attributes={"operator": _LIMIT_WORD[text],
+                                            "source_glyph": text, "source_tag": "mi"})
+            # P4: named operator detection — \operatorname{sgn}(x) vs sgn(x)
+            # MathML is identical for both; only the annotation distinguishes them.
+            if self._latex_source and text in _NAMED_OPERATORS:
+                import re
+                # Check if the annotation contains \operatorname{text}
+                pattern = r"\\operatorname\{" + re.escape(text) + r"\}"
+                if re.search(pattern, self._latex_source):
+                    return ExprNode(kind="named_operator", value=text,
+                                    attributes={"operator_name": text,
+                                                "source_tag": "mi",
+                                                "source_glyph": text})
             # Detect mathvariant from Unicode character name (reliable)
             try:
                 import unicodedata
@@ -333,6 +371,21 @@ class StructuralASTExtractor:
         kids = [self._walk(k) for k in self._children(node)]
         kids = [k for k in kids if k is not None]
         if len(kids) >= 2:
+            if kind == "fraction":
+                return ExprNode(kind=kind, children=(kids[0], kids[1]),
+                                attributes={"numerator": kids[0].to_dict(),
+                                            "denominator": kids[1].to_dict()})
+            if kind == "subscript":
+                # P4: norm detection — <msub> with base starting/ending with ‖
+                base = kids[0]
+                if base.kind == "group" and len(base.children) >= 2:
+                    first_child = base.children[0]
+                    last_child = base.children[-1]
+                    if (first_child.kind == "operator" and first_child.value == "‖" and
+                        last_child.kind == "operator" and last_child.value == "‖"):
+                        return ExprNode(kind="norm", children=(base, kids[1]),
+                                        attributes={"parameter": kids[1].to_dict(),
+                                                    "source_tag": "msub"})
             return ExprNode(kind=kind, children=(kids[0], kids[1]))
         return self._unsupported(node, f"{tag}_arity")
 
@@ -425,6 +478,17 @@ class StructuralASTExtractor:
     def _group(self, node: Any) -> ExprNode:
         kids = [self._walk(k) for k in self._children(node)]
         kids = [k for k in kids if k is not None]
+        # P4: inner product detection
+        # ⟨a,b⟩ is <mrow><mo>⟨</mo>...<mo>,</mo>...<mo>⟩</mo></mrow>
+        # This is NOT a tuple — it's an inner product.
+        if len(kids) >= 3:
+            first_text = self._text(self._children(node)[0]).strip() if self._children(node) else ""
+            last_text = self._text(self._children(node)[-1]).strip() if self._children(node) else ""
+            if first_text == "⟨" and last_text == "⟩":
+                return ExprNode(kind="inner_product", children=tuple(kids),
+                                attributes={"source_tag": "mrow",
+                                            "left_delimiter": "⟨",
+                                            "right_delimiter": "⟩"})
         return ExprNode(kind="group", children=tuple(kids))
 
     def _unsupported(self, node: Any, reason: str) -> ExprNode:
