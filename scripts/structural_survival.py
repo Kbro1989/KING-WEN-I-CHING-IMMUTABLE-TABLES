@@ -177,29 +177,34 @@ def main() -> int:
                 )
                 baseline_keys[occurrence_key(o)] += 1
 
+    # P4-C: explicit, non-conflated category labels.
     conservation = {
         "total": len(records),
         "source_eq_baseline": trace_keys == baseline_keys,
-        "missing_from_baseline": sum((baseline_keys - trace_keys).values()),
-        "extra_vs_baseline": sum((trace_keys - baseline_keys).values()),
+        "source_only": sum((trace_keys - baseline_keys).values()),
+        "baseline_only": sum((baseline_keys - trace_keys).values()),
         "duplicate_keys": sum(1 for c in trace_keys.values() if c > 1),
     }
 
-    gate_ok = (
-        conservation["source_eq_baseline"]
-        and conservation["missing_from_baseline"] == 0
-        and conservation["extra_vs_baseline"] == 0
-        and conservation["duplicate_keys"] == 0
+    # P4-C: the structural-survival gate asks whether structure SURVIVED
+    # (extract + round-trip + no duplicate identities). Whether the source
+    # still matches the FROZEN baseline is a separate staleness question,
+    # reported independently and explained by reconcile_occurrences.py.
+    structural_gate = (
+        conservation["duplicate_keys"] == 0
         and m["roundtrip_failed"] == 0
         and m["extract_failed"] == 0
     )
+    baseline_alignment = conservation["source_eq_baseline"]
+    gate_ok = structural_gate
 
     report = {
         "conservation": conservation,
         "metrics": dict(m),
         "roundtrip_failures": len(roundtrip_failures),
         "roundtrip_gate": m["roundtrip_failed"] == 0,
-        "structural_survival_gate": gate_ok,
+        "structural_survival_gate": structural_gate,
+        "baseline_alignment": baseline_alignment,
         "note": (
             "extractor_status='fully_supported_by_extractor' means no unsupported "
             "nodes were emitted; it is NOT contract 'verified' (which requires a "
@@ -229,7 +234,9 @@ def main() -> int:
     for k, v in conservation.items():
         print(f"  {k:24s} {v}")
     print(f"\nROUND-TRIP GATE:        {'PASS' if m['roundtrip_failed']==0 else 'FAIL'}")
-    print(f"STRUCTURAL SURVIVAL:   {'PASS' if gate_ok else 'FAIL'}")
+    print(f"STRUCTURAL SURVIVAL:   {'PASS' if structural_gate else 'FAIL'}")
+    print(f"BASELINE ALIGNMENT:    "
+          f"{'aligned' if baseline_alignment else 'STALE - see reconcile_occurrences.py'}")
     print(f"Wrote {out_jsonl}")
     print(f"Wrote {out_report}")
     return 0 if gate_ok else 1

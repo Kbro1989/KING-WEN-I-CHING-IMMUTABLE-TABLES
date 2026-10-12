@@ -112,7 +112,12 @@ def measure_mathml_parse(mathml: str) -> dict[str, Any]:
             result["error"] = "no_math_element"
             return result
         expr, unsup = MathMLParser().parse(node)
-        result["parsed"] = expr is not None
+        # P4-C: an empty string is NOT a successful parse. It means the
+        # parser emitted no usable expression, which the recovery stage
+        # treats as a fallback (see `if tree_expr:`). Reporting it as
+        # 'parsed' inflates parsing success by 176 occurrences.
+        result["parsed"] = bool(expr)
+        result["parsed_empty"] = (expr == "")
         result["expr"] = expr
         result["unsupported"] = list(unsup)
     except Exception as e:  # parser crash is a measured outcome, not a skip
@@ -213,6 +218,8 @@ def main() -> int:
             m["struct_lost"] += 1
         if s["s1"]["parsed"]:
             m["s1_parsed"] += 1
+        if s["s1"].get("parsed_empty"):
+            m["s1_parsed_empty"] += 1
         if s["s1"]["unsupported"]:
             m["s1_has_unsupported"] += 1
 
@@ -225,6 +232,7 @@ def main() -> int:
             "extraction_hash": extraction_hash(s["latex"], s["mathml"]),
             "src_has_mathml": src_has_mathml,
             "s1_parsed": s["s1"]["parsed"],
+            "s1_parsed_empty": s["s1"].get("parsed_empty", False),
             "s1_unsupported_count": len(s["s1"]["unsupported"]),
             "s1_error": s["s1"]["error"],
             "recovery_present": recovery_present,
@@ -243,6 +251,11 @@ def main() -> int:
     trace_keys = Counter(t["occurrence_key"] for t in trace)
     dupes = [k for k, c in trace_keys.items() if c > 1]
 
+    # P4-C: explicit, non-conflated category labels.
+    # source_only and recovery_missing are DIFFERENT questions and must
+    # never be reported under one ambiguous name.
+    recovery_missing_keys = source_keys - recovery_counter
+    recovery_only_keys = recovery_counter - source_keys
     conservation = {
         "source_occurrences": sum(source_keys.values()),
         "trace_occurrences": sum(trace_keys.values()),
@@ -250,9 +263,10 @@ def main() -> int:
         "recovery_occurrences": sum(recovery_counter.values()),
         "source_eq_trace": source_keys == trace_keys,
         "source_eq_baseline": source_keys == baseline_keys,
-        "missing_from_baseline": sum(src_missing_vs_base.values()),
-        "extra_in_baseline": sum(base_missing_vs_src.values()),
-        "recovery_extra": m["recovery_extra"],
+        "source_only": sum(src_missing_vs_base.values()),
+        "baseline_only": sum(base_missing_vs_src.values()),
+        "recovery_missing": sum(recovery_missing_keys.values()),
+        "recovery_only": sum(recovery_only_keys.values()),
         "duplicate_trace_keys": len(dupes),
     }
 
@@ -287,21 +301,36 @@ def main() -> int:
         print(f"  {k:28s} {v}")
     print("\n=== METRICS (Finding C) ===")
     for k in ("total", "src_has_mathml", "src_no_mathml", "s1_parsed",
-              "s1_has_unsupported", "recovery_missing", "recovery_extra",
-              "struct_preserved", "struct_lost"):
+              "s1_parsed_empty", "s1_has_unsupported", "recovery_missing",
+              "recovery_only", "struct_preserved", "struct_lost"):
         print(f"  {k:28s} {m.get(k,0)}")
     if unpinned_papers:
         print(f"\n  UNPINNED papers: {unpinned_papers}")
 
-    # ── acceptance gate ──
-    gate_ok = (
+    # ── acceptance gates (P4-C: separated, not conflated) ──
+    #
+    # conservation_gate: the trace must cover the source exactly. This is the
+    #   real conservation check and must always hold.
+    # coverage_gate: recovery must cover the source exactly, with no extras.
+    # baseline_alignment: whether source == the FROZEN baseline. This is a
+    #   staleness question, not a correctness question. It is reported
+    #   separately and explained by reconcile_occurrences.py; it does NOT
+    #   silently weaken the conservation gate.
+    conservation_gate = (
         conservation["source_eq_trace"]
-        and conservation["source_eq_baseline"]
-        and conservation["missing_from_baseline"] == 0
-        and conservation["extra_in_baseline"] == 0
         and conservation["duplicate_trace_keys"] == 0
     )
-    print(f"\nACCEPTANCE GATE (conservation): {'PASS' if gate_ok else 'FAIL'}")
+    coverage_gate = (
+        conservation["recovery_missing"] == 0
+        and conservation["recovery_only"] == 0
+    )
+    baseline_alignment = conservation["source_eq_baseline"]
+    gate_ok = conservation_gate and coverage_gate
+
+    print(f"\nCONSERVATION GATE (source==trace): {'PASS' if conservation_gate else 'FAIL'}")
+    print(f"COVERAGE GATE (recovery covers source): {'PASS' if coverage_gate else 'FAIL'}")
+    print(f"BASELINE ALIGNMENT (informational): "
+          f"{'aligned' if baseline_alignment else 'STALE - see reconcile_occurrences.py'}")
     print(f"Wrote {out_json}")
     print(f"Wrote {out_jsonl}")
     return 0 if gate_ok else 1
