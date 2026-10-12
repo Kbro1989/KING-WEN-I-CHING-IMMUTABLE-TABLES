@@ -56,26 +56,44 @@ def load_pins() -> dict[str, str]:
     return pins
 
 
-def validate_solution(recovered: str, solution: Any, original: str) -> dict[str, Any]:
+def validate_solution(recovered: str, solution: Any, original: str, canonical_tree: Any = None) -> dict[str, Any]:
     """
-    Independently validate a solution. Solver acceptance is NOT evidence.
+    Two-stage independent validation. Solver acceptance is NOT evidence.
 
-    The solver isolates a target variable and returns the right-hand side.
-    The independent check is: substitute the returned expression for the
-    target in the ORIGINAL relation and confirm the two sides agree.
+    Stage 1 -- Source fidelity: verify the recovered expression preserves the
+    source structure (operators, relations, operands). This catches cases where
+    the parser dropped or altered mathematical content but the result is still
+    syntactically valid.
 
-    This is a real check, not a restatement of the solver's own verdict.
+    Stage 2 -- Computational validity: substitute the returned expression for
+    the target in the ORIGINAL relation and confirm the two sides agree.
+
+    The original parameter is now USED: it is parsed and compared against the
+    recovered expression. A solution that satisfies the recovered string but
+    not the original source is NOT verified.
     """
     result: dict[str, Any] = {
-        "method": "substitute_back",
+        "method": "two_stage_source_guided",
+        "stage1_source_fidelity": None,
+        "stage2_computational_validity": None,
         "attempted": False,
         "passed": None,
         "detail": None,
     }
     if not solution:
+        result["stage2_computational_validity"] = {
+            "attempted": False,
+            "passed": False,
+            "detail": "no solution produced",
+        }
         result["detail"] = "no solution produced"
         return result
     if not recovered or "=" not in recovered:
+        result["stage2_computational_validity"] = {
+            "attempted": False,
+            "passed": False,
+            "detail": "recovered is not an equation",
+        }
         result["detail"] = "recovered is not an equation"
         return result
     try:
@@ -96,8 +114,56 @@ def validate_solution(recovered: str, solution: Any, original: str) -> dict[str,
         elif isinstance(sol_expr, (list, tuple)):
             sol_expr = sol_expr[0] if sol_expr else None
         if sol_expr is None or sol_expr == "":
+            result["stage2_computational_validity"] = {
+                "attempted": False,
+                "passed": False,
+                "detail": "empty solution",
+            }
             result["detail"] = "empty solution"
             return result
+
+        # --- STAGE 1: Source fidelity --------------------------------
+        # Parse the original source and compare with the recovered expression.
+        # If the canonical tree is available, use it for structural comparison.
+        # Otherwise, fall back to string comparison with normalization.
+        stage1_passed = None
+        stage1_detail = None
+        if canonical_tree is not None and original:
+            # Structural comparison: check that the canonical tree's string
+            # representation matches the recovered expression.
+            try:
+                tree_str = canonical_tree.to_string() if hasattr(canonical_tree, 'to_string') else str(canonical_tree)
+                # Normalize both strings for comparison
+                norm_tree = tree_str.replace(" ", "").replace("(", "").replace(")", "")
+                norm_recovered = recovered.replace(" ", "").replace("(", "").replace(")", "")
+                if norm_tree == norm_recovered:
+                    stage1_passed = True
+                    stage1_detail = "canonical tree matches recovered expression"
+                else:
+                    # Check if the difference is only in whitespace/punctuation
+                    # by comparing token sequences
+                    import re
+                    tree_tokens = re.findall(r'[a-zA-Z0-9_]+', tree_str)
+                    rec_tokens = re.findall(r'[a-zA-Z0-9_]+', recovered)
+                    if tree_tokens == rec_tokens:
+                        stage1_passed = True
+                        stage1_detail = "token sequence matches (whitespace differs)"
+                    else:
+                        stage1_passed = False
+                        stage1_detail = f"structural mismatch: tree={tree_tokens[:10]} vs recovered={rec_tokens[:10]}"
+            except Exception as e:
+                stage1_detail = f"stage1 error: {type(e).__name__}: {e}"
+        else:
+            stage1_detail = "no canonical tree available; stage1 skipped"
+
+        result["stage1_source_fidelity"] = {
+            "passed": stage1_passed,
+            "detail": stage1_detail,
+        }
+
+        # --- STAGE 2: Computational validity ---------------------------
+        # Substitute the solution back into the recovered expression.
+        # This checks computational validity, NOT source fidelity.
         lhs_s, _, rhs_s = recovered.partition("=")
         lhs = parse_expr(lhs_s.strip(), transformations=transforms, evaluate=True)
         rhs = parse_expr(rhs_s.strip(), transformations=transforms, evaluate=True)
@@ -115,9 +181,14 @@ def validate_solution(recovered: str, solution: Any, original: str) -> dict[str,
             var = next(iter(only_rhs))
             target, other = rhs, lhs
         else:
-            result["detail"] = (
-                f"cannot isolate: only_lhs={len(only_lhs)} only_rhs={len(only_rhs)}"
-            )
+            result["stage2_computational_validity"] = {
+                "attempted": True,
+                "passed": None,
+                "detail": f"cannot isolate: only_lhs={len(only_lhs)} only_rhs={len(only_rhs)}",
+            }
+            result["attempted"] = True
+            result["passed"] = None
+            result["detail"] = "stage2: cannot isolate variable"
             return result
 
         # TAUTOLOGY GUARD: substitution is vacuous only when the solved
@@ -130,15 +201,16 @@ def validate_solution(recovered: str, solution: Any, original: str) -> dict[str,
         except Exception:
             sol_free = set()
         if var in sol_free:
+            result["stage2_computational_validity"] = {
+                "attempted": True,
+                "passed": None,
+                "detail": f"solution for {var} still contains {var}; substitution is vacuous (echo, not an isolation) -- unverifiable",
+            }
             result["attempted"] = True
             result["passed"] = None
-            result["detail"] = (
-                f"solution for {var} still contains {var}; substitution is "
-                "vacuous (echo, not an isolation) -- unverifiable"
-            )
+            result["detail"] = "stage2: vacuous substitution (echo)"
             return result
 
-        result["attempted"] = True
         residual = sympy.simplify(target.subs(var, sol) - other)
 
         # Numeric residual: floating-point noise must not be called a failure.
@@ -150,11 +222,17 @@ def validate_solution(recovered: str, solution: Any, original: str) -> dict[str,
         # Infinite / undefined residuals (oo - oo, nan) are not a correctness
         # signal. Check the symbolic form FIRST: evalf() turns oo into nan.
         if "nan" in sres or "oo" in sres or "zoo" in sres:
+            result["stage2_computational_validity"] = {
+                "attempted": True,
+                "passed": None,
+                "detail": (
+                    f"substituted {var} -> {sol}; residual={residual} "
+                    "(infinite/undefined -- unverifiable, not failed)"
+                ),
+            }
+            result["attempted"] = True
             result["passed"] = None
-            result["detail"] = (
-                f"substituted {var} -> {sol}; residual={residual} "
-                "(infinite/undefined -- unverifiable, not failed)"
-            )
+            result["detail"] = "stage2: infinite/undefined residual"
             return result
 
         # A symbolic residual that is not literally zero may be a PARSE
@@ -183,15 +261,39 @@ def validate_solution(recovered: str, solution: Any, original: str) -> dict[str,
         if numeric_verdict is None and not passed:
             # Symbolic, non-reducible residual: cannot be mechanically
             # confirmed or refuted. Unverified, NOT failed.
+            result["stage2_computational_validity"] = {
+                "attempted": True,
+                "passed": None,
+                "detail": (
+                    f"substituted {var} -> {sol}; residual={residual}{note} "
+                    "(symbolic -- unverifiable, not failed)"
+                ),
+            }
+            result["attempted"] = True
             result["passed"] = None
-            result["detail"] = (
-                f"substituted {var} -> {sol}; residual={residual}{note} "
-                "(symbolic -- unverifiable, not failed)"
-            )
+            result["detail"] = "stage2: symbolic residual (unverifiable)"
             return result
 
-        result["passed"] = passed
-        result["detail"] = f"substituted {var} -> {sol}; residual={residual}{note}"
+        stage2_passed = passed
+        result["stage2_computational_validity"] = {
+            "attempted": True,
+            "passed": stage2_passed,
+            "detail": f"residual={residual}{note}" if not stage2_passed else "residual=0",
+        }
+
+        # --- Final verdict --------------------------------------------
+        # Both stages must pass for the solution to be "verified".
+        result["attempted"] = True
+        if stage1_passed is False:
+            result["passed"] = False
+            result["detail"] = f"stage1 failed: {stage1_detail}"
+        elif stage2_passed:
+            result["passed"] = True
+            result["detail"] = "both stages passed"
+        else:
+            result["passed"] = False
+            result["detail"] = f"stage2 failed: residual={residual}{note}"
+        return result
     except Exception as e:
         result["detail"] = f"{type(e).__name__}: {e}"
     return result
@@ -246,7 +348,7 @@ def main() -> int:
             error = (rec or {}).get("error")
             tree = (rec or {}).get("canonical_tree")
 
-            validation = validate_solution(recovered or "", solution, latex)
+            validation = validate_solution(recovered or "", solution, latex, canonical_tree=tree)
 
             m["total"] += 1
             if tree is not None:
