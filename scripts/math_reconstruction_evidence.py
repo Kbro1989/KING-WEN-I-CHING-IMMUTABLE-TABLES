@@ -147,44 +147,96 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
         stage1_passed = None
         stage1_detail = "no canonical tree available; stage1 skipped"
         stage1_skipped = True
+        stage1_checks = 0
 
         if canonical_tree is not None:
             stage1_skipped = False
             try:
-                # If canonical_tree has to_string() or is not a standard ExprNode with children,
-                # extract token representation from it directly.
+                import unicodedata
+
                 has_to_string = hasattr(canonical_tree, "to_string")
                 tree_str = canonical_tree.to_string() if has_to_string else None
 
-                def _walk(node: Any) -> list[tuple[str, str | None]]:
-                    """Yield (kind, value) for structurally important nodes and tokens."""
+                IGNORABLE_CHARS = {
+                    '\u200b', '\u200e', '\u200f', '\u202a', '\u202c', '\xa0', ' ',
+                    '\u2061', '\u2062', '\u2063', '\u2064',
+                }
+                GLYPH_MAP = {
+                    '−': '-', '\u2212': '-', '–': '-', '—': '-',
+                    '×': '*', '\u00d7': '*', '·': '*', '\u22c5': '*',
+                    '÷': '/', '\u00f7': '/', '∕': '/',
+                    '⋆': 'star', '\u22c6': 'star', '∗': 'star', '*': 'star',
+                    '≔': '=', ':=': '=', 'coloneqq': '=',
+                    '…': '...', '\u2026': '...',
+                    '‖': 'lvert', '\u2016': 'lvert',
+                    '¯': 'bar', '\u00af': 'bar',
+                    '∑': 'sum', '\u2211': 'sum',
+                    '∏': 'prod', '\u220f': 'prod',
+                    '∫': 'int', '\u222b': 'int',
+                    'δ': 'delta', '\u03b4': 'delta',
+                    'π': 'pi', '\u03c0': 'pi',
+                    'α': 'alpha', '\u03b1': 'alpha',
+                    'β': 'beta', '\u03b2': 'beta',
+                    'γ': 'gamma', '\u03b3': 'gamma',
+                    'θ': 'theta', '\u03b8': 'theta',
+                    'ν': 'nu', '\u03bd': 'nu',
+                    'τ': 'tau', '\u03c4': 'tau',
+                    'Δ': 'delta', '\u0394': 'delta',
+                    'Γ': 'gamma', '\u0393': 'gamma',
+                    'Π': 'pi', '\u03a0': 'pi',
+                    'ϕ': 'phi', '\u03d5': 'phi', 'φ': 'phi', '\u03c6': 'phi',
+                    '∇': 'grad', '\u2207': 'grad',
+                    'ϵ': 'epsilon', '\u03f5': 'epsilon', 'ε': 'epsilon', '\u03b5': 'epsilon',
+                }
+
+                def _norm(s: str) -> str:
+                    nfkd = unicodedata.normalize('NFKD', s)
+                    return GLYPH_MAP.get(s, GLYPH_MAP.get(nfkd, nfkd))
+
+                def _walk(node: Any, is_mover: bool = False) -> list[tuple[str, str | None]]:
+                    """Yield (kind, value) polymorphically for dicts and ExprNode."""
                     sigs: list[tuple[str, str | None]] = []
-                    kind = getattr(node, "kind", None)
-                    val = getattr(node, "value", None)
-                    if kind in ("relation", "operator"):
+                    if isinstance(node, dict):
+                        kind = node.get("kind")
+                        val = node.get("value")
+                        attrs = node.get("attributes", {})
+                        children = node.get("children", [])
+                    else:
+                        kind = getattr(node, "kind", None)
+                        val = getattr(node, "value", None)
+                        attrs = getattr(node, "attributes", {})
+                        children = getattr(node, "children", ())
+
+                    mover = is_mover or attrs.get("script") == "mover"
+
+                    # Accents under mover (e.g. tilde over r) are not standalone relations
+                    if kind == "relation" and val in ("~", "sim") and mover:
+                        pass
+                    elif kind in ("relation", "operator"):
                         sigs.append((kind, val))
                     elif kind in ("inner_product", "norm", "named_operator",
                                   "integral", "sum", "product", "limit"):
                         sigs.append((kind, val))
                     elif kind in ("identifier", "number") and val:
                         sigs.append((kind, val))
-                    for child in getattr(node, "children", ()):
-                        sigs.extend(_walk(child))
+
+                    for child in children:
+                        sigs.extend(_walk(child, mover))
                     return sigs
 
-                if has_to_string and not getattr(canonical_tree, "children", None):
+                if has_to_string and not getattr(canonical_tree, "children", None) and not isinstance(canonical_tree, dict):
                     import re
-                    # Token-level check for string-backed tree stubs (e.g. FakeTree)
                     tree_tokens = re.findall(r'[a-zA-Z0-9_]+', tree_str)
                     rec_tokens = re.findall(r'[a-zA-Z0-9_]+', recovered)
                     from collections import Counter as TokCounter
                     diff = TokCounter(tree_tokens) - TokCounter(rec_tokens)
+                    stage1_checks = len(tree_tokens)
                     if diff:
                         stage1_passed = False
                         stage1_detail = f"tokens from tree missing in recovered: {list(diff.elements())[:5]}"
                     else:
                         stage1_passed = True
-                        stage1_detail = "all tokens from tree present in recovered form"
+                        stage1_detail = f"all {len(tree_tokens)} tokens from tree present in recovered form"
                 else:
                     sig = _walk(canonical_tree)
 
@@ -192,44 +244,60 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
                         (k, v) for k, v in sig
                         if k in ("inner_product", "norm", "named_operator",
                                  "integral", "sum", "product", "limit")
-                        or (k == "relation" and v not in (None, "=", "eq"))
+                        or (k == "relation" and v not in (None, "=", "eq", "≔", ":="))
                         or (k == "operator" and v not in (None, "+", "-", "*", "/",
-                                                           "=", "^", "_"))
+                                                           "=", "^", "_", "−", "\u2212", ",")
+                            and str(v) not in IGNORABLE_CHARS)
                     ]
 
-                    # Also collect leaf identifiers/numbers to verify no terms were dropped
-                    leaves = [(k, v) for k, v in sig if k in ("identifier", "number") and v]
+                    leaves = [
+                        (k, v) for k, v in sig
+                        if k in ("identifier", "number") and v and str(v) not in IGNORABLE_CHARS
+                    ]
 
-                    missing: list[str] = []
-                    recovered_lower = recovered.lower()
-                    for kind_c, val_c in critical:
-                        if val_c is None:
-                            continue
-                        if str(val_c).lower() not in recovered_lower:
-                            missing.append(f"{kind_c}:{val_c!r}")
+                    total_checks = len(critical) + len(leaves)
+                    stage1_checks = total_checks
 
-                    for kind_l, val_l in leaves:
-                        if str(val_l).lower() not in recovered_lower:
-                            missing.append(f"{kind_l}:{val_l!r}")
-
-                    if missing:
-                        stage1_passed = False
-                        stage1_detail = (
-                            f"structural elements or terms absent from recovered form: "
-                            f"{missing[:5]}"
-                        )
-                    else:
+                    if total_checks == 0:
                         stage1_passed = True
-                        stage1_detail = (
-                            f"all {len(critical)} critical structural elements and "
-                            f"{len(leaves)} leaf terms accounted for"
-                        )
+                        stage1_detail = "no critical structural elements or leaves in tree; stage1 vacuously passed"
+                    else:
+                        missing: list[str] = []
+                        recovered_lower = recovered.lower()
+
+                        for kind_c, val_c in critical:
+                            if val_c is None:
+                                continue
+                            norm_v = _norm(str(val_c)).lower()
+                            raw_v = str(val_c).lower()
+                            if norm_v not in recovered_lower and raw_v not in recovered_lower:
+                                missing.append(f"{kind_c}:{val_c!r}")
+
+                        for kind_l, val_l in leaves:
+                            norm_v = _norm(str(val_l)).lower()
+                            raw_v = str(val_l).lower()
+                            if norm_v not in recovered_lower and raw_v not in recovered_lower:
+                                missing.append(f"{kind_l}:{val_l!r}")
+
+                        if missing:
+                            stage1_passed = False
+                            stage1_detail = (
+                                f"structural elements or terms absent from recovered form: "
+                                f"{missing[:5]}"
+                            )
+                        else:
+                            stage1_passed = True
+                            stage1_detail = (
+                                f"all {len(critical)} critical structural elements and "
+                                f"{len(leaves)} leaf terms accounted for"
+                            )
             except Exception as e:
                 stage1_detail = f"stage1 error: {type(e).__name__}: {e}"
 
         result["stage1_source_fidelity"] = {
             "passed": stage1_passed,
             "skipped": stage1_skipped,
+            "checks": stage1_checks,
             "detail": stage1_detail,
         }
 
@@ -437,6 +505,16 @@ def main() -> int:
                 m["path_fallback"] += 1
             else:
                 m["path_none"] += 1
+            s1 = validation.get("stage1_source_fidelity") or {}
+            if s1.get("skipped"):
+                m["stage1_skipped"] += 1
+            elif s1.get("passed") is False:
+                m["stage1_failed"] += 1
+            elif (s1.get("checks") or 0) > 0:
+                m["stage1_evaluated_with_checks"] += 1
+            elif s1.get("passed") is True:
+                m["stage1_evaluated_vacuously"] += 1
+
             if solved:
                 m["solver_accepted"] += 1
             if validation["attempted"]:
@@ -474,7 +552,7 @@ def main() -> int:
     rejected_sample = next((r for r in records if not r["solved"]), None)
 
     summary = {
-        "date": "2026-10-11",
+        "date": "2026-10-12",
         "total_occurrences": m["total"],
         "metrics": {
             "canonical_tree_persisted": m["has_tree"],
@@ -486,11 +564,18 @@ def main() -> int:
             "validation_passed": m["validation_passed"],
             "validation_failed": m["validation_failed"],
             "validation_unverifiable": m["validation_unverifiable"],
+            "stage1_breakdown": {
+                "evaluated_with_checks": m["stage1_evaluated_with_checks"],
+                "evaluated_vacuously": m["stage1_evaluated_vacuously"],
+                "skipped": m["stage1_skipped"],
+                "failed": m["stage1_failed"],
+            },
         },
         "note": (
             "solver_accepted is SymPy's verdict. validation_passed is an "
             "INDEPENDENT substitute-back check and is the correctness metric. "
-            "The two are reported separately and can disagree."
+            "Stage 1 checks source structural fidelity against the canonical tree; "
+            "Stage 2 checks computational residual."
         ),
         "samples": {
             "solved_and_validated": solved_sample,
@@ -510,6 +595,11 @@ def main() -> int:
     print(f"  validation passed          {m['validation_passed']}")
     print(f"  validation failed          {m['validation_failed']}")
     print(f"  validation unverifiable    {m['validation_unverifiable']}")
+    print("  Stage 1 Breakdown:")
+    print(f"    evaluated with checks    {m['stage1_evaluated_with_checks']}")
+    print(f"    evaluated vacuously      {m['stage1_evaluated_vacuously']}")
+    print(f"    skipped (no tree)        {m['stage1_skipped']}")
+    print(f"    failed (structural diff) {m['stage1_failed']}")
     print()
     if solved_sample:
         print("  SAMPLE (solved + independently validated):")
