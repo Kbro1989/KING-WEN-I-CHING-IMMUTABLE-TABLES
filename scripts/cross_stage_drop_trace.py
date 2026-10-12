@@ -47,7 +47,7 @@ from math_contract import (  # noqa: E402
 )
 
 CORPUS_DIR = ROOT / "DATASETS" / "arxiv_html_corpus"
-RECOVERY_DIR = ROOT / "DATASETS" / "math_recovery_v15"
+RECOVERY_DIR = ROOT / "DATASETS" / "math_recovery_v16"
 BASELINE = ROOT / "DATASETS" / "baseline_2026-10-09"
 
 # First-pull equation field set (S0 schema).
@@ -68,6 +68,26 @@ def load_pins() -> dict[str, str]:
                 if len(parts) >= 2:
                     pins[parts[0]] = parts[1]
     return pins
+
+
+def build_source_equations(data: dict, paper_id: str, pins: dict[str, str]) -> list[dict]:
+    """Build source equation records with pinned versions."""
+    version = pins.get(paper_id, "unpinned")
+    equations = []
+    for i, eq in enumerate(data.get("equations", [])):
+        occ = SourceOccurrence(
+            paper_id=paper_id, paper_version=version,
+            source_locator=f"math[{i}]", occurrence_index=i,
+            source_hash=source_hash(eq.get("mathml", "")),
+            latex=eq.get("latex", ""), mathml=eq.get("mathml", ""),
+        )
+        equations.append({
+            "occ": occ, "eq": eq,
+            "mathml": eq.get("mathml") or None,
+            "latex": eq.get("latex") or None,
+            "version": version,
+        })
+    return equations
 
 
 def measure_mathml_parse(mathml: str) -> dict[str, Any]:
@@ -125,23 +145,7 @@ def main() -> int:
     for jf in sorted(CORPUS_DIR.glob("*.json")):
         data = json.loads(jf.read_text(encoding="utf-8"))
         paper_id = data.get("arxiv_id", jf.stem)
-        version = pins.get(paper_id) or data.get("version") or "unpinned"
-        if version == "unpinned":
-            unpinned_papers.append(paper_id)
-        for i, eq in enumerate(data.get("equations", [])):
-            mathml = eq.get("mathml") or None
-            latex = eq.get("latex") or None
-            occ = SourceOccurrence(
-                paper_id=paper_id, paper_version=version,
-                source_locator=f"math[{i}]", occurrence_index=i,
-                source_hash=source_hash(mathml) if mathml else "",
-                latex=latex, mathml=mathml,
-            )
-            source.append({
-                "occ": occ, "eq": eq,
-                "mathml": mathml, "latex": latex,
-                "version": version,
-            })
+        source.extend(build_source_equations(data, paper_id, pins))
 
     # ── S1: measure real parser output per occurrence ──
     for s in source:

@@ -24,6 +24,11 @@ from pathlib import Path
 from collections import Counter, defaultdict
 
 from delimiter_identity import normalize_latex_norms
+try:
+    from structural_ast_extractor import extract_structural_ast
+    HAS_STRUCTURAL_AST = True
+except ImportError:
+    HAS_STRUCTURAL_AST = False
 
 import sympy
 from sympy.parsing.sympy_parser import (
@@ -1462,6 +1467,20 @@ def process_paper(arxiv_id, output_dir=None, verbose=True, display_only=False):
             recovered, notes = recover_latex(eq["latex"])
             notes = ["path:latex_fallback"] + notes
 
+        # P4-A: Extract and persist typed AST for downstream consumers
+        canonical_tree = None
+        if HAS_STRUCTURAL_AST:
+            mathml = eq.get("mathml", "")
+            if mathml:
+                try:
+                    ast_node, ast_unsupported = extract_structural_ast(mathml)
+                    if ast_node is not None:
+                        canonical_tree = ast_node.to_dict()
+                        if ast_unsupported:
+                            notes.extend([f"ast_unsupported:{u}" for u in ast_unsupported])
+                except Exception as e:
+                    notes.append(f"ast_extract_error:{type(e).__name__}:{e}")
+
         ok, solution, error, variables, trivial = solve_recovered(recovered, original=eq["latex"])
 
         # Count as "recoverable" if it converted to something parseable-looking
@@ -1495,6 +1514,7 @@ def process_paper(arxiv_id, output_dir=None, verbose=True, display_only=False):
             "variables": variables,
             "context_before": eq["context_before"],
             "context_after": eq["context_after"],
+            "canonical_tree": canonical_tree,
         })
 
     stats = {
@@ -1571,6 +1591,7 @@ def process_corpus(corpus_dir, output_dir=None):
 
             equations.append({
                 "latex": eq.get("latex", ""),
+                "mathml": eq.get("mathml", ""),
                 "expr": tree_expr,
                 "tree_unsupported": tree_unsupported,
                 # Preserve occurrence identity from the corpus file when
@@ -1609,6 +1630,20 @@ def process_corpus(corpus_dir, output_dir=None):
                 recovered, notes = recover_latex(eq["latex"])
                 notes = ["path:latex_fallback"] + notes
 
+            # P4-A: Extract and persist typed AST for downstream consumers
+            canonical_tree = None
+            if HAS_STRUCTURAL_AST:
+                mathml = eq.get("mathml", "")
+                if mathml:
+                    try:
+                        ast_node, ast_unsupported = extract_structural_ast(mathml)
+                        if ast_node is not None:
+                            canonical_tree = ast_node.to_dict()
+                            if ast_unsupported:
+                                notes.extend([f"ast_unsupported:{u}" for u in ast_unsupported])
+                    except Exception as e:
+                        notes.append(f"ast_extract_error:{type(e).__name__}:{e}")
+
             ok, solution, error, variables, trivial = solve_recovered(recovered, original=eq["latex"])
 
             has_unknown = any(n.startswith("unknown:") for n in notes)
@@ -1630,6 +1665,7 @@ def process_corpus(corpus_dir, output_dir=None):
                 "solution": solution,
                 "error": error,
                 "variables": variables,
+                "canonical_tree": canonical_tree,
             })
 
         stats = {
