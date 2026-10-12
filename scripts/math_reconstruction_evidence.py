@@ -245,8 +245,7 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
                         if k in ("inner_product", "norm", "named_operator",
                                  "integral", "sum", "product", "limit")
                         or (k == "relation" and v not in (None, "=", "eq", "≔", ":="))
-                        or (k == "operator" and v not in (None, "+", "-", "*", "/",
-                                                           "=", "^", "_", "−", "\u2212", ",")
+                        or (k == "operator" and v not in (None, "=", "^", "_", ",")
                             and str(v) not in IGNORABLE_CHARS)
                     ]
 
@@ -270,6 +269,9 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
                                 continue
                             norm_v = _norm(str(val_c)).lower()
                             raw_v = str(val_c).lower()
+                            # For multiplication, implicit multiplication or * or ( is accepted
+                            if norm_v == '*' and ('*' in recovered_lower or '(' in recovered_lower):
+                                continue
                             if norm_v not in recovered_lower and raw_v not in recovered_lower:
                                 missing.append(f"{kind_c}:{val_c!r}")
 
@@ -327,8 +329,12 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
                 "detail": f"cannot isolate: only_lhs={len(only_lhs)} only_rhs={len(only_rhs)}",
             }
             result["attempted"] = True
-            result["passed"] = None
-            result["detail"] = "stage2: cannot isolate variable"
+            if stage1_passed is False:
+                result["passed"] = False
+                result["detail"] = f"stage1 failed: {stage1_detail} (stage2 cannot isolate)"
+            else:
+                result["passed"] = None
+                result["detail"] = "stage2: cannot isolate variable"
             return result
 
         # TAUTOLOGY GUARD: substitution is vacuous only when the solved
@@ -347,8 +353,12 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
                 "detail": f"solution for {var} still contains {var}; substitution is vacuous (echo, not an isolation) -- unverifiable",
             }
             result["attempted"] = True
-            result["passed"] = None
-            result["detail"] = "stage2: vacuous substitution (echo)"
+            if stage1_passed is False:
+                result["passed"] = False
+                result["detail"] = f"stage1 failed: {stage1_detail} (stage2 vacuous echo)"
+            else:
+                result["passed"] = None
+                result["detail"] = "stage2: vacuous substitution (echo)"
             return result
 
         residual = sympy.simplify(target.subs(var, sol) - other)
@@ -371,8 +381,12 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
                 ),
             }
             result["attempted"] = True
-            result["passed"] = None
-            result["detail"] = "stage2: infinite/undefined residual"
+            if stage1_passed is False:
+                result["passed"] = False
+                result["detail"] = f"stage1 failed: {stage1_detail} (stage2 infinite/undefined residual)"
+            else:
+                result["passed"] = None
+                result["detail"] = "stage2: infinite/undefined residual"
             return result
 
         # A symbolic residual that is not literally zero may be a PARSE
@@ -410,8 +424,12 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
                 ),
             }
             result["attempted"] = True
-            result["passed"] = None
-            result["detail"] = "stage2: symbolic residual (unverifiable)"
+            if stage1_passed is False:
+                result["passed"] = False
+                result["detail"] = f"stage1 failed: {stage1_detail} (stage2 symbolic residual)"
+            else:
+                result["passed"] = None
+                result["detail"] = "stage2: symbolic residual (unverifiable)"
             return result
 
         stage2_passed = passed
@@ -426,11 +444,13 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
         # Stage 2 PASS + Stage 1 passed    => verified (both stages passed).
         # Stage 2 PASS + Stage 1 skipped   => stage2_only (not fully verified).
         # Stage 2 FAIL                     => overall fail.
-        result["attempted"] = True
         if stage1_passed is False:
             result["passed"] = False
             result["detail"] = f"stage1 failed: {stage1_detail}"
-        elif stage2_passed and stage1_passed is True:
+            return result
+
+        result["attempted"] = True
+        if stage2_passed and stage1_passed is True:
             result["passed"] = True
             result["detail"] = "both stages passed"
         elif stage2_passed and stage1_skipped:
@@ -441,7 +461,11 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
             result["detail"] = f"stage2 failed: residual={residual}{note}"
         return result
     except Exception as e:
-        result["detail"] = f"{type(e).__name__}: {e}"
+        if stage1_passed is False:
+            result["passed"] = False
+            result["detail"] = f"stage1 failed: {stage1_detail} (exception: {type(e).__name__}: {e})"
+        else:
+            result["detail"] = f"{type(e).__name__}: {e}"
     return result
 
 
@@ -517,8 +541,12 @@ def main() -> int:
 
             if solved:
                 m["solver_accepted"] += 1
-            if validation["attempted"]:
-                m["validation_attempted"] += 1
+                m["candidate_equations"] += 1
+                if validation["attempted"]:
+                    m["substitution_attempted"] += 1
+                else:
+                    m["unattempted_exceptions"] += 1
+
                 if validation["passed"] is True:
                     m["validation_passed"] += 1
                 elif validation["passed"] is False:
@@ -560,7 +588,9 @@ def main() -> int:
             "parse_path_latex_fallback": m["path_fallback"],
             "parse_path_none": m["path_none"],
             "solver_accepted": m["solver_accepted"],
-            "validation_attempted": m["validation_attempted"],
+            "candidate_equations": m["candidate_equations"],
+            "substitution_attempted": m["substitution_attempted"],
+            "unattempted_exceptions": m["unattempted_exceptions"],
             "validation_passed": m["validation_passed"],
             "validation_failed": m["validation_failed"],
             "validation_unverifiable": m["validation_unverifiable"],
@@ -591,7 +621,9 @@ def main() -> int:
     print(f"  parse path latex_fallback  {m['path_fallback']}")
     print(f"  parse path none            {m['path_none']}")
     print(f"  solver accepted            {m['solver_accepted']}")
-    print(f"  validation attempted       {m['validation_attempted']}")
+    print(f"  candidate equations        {m['candidate_equations']}")
+    print(f"  substitution attempted     {m['substitution_attempted']}")
+    print(f"  unattempted exceptions     {m['unattempted_exceptions']}")
     print(f"  validation passed          {m['validation_passed']}")
     print(f"  validation failed          {m['validation_failed']}")
     print(f"  validation unverifiable    {m['validation_unverifiable']}")

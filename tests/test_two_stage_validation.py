@@ -331,11 +331,96 @@ def test_no_equality_in_recovered() -> None:
     print("PASS: no equality in recovered handled")
 
 
+def test_dict_tree_checks_leaves_and_operators() -> None:
+    """
+    Regression test for the dict-tree bug:
+    Ensures that plain Python dictionary trees (as loaded from json/jsonl)
+    are traversed properly and inspect leaf terms and operators.
+    """
+    tree_dict = {
+        "kind": "group",
+        "children": [
+            {"kind": "identifier", "value": "d"},
+            {"kind": "relation", "value": "="},
+            {"kind": "number", "value": "3"},
+            {"kind": "operator", "value": "−"},
+            {"kind": "number", "value": "5"},
+        ],
+    }
+    source = "d = 3 - 5"
+    recovered = "d = 3 - 5"
+    solution = "[-2]"
+
+    result = validate_solution(recovered, solution, source, canonical_tree=tree_dict)
+    s1 = result["stage1_source_fidelity"]
+    assert s1["passed"] is True, f"Stage 1 should pass: {s1}"
+    assert s1["checks"] > 0, f"Stage 1 must perform checks > 0, got: {s1['checks']}"
+    assert result["passed"] is True
+    print(f"PASS: dict tree inspected {s1['checks']} elements successfully")
+
+
+def test_operator_swap_fails_stage1() -> None:
+    """
+    Operator swap test:
+    Source tree specifies multiplication (*) but recovered form uses addition (+).
+    Stage 1 MUST reject this, and overall result MUST be passed=False.
+    """
+    tree_mult = {
+        "kind": "group",
+        "children": [
+            {"kind": "identifier", "value": "d"},
+            {"kind": "relation", "value": "="},
+            {"kind": "number", "value": "3"},
+            {"kind": "operator", "value": "*"},
+            {"kind": "number", "value": "5"},
+        ],
+    }
+    source = "d = 3 * 5"
+    recovered = "d = 3 + 5"
+    solution = "[8]"
+
+    result = validate_solution(recovered, solution, source, canonical_tree=tree_mult)
+    s1 = result["stage1_source_fidelity"]
+    assert s1["passed"] is False, f"Stage 1 must detect operator swap: {s1}"
+    assert result["passed"] is False, f"Overall result must be False: {result}"
+    print("PASS: operator swap detected and failed")
+
+
+def test_minus_to_plus_swap_fails_stage1() -> None:
+    """
+    Minus to plus swap:
+    Source tree has minus ('−'), but recovered form has plus ('+').
+    Stage 1 MUST fail.
+    """
+    tree_sub = {
+        "kind": "group",
+        "children": [
+            {"kind": "identifier", "value": "d"},
+            {"kind": "relation", "value": "="},
+            {"kind": "number", "value": "3"},
+            {"kind": "operator", "value": "−"},
+            {"kind": "number", "value": "5"},
+        ],
+    }
+    source = "d = 3 - 5"
+    recovered = "d = 3 + 5"
+    solution = "[8]"
+
+    result = validate_solution(recovered, solution, source, canonical_tree=tree_sub)
+    s1 = result["stage1_source_fidelity"]
+    assert s1["passed"] is False, f"Stage 1 must detect minus-to-plus swap: {s1}"
+    assert result["passed"] is False, f"Overall result must be False: {result}"
+    print("PASS: minus-to-plus swap detected and failed")
+
+
 if __name__ == "__main__":
     test_old_single_stage_would_false_positive()
     test_new_validator_correct_pass()
     test_new_validator_detects_dropped_term()
     test_new_validator_detects_changed_operator()
+    test_dict_tree_checks_leaves_and_operators()
+    test_operator_swap_fails_stage1()
+    test_minus_to_plus_swap_fails_stage1()
     test_no_canonical_tree_skips_stage1()
     test_vacuous_substitution_still_caught()
     test_infinite_residual_unverifiable()
