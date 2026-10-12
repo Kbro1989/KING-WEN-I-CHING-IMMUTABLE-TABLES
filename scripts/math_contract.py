@@ -86,11 +86,15 @@ NODE_KINDS = frozenset({
     "product",        # ∏ — with bounds and multiplicand
     "limit",          # lim — with approach and function
     "sqrt",           # √ — with radicand
-    "root",           # \sqrt[n] — with radicand and index
+    "root",           # \\sqrt[n] — with radicand and index
     "matrix",         # <mtable> — rows of cells
     "group",          # <mrow> — implicit product/sequence
     "text",           # <mtext> — text label in math
     "unsupported",    # MathML subtree the parser cannot represent
+    # P4 semantic node kinds
+    "inner_product",  # ⟨a,b⟩ — inner product, NOT a tuple
+    "named_operator", # \\operatorname{sgn}(x) — named function, NOT identifier
+    "norm",           # ‖x‖_p — norm with parameter, NOT absolute value
 })
 
 
