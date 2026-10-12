@@ -39,7 +39,7 @@ from delimiter_identity import (
 # ---------------------------------------------------------------------------
 MO_MAP = {
     # arithmetic
-    "+": "+", "−": "-", "-": "-", "±": "+", "∓": "-",
+    "+": "+", "−": "-", "-": "-", "±": "pm", "∓": "mp",
     "×": "*", "⋅": "*", "·": "*", "∗": "*", "⋆": "*",
     "÷": "/", "∕": "/",
     # --- EQUALITY: only true equality operators map to '='
@@ -131,6 +131,9 @@ NON_EQUALITY_TOKENS = {
     "Rightarrow", "Leftarrow", "Leftrightarrow",
     "rightarrow", "leftarrow", "mapsto", "to", "gets", "implies", "iff",
     "~=",  # legacy alias, kept so older artifacts still guard correctly
+    # \pm / \mp denote a RANGE (x ± dx), not a point value. Treating them as
+    # solvable produced a fabricated answer: '\Gamma=1.5\pm 0.1' -> 1.6.
+    "pm", "mp",
     "!=", "prec", "succ", "<<", ">>", "<", ">", "<=", ">=",
     "in", "notin", "ni", "subset", "supset", "subseteq", "supseteq",
     "and", "or", "not", "forall", "exists", "cap", "cup", "setminus",
