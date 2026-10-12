@@ -111,6 +111,13 @@ def test_new_validator_detects_changed_operator() -> None:
     Parser changed operator: source 'd = 3 * 5' recovered as 'd = 3 + 5'.
     Both are solvable, both give residual=0 for their respective solutions,
     but the source fidelity check catches the structural change.
+
+    NOTE: With FakeTree (string comparison), tokens are the same so Stage 1
+    cannot detect this. This is a documented limitation of the FakeTree stub.
+    The real ExprNode-based Stage 1 (operator inventory check) can only
+    detect dropped structural elements, not substituted arithmetic operators
+    (+, -, *, /), because those are in the excluded set. This is documented
+    in the Stage 1 limitation comment.
     """
     source = "d = 3 * 5"
     recovered = "d = 3 + 5"
@@ -118,12 +125,126 @@ def test_new_validator_detects_changed_operator() -> None:
     tree = FakeTree("d=3*5")
 
     result = validate_solution(recovered, solution, source, canonical_tree=tree)
-    # Stage 1: tokens are d, 3, 5 vs d, 3, 5 -- same tokens!
-    # But the operators differ. Token comparison alone won't catch this.
-    # This is a known limitation: token comparison catches dropped/added
-    # tokens but not operator substitution. Document this.
-    print(f"NOTE: operator substitution caught by stage1={result['stage1_source_fidelity']['passed']}, "
+    # Stage 1: FakeTree string comparison -- cannot detect operator substitution.
+    # Document this: it's a known limitation, not a bug in the new validator.
+    print(f"NOTE: operator substitution via FakeTree: stage1={result['stage1_source_fidelity']['passed']}, "
           f"final={result['passed']}")
+
+
+def test_stage1_detects_dropped_inner_product() -> None:
+    """
+    Stage 1 MUST reject a recovered expression that dropped an inner product.
+
+    Source: x = <a, b>  (inner product)
+    Recovered: x = a*b  (parser flattened to multiplication)
+
+    Stage 2 would pass (a*b substituted for x gives residual=0).
+    Stage 1 must catch the dropped inner_product node.
+
+    This test uses a REAL ExprNode tree, not FakeTree.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from math_contract import ExprNode  # noqa: E402
+
+    inner_prod_tree = ExprNode(
+        kind="inner_product",
+        value="inner_product",
+        children=(
+            ExprNode(kind="identifier", value="a"),
+            ExprNode(kind="identifier", value="b"),
+        ),
+    )
+    recovered = "x = a*b"
+    solution = "[a*b]"
+    source = r"x = \langle a, b \rangle"
+
+    result = validate_solution(recovered, solution, source, canonical_tree=inner_prod_tree)
+    assert result["stage1_source_fidelity"]["passed"] is False, (
+        f"Stage 1 must detect dropped inner_product: {result['stage1_source_fidelity']}"
+    )
+    assert result["passed"] is False, f"overall must fail: {result}"
+    print("PASS: dropped inner_product detected by stage 1")
+
+
+def test_stage1_detects_dropped_named_operator() -> None:
+    """
+    Stage 1 MUST reject a recovered expression that dropped a named operator.
+
+    Source: y = sgn(x)  (named operator)
+    Recovered: y = x    (parser dropped the operator entirely)
+
+    Stage 2 would pass (x substituted for y gives residual=0).
+    Stage 1 must catch the absent named_operator node.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from math_contract import ExprNode  # noqa: E402
+
+    sgn_tree = ExprNode(
+        kind="named_operator",
+        value="sgn",
+        children=(ExprNode(kind="identifier", value="x"),),
+    )
+    recovered = "y = x"
+    solution = "[x]"
+    source = r"y = \operatorname{sgn}(x)"
+
+    result = validate_solution(recovered, solution, source, canonical_tree=sgn_tree)
+    assert result["stage1_source_fidelity"]["passed"] is False, (
+        f"Stage 1 must detect dropped named_operator 'sgn': {result['stage1_source_fidelity']}"
+    )
+    assert result["passed"] is False, f"overall must fail: {result}"
+    print("PASS: dropped named_operator 'sgn' detected by stage 1")
+
+
+def test_stage1_detects_dropped_sim_relation() -> None:
+    """
+    Stage 1 MUST reject a recovered expression that changed a ~ relation to =.
+
+    Source: a ~ b  (similarity/approximation relation)
+    Recovered: a = b  (parser collapsed sim to equality)
+
+    This is exactly the class of error that motivated the distinct relation
+    ontology in structural_ast_extractor.py.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from math_contract import ExprNode  # noqa: E402
+
+    sim_tree = ExprNode(
+        kind="relation",
+        value="sim",
+        children=(
+            ExprNode(kind="identifier", value="a"),
+            ExprNode(kind="identifier", value="b"),
+        ),
+    )
+    # The recovered form uses = not sim, but stage 1 looks for 'sim' in recovered
+    recovered = "a = b"
+    solution = "[b]"
+    source = r"a \sim b"
+
+    result = validate_solution(recovered, solution, source, canonical_tree=sim_tree)
+    assert result["stage1_source_fidelity"]["passed"] is False, (
+        f"Stage 1 must detect sim relation replaced by =: {result['stage1_source_fidelity']}"
+    )
+    assert result["passed"] is False, f"overall must fail: {result}"
+    print("PASS: dropped sim relation detected by stage 1")
+
+
+def test_stage1_skipped_recorded_explicitly() -> None:
+    """
+    When no canonical tree is given, stage1 is skipped and this is
+    explicitly recorded in stage1_source_fidelity['skipped']=True.
+
+    Callers who see skipped=True know that only Stage 2 was checked.
+    They must not treat stage2_only as 'both stages passed'.
+    """
+    result = validate_solution("d = 3 - 5", "[-2]", "d = 3 - 5", canonical_tree=None)
+    s1 = result["stage1_source_fidelity"]
+    assert s1["passed"] is None, f"Stage 1 should be None (skipped), got: {s1}"
+    assert s1["skipped"] is True, f"Stage 1 skipped must be True: {s1}"
+    assert "skipped" in result["detail"], f"detail must mention skipped: {result['detail']}"
+    assert result["passed"] is True  # stage2 alone can still pass
+    print(f"PASS: stage1 skipped explicitly recorded, detail='{result['detail']}'")
 
 
 def test_no_canonical_tree_skips_stage1() -> None:

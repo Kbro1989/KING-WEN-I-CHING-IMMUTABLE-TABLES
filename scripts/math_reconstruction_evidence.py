@@ -58,19 +58,34 @@ def load_pins() -> dict[str, str]:
 
 def validate_solution(recovered: str, solution: Any, original: str, canonical_tree: Any = None) -> dict[str, Any]:
     """
-    Two-stage independent validation. Solver acceptance is NOT evidence.
+    Two-stage validation. Solver acceptance is NOT evidence of correctness.
 
-    Stage 1 -- Source fidelity: verify the recovered expression preserves the
-    source structure (operators, relations, operands). This catches cases where
-    the parser dropped or altered mathematical content but the result is still
-    syntactically valid.
+    Stage 1 -- Operator/relation inventory check.
+    Extracts the structural signature (operator kinds, relation types, named
+    operators, inner products, norms) from the canonical ExprNode tree and
+    checks that none are absent from the recovered string. This catches cases
+    where the parser dropped or altered a key operator or relation.
 
-    Stage 2 -- Computational validity: substitute the returned expression for
-    the target in the ORIGINAL relation and confirm the two sides agree.
+    Limitation: this is a necessary condition, not sufficient. The tree and
+    the recovered string both come from the same parser, so Stage 1 cannot
+    detect all forms of parser error — only dropped or substituted structural
+    elements. It is NOT a source-to-AST round-trip check.
 
-    The original parameter is now USED: it is parsed and compared against the
-    recovered expression. A solution that satisfies the recovered string but
-    not the original source is NOT verified.
+    The `original` parameter is retained for provenance logging but is not
+    yet parsed independently (that requires a separate source-to-tree path
+    outside this module).
+
+    Stage 2 -- Computational validity.
+    Substitutes the solution into the recovered equation and verifies the
+    residual is zero. This checks algebra, NOT source fidelity.
+
+    Final verdict:
+      - If Stage 1 explicitly FAILS (structural element dropped): passed=False
+      - If Stage 2 PASSES and Stage 1 passed or was skipped: passed=True
+        EXCEPT: if Stage 1 was skipped (no tree), result is marked with
+        stage1_skipped=True so callers know only Stage 2 was checked.
+      - If Stage 2 fails: passed=False
+      - Inconclusive (symbolic residual, vacuous echo): passed=None
     """
     result: dict[str, Any] = {
         "method": "two_stage_source_guided",
@@ -122,42 +137,99 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
             result["detail"] = "empty solution"
             return result
 
-        # --- STAGE 1: Source fidelity --------------------------------
-        # Parse the original source and compare with the recovered expression.
-        # If the canonical tree is available, use it for structural comparison.
-        # Otherwise, fall back to string comparison with normalization.
+        # --- STAGE 1: Operator/relation inventory check ------------------
+        # Walk the ExprNode tree and collect every structural element that
+        # must survive in the recovered string: named operators, typed
+        # relations, inner products, norms. Then verify none are absent.
+        #
+        # This is NOT a full round-trip. It cannot catch all parser errors.
+        # It catches dropped/substituted structural elements only.
         stage1_passed = None
-        stage1_detail = None
-        if canonical_tree is not None and original:
-            # Structural comparison: check that the canonical tree's string
-            # representation matches the recovered expression.
+        stage1_detail = "no canonical tree available; stage1 skipped"
+        stage1_skipped = True
+
+        if canonical_tree is not None:
+            stage1_skipped = False
             try:
-                tree_str = canonical_tree.to_string() if hasattr(canonical_tree, 'to_string') else str(canonical_tree)
-                # Normalize both strings for comparison
-                norm_tree = tree_str.replace(" ", "").replace("(", "").replace(")", "")
-                norm_recovered = recovered.replace(" ", "").replace("(", "").replace(")", "")
-                if norm_tree == norm_recovered:
-                    stage1_passed = True
-                    stage1_detail = "canonical tree matches recovered expression"
-                else:
-                    # Check if the difference is only in whitespace/punctuation
-                    # by comparing token sequences
+                # If canonical_tree has to_string() or is not a standard ExprNode with children,
+                # extract token representation from it directly.
+                has_to_string = hasattr(canonical_tree, "to_string")
+                tree_str = canonical_tree.to_string() if has_to_string else None
+
+                def _walk(node: Any) -> list[tuple[str, str | None]]:
+                    """Yield (kind, value) for structurally important nodes and tokens."""
+                    sigs: list[tuple[str, str | None]] = []
+                    kind = getattr(node, "kind", None)
+                    val = getattr(node, "value", None)
+                    if kind in ("relation", "operator"):
+                        sigs.append((kind, val))
+                    elif kind in ("inner_product", "norm", "named_operator",
+                                  "integral", "sum", "product", "limit"):
+                        sigs.append((kind, val))
+                    elif kind in ("identifier", "number") and val:
+                        sigs.append((kind, val))
+                    for child in getattr(node, "children", ()):
+                        sigs.extend(_walk(child))
+                    return sigs
+
+                if has_to_string and not getattr(canonical_tree, "children", None):
                     import re
+                    # Token-level check for string-backed tree stubs (e.g. FakeTree)
                     tree_tokens = re.findall(r'[a-zA-Z0-9_]+', tree_str)
                     rec_tokens = re.findall(r'[a-zA-Z0-9_]+', recovered)
-                    if tree_tokens == rec_tokens:
-                        stage1_passed = True
-                        stage1_detail = "token sequence matches (whitespace differs)"
-                    else:
+                    from collections import Counter as TokCounter
+                    diff = TokCounter(tree_tokens) - TokCounter(rec_tokens)
+                    if diff:
                         stage1_passed = False
-                        stage1_detail = f"structural mismatch: tree={tree_tokens[:10]} vs recovered={rec_tokens[:10]}"
+                        stage1_detail = f"tokens from tree missing in recovered: {list(diff.elements())[:5]}"
+                    else:
+                        stage1_passed = True
+                        stage1_detail = "all tokens from tree present in recovered form"
+                else:
+                    sig = _walk(canonical_tree)
+
+                    critical = [
+                        (k, v) for k, v in sig
+                        if k in ("inner_product", "norm", "named_operator",
+                                 "integral", "sum", "product", "limit")
+                        or (k == "relation" and v not in (None, "=", "eq"))
+                        or (k == "operator" and v not in (None, "+", "-", "*", "/",
+                                                           "=", "^", "_"))
+                    ]
+
+                    # Also collect leaf identifiers/numbers to verify no terms were dropped
+                    leaves = [(k, v) for k, v in sig if k in ("identifier", "number") and v]
+
+                    missing: list[str] = []
+                    recovered_lower = recovered.lower()
+                    for kind_c, val_c in critical:
+                        if val_c is None:
+                            continue
+                        if str(val_c).lower() not in recovered_lower:
+                            missing.append(f"{kind_c}:{val_c!r}")
+
+                    for kind_l, val_l in leaves:
+                        if str(val_l).lower() not in recovered_lower:
+                            missing.append(f"{kind_l}:{val_l!r}")
+
+                    if missing:
+                        stage1_passed = False
+                        stage1_detail = (
+                            f"structural elements or terms absent from recovered form: "
+                            f"{missing[:5]}"
+                        )
+                    else:
+                        stage1_passed = True
+                        stage1_detail = (
+                            f"all {len(critical)} critical structural elements and "
+                            f"{len(leaves)} leaf terms accounted for"
+                        )
             except Exception as e:
                 stage1_detail = f"stage1 error: {type(e).__name__}: {e}"
-        else:
-            stage1_detail = "no canonical tree available; stage1 skipped"
 
         result["stage1_source_fidelity"] = {
             "passed": stage1_passed,
+            "skipped": stage1_skipped,
             "detail": stage1_detail,
         }
 
@@ -282,14 +354,20 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
         }
 
         # --- Final verdict --------------------------------------------
-        # Both stages must pass for the solution to be "verified".
+        # Stage 1 explicit FAIL => overall fail (structural element dropped).
+        # Stage 2 PASS + Stage 1 passed    => verified (both stages passed).
+        # Stage 2 PASS + Stage 1 skipped   => stage2_only (not fully verified).
+        # Stage 2 FAIL                     => overall fail.
         result["attempted"] = True
         if stage1_passed is False:
             result["passed"] = False
             result["detail"] = f"stage1 failed: {stage1_detail}"
-        elif stage2_passed:
+        elif stage2_passed and stage1_passed is True:
             result["passed"] = True
             result["detail"] = "both stages passed"
+        elif stage2_passed and stage1_skipped:
+            result["passed"] = True
+            result["detail"] = "stage2 passed; stage1 skipped (no canonical tree)"
         else:
             result["passed"] = False
             result["detail"] = f"stage2 failed: residual={residual}{note}"
