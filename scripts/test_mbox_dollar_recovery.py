@@ -48,22 +48,32 @@ for latex in CASES:
     has_textcmd = any(c in out for c in ("\\text", "\\mathrm", "\\mathcal",
                                          "\\mathbb", "\\rm{"))
 
-    status = "ok  "
-    if has_dollar or has_mbox:
-        status = "FAIL"
-        fail += 1
+def run_check():
+    fail = 0
+    for latex, out, notes in CASES:
+        has_dollar = "$" in out
+        has_mbox = "\\mbox" in out or "mbox" in out.split()
 
-    print(f"  {status} {latex[:64]}")
-    print(f"       -> {out[:110]}")
-    if has_dollar:
-        print("       ^^ DOLLAR SURVIVED")
-    if has_mbox:
-        print("       ^^ \\mbox SURVIVED")
-    if notes:
-        print(f"       notes: {notes}")
-    print()
+        status = "ok  "
+        if has_dollar or has_mbox:
+            status = "FAIL"
+            fail += 1
 
-print("=" * 78)
-print(f"RESULT: {len(CASES) - fail}/{len(CASES)} pass")
-print("=" * 78)
-sys.exit(1 if fail else 0)
+        print(f"  {status} {latex[:64]}")
+        print(f"       -> {out[:110]}")
+        if has_dollar:
+            print("       ^^ DOLLAR SURVIVED")
+        if has_mbox:
+            print("       ^^ \\mbox SURVIVED")
+        if notes:
+            print(f"       notes: {notes}")
+        print()
+
+    print("=" * 78)
+    print(f"RESULT: {len(CASES) - fail}/{len(CASES)} pass")
+    print("=" * 78)
+    return 1 if fail else 0
+
+
+if __name__ == "__main__":
+    sys.exit(run_check())

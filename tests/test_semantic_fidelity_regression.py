@@ -299,7 +299,7 @@ def test_recovery_output_has_canonical_tree():
     if not recovery_path.exists():
         print("SKIP: recovery output not found, run math_recovery_tool.py first")
         return
-    with open(recovery_path, "r") as f:
+    with open(recovery_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     results = data.get("results", [])
     assert len(results) > 0, "Recovery output must have results"
@@ -316,7 +316,7 @@ def test_canonical_tree_roundtrips_in_output():
     if not recovery_path.exists():
         print("SKIP: recovery output not found")
         return
-    with open(recovery_path, "r") as f:
+    with open(recovery_path, "r", encoding="utf-8") as f:
         data = json.load(f)
     results = data.get("results", [])
     for r in results[:10]:  # Check first 10
