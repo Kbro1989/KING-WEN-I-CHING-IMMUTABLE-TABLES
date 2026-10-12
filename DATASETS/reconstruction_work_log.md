@@ -13,9 +13,9 @@ Every row is a real record from real execution — no fabrication.
 | Parsed via MathML tree | 4059 | 95.8% |
 | Parsed via LaTeX fallback | 176 | 4.2% |
 | Solver accepted | 452 | 10.7% |
-| Independently verified | 218 | 5.1% |
-| Verification refuted | 0 | 0.0% |
-| Verification inconclusive | 98 | 2.3% |
+| Independently verified | 217 | 5.1% |
+| Verification refuted | 53 | 1.3% |
+| Verification inconclusive | 88 | 2.1% |
 
 ## Where the pipeline stops, and why
 
@@ -38,7 +38,7 @@ Every row is a real record from real execution — no fabrication.
 
 | Paper | Occurrences | Solved | Verified |
 | --- | ---: | ---: | ---: |
-| 2009.00031 | 360 | 32 | 12 |
+| 2009.00031 | 360 | 32 | 11 |
 | 2102.03334 | 94 | 1 | 0 |
 | 2605.00155 | 991 | 116 | 48 |
 | 2605.00224 | 156 | 24 | 12 |
@@ -66,7 +66,6 @@ solution, and the substitute-back check that confirms it.
 | 2009.00031 | `\dot{E}=5.6\times 10^{37}\mbox{ erg s${}^{-1}$}` | `E_dot=5.6*((10)**(37))erg_s` | `[5.6e+37*erg_s]` | both stages passed |
 | 2009.00031 | `f_{\rm X}=1.8\times 10^{-11}\mbox{ erg cm${}^{-2}$ s${...` | `f_X=1.8*((10)**(-11))erg_cms` | `[1.8e-11*erg_cms]` | both stages passed |
 | 2009.00031 | `f_{\rm X}=3.1\times 10^{-12}\mbox{ erg cm${}^{-2}$ s${...` | `f_X=3.1*((10)**(-12))erg_cms` | `[3.1e-12*erg_cms]` | both stages passed |
-| 2009.00031 | `\Gamma=0.4_{-0.7}^{+0.4}` | `Gamma=0.4_0.7**(+0.4)` | `[0.346816065752449]` | both stages passed |
 | 2009.00031 | `\nu=22.35194397\mbox{ Hz}` | `nu=22.35194397Hz` | `[22.35194397*H*z]` | both stages passed |
 | 2009.00031 | `\nu=22.3717124\mbox{ Hz}` | `nu=22.3717124Hz` | `[22.3717124*H*z]` | both stages passed |
 | 2009.00031 | `\nu=22.35196\mbox{ Hz}` | `nu=22.35196Hz` | `[22.35196*H*z]` | both stages passed |
@@ -100,6 +99,7 @@ solution, and the substitute-back check that confirms it.
 | 2605.00155 | `P\coloneqq(T_{\Delta})_{\#}P_{0}` | `P=(T_Delta)_#P_0` | `[T_Delta*_]` | both stages passed |
 | 2605.00155 | `\Pi_{f}\coloneqq\Pi_{\mathrm{full}}` | `Pi_f=Pi_full` | `[Pi_full]` | both stages passed |
 | 2605.00155 | `p=1` | `p=1` | `[1]` | both stages passed |
+| 2605.00155 | `\Delta^{\star}=\delta e_{k}` | `Delta_star=deltae_k` | `[deltae_k]` | both stages passed |
 
 ## Honest rejections — refused rather than fabricated
 
@@ -134,7 +134,6 @@ as inconclusive rather than passed or failed.
 | 2009.00031 | `N_{\rm H}=13.1\times 10^{22}\mbox{ cm${}^{-2}$}` | stage2: symbolic residual (unverifiable) |
 | 2009.00031 | `L_{\rm X}/\dot{E}=1.7\times 10^{-4}` | stage2: cannot isolate variable |
 | 2009.00031 | `L_{\rm X}\mbox{(PWN)}/\dot{E}=9.6\times 10^{-4}` | stage2: cannot isolate variable |
-| 2009.00031 | `N_{\rm H}=9.8_{-0.9}^{+1.2}\times 10^{22}\mbox{ cm${}^...` | stage2: symbolic residual (unverifiable) |
 | 2009.00031 | `N_{\rm H}=1.7\times 10^{22}\mbox{ cm${}^{-2}$}` | stage2: symbolic residual (unverifiable) |
 | 2009.00031 | `\Delta\nu=-0.01975` | stage2: cannot isolate variable |
 | 2009.00031 | `N_{\rm H}=13.1\times 10^{22}\mbox{ cm${}^{-2}$}` | stage2: symbolic residual (unverifiable) |
@@ -150,12 +149,13 @@ as inconclusive rather than passed or failed.
 | 2605.00155 | `D_{x}\coloneqq R(x)-\widetilde{R}(x)` | stage2: symbolic residual (unverifiable) |
 | 2605.00155 | `R=T_{\Delta}(\widetilde{R})` | stage2: symbolic residual (unverifiable) |
 | 2605.00155 | `\beta=e_{i}` | stage2: vacuous substitution (echo) |
+| 2605.00155 | `p=\infty` | stage2: infinite/undefined residual |
 
 ## Verdict
 
-- 0 equations were solved to a result that failed independent
+- 53 equations were solved to a result that failed independent
   verification. This is the number that matters for correctness.
-- 218 equations were solved and independently verified.
-- 98 solutions could not be mechanically confirmed either way.
+- 217 equations were solved and independently verified.
+- 88 solutions could not be mechanically confirmed either way.
 - Solver acceptance alone (452) is not treated as correctness.
 
