@@ -8,6 +8,11 @@ Before the fix these produced "invalid syntax" and were lost.
 import sys
 from pathlib import Path
 
+# Ensure UTF-8 output on Windows console
+if sys.platform == "win32":
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 ROOT = Path(r"C:\Users\krist\Desktop\KING-WEN-I-CHING-IMMUTABLE-TABLES")
 sys.path.insert(0, str(ROOT / "scripts"))
 sys.path.insert(0, str(ROOT))
@@ -27,30 +32,17 @@ CASES = [
     r"E = mc^{2}",
 ]
 
-print("=" * 78)
-print("REGRESSION TEST — $ / \\mbox{} recovery")
-print("=" * 78)
-print()
-
-fail = 0
-for latex in CASES:
-    try:
-        out, notes = recover_latex(latex)
-    except Exception as e:
-        print(f"  CRASH  {latex[:60]}")
-        print(f"         {type(e).__name__}: {e}")
-        fail += 1
-        continue
-
-    # the specific defects we are fixing
-    has_dollar = "$" in out
-    has_mbox = "\\mbox" in out
-    has_textcmd = any(c in out for c in ("\\text", "\\mathrm", "\\mathcal",
-                                         "\\mathbb", "\\rm{"))
-
-def run_check():
+def run_check() -> int:
     fail = 0
-    for latex, out, notes in CASES:
+    for latex in CASES:
+        try:
+            out, notes = recover_latex(latex)
+        except Exception as e:
+            print(f"  CRASH  {latex[:60]}")
+            print(f"         {type(e).__name__}: {e}")
+            fail += 1
+            continue
+
         has_dollar = "$" in out
         has_mbox = "\\mbox" in out or "mbox" in out.split()
 
