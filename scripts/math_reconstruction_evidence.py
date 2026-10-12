@@ -120,6 +120,24 @@ def validate_solution(recovered: str, solution: Any, original: str) -> dict[str,
             )
             return result
 
+        # TAUTOLOGY GUARD: substitution is vacuous only when the solved
+        # expression STILL CONTAINS the variable being solved for. Then
+        # X = f(X) collapses to 0 for any X and proves nothing.
+        #   'd = 3-5' solved to -2 is a REAL check (constant RHS).
+        #   'E = 5.6e37*E' solved to 5.6e37*E is an ECHO.
+        try:
+            sol_free = sympy.sympify(sol_expr).free_symbols
+        except Exception:
+            sol_free = set()
+        if var in sol_free:
+            result["attempted"] = True
+            result["passed"] = None
+            result["detail"] = (
+                f"solution for {var} still contains {var}; substitution is "
+                "vacuous (echo, not an isolation) -- unverifiable"
+            )
+            return result
+
         result["attempted"] = True
         residual = sympy.simplify(target.subs(var, sol) - other)
 

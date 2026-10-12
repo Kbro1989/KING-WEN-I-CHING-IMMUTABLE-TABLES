@@ -283,7 +283,11 @@ ACCENT_CMDS = {
 OPERATOR_MAP = {
     "\\cdot": "*", "\\times": "*", "\\div": "/", "\\ast": "*", "\\star": "*",
     "\\oplus": "+", "\\ominus": "-", "\\otimes": "*", "\\odot": "*",
-    "\\pm": "+", "\\mp": "-", "\\circ": "*", "\\bullet": "*",
+    # \\pm and \\mp denote a RANGE (x ± dx means [x-dx, x+dx]), NOT addition.
+    # Mapping them to '+' fabricates a point value the paper never stated:
+    # '\\Gamma=1.5\\pm 0.1' became 'Gamma=1.5+0.1' and was "solved" to 1.6.
+    # They are preserved as a typed token so the solver refuses them.
+    "\\pm": "pm", "\\mp": "mp", "\\circ": "*", "\\bullet": "*",
     "\\wedge": "*", "\\vee": "+", "\\cap": "*", "\\cup": "+",
 }
 
@@ -1388,6 +1392,13 @@ def solve_recovered(recovered, original=None):
     if not sol:
         return False, None, "no_solution", [str(v) for v in variables], False
 
+    # sympy.solve can return [None] (a list containing None) for equations
+    # where the variable cancels out. Treat that as no_solution, not as a
+    # fabricated answer. Without this guard, str([None]) = "[None]" and the
+    # letters N/o/e trigger the fabrication gate -- a false positive.
+    if sol == [None] or all(s is None for s in sol):
+        return False, None, "no_solution", [str(v) for v in variables], False
+
     solution_str = str(sol)
 
     # --- VERIFICATION GATE: reject fabricated solutions -----------------
@@ -1401,7 +1412,11 @@ def solve_recovered(recovered, original=None):
         "binomial", "floor", "ceil", "re", "im", "arg", "conjugate",
     }
     input_chars = set(recovered)
-    sol_identifiers = set(re.findall(r"[A-Za-z]+", solution_str))
+    # Scientific notation (1.179e+23) contains 'e' which is NOT a symbol.
+    # Strip sci-notation tokens before extracting identifiers, or every
+    # scientific-notation answer is falsely flagged as fabricated.
+    sol_for_ident = re.sub(r'[eE][+-]?\d+', '', str(solution_str))
+    sol_identifiers = set(re.findall(r"[A-Za-z]+", sol_for_ident))
     for ident in sol_identifiers:
         if ident in SOLUTION_FUNCS:
             continue
