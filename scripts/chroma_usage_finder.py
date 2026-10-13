@@ -52,7 +52,7 @@ _GREEK_MAP = {
 
 
 def extract_canonical_math_atoms(tokens: List[str]) -> set:
-    """Extract normalized mathematical identifier atoms from string or AST tokens."""
+    """Extract normalized mathematical identifier and index atoms from string or AST tokens."""
     atoms = set()
     for t in tokens:
         tl = t.lower().strip()
@@ -62,7 +62,7 @@ def extract_canonical_math_atoms(tokens: List[str]) -> set:
         t_norm = unicodedata.normalize("NFKD", t)
         for ch in t_norm:
             chl = ch.lower()
-            if "a" <= chl <= "z" or chl in _GREEK_MAP.values():
+            if "a" <= chl <= "z" or "0" <= chl <= "9" or chl in _GREEK_MAP.values():
                 atoms.add(chl)
     return atoms
 
@@ -77,20 +77,28 @@ def _get_ast_leaves(node: Any) -> List[str]:
     return leaves
 
 
-def match_fraction_to_ast_corpus(vis_num: str, vis_den: str, corpus_equations: List[Dict[str, Any]], min_score: float = 0.85) -> Dict[str, Any] | None:
+def match_fraction_to_ast_corpus(
+    vis_num: str,
+    vis_den: str,
+    corpus_equations: List[Dict[str, Any]],
+    min_score: float = 0.85,
+    excluded_targets: set | None = None
+) -> Dict[str, Any] | None:
     """
     Phase 3 Structural Subtree Matcher:
     Compares visual fraction tokens against actual MathML fraction subtrees extracted
     by StructuralASTExtractor, replacing naive substring search.
-    Requires one-to-one disambiguation with a combined Jaccard & atom recall score >= min_score.
+    Enforces one-to-one assignment via excluded_targets set, and records runner-up score.
     """
     vn_atoms = extract_canonical_math_atoms([vis_num])
     vd_atoms = extract_canonical_math_atoms([vis_den])
     if not vn_atoms or not vd_atoms:
         return None
 
-    best_match: Dict[str, Any] | None = None
-    best_score = 0.0
+    if excluded_targets is None:
+        excluded_targets = set()
+
+    candidates = []
 
     for eq in corpus_equations:
         mathml = eq.get("mathml", "")
@@ -112,6 +120,7 @@ def match_fraction_to_ast_corpus(vis_num: str, vis_den: str, corpus_equations: L
             _find_fracs(ast)
 
             for frac_idx, fn in enumerate(frac_nodes):
+                target_key = (eq.get("index"), frac_idx + 1)
                 an_atoms = extract_canonical_math_atoms(_get_ast_leaves(fn.children[0]))
                 ad_atoms = extract_canonical_math_atoms(_get_ast_leaves(fn.children[1]))
                 if not an_atoms or not ad_atoms:
@@ -122,20 +131,41 @@ def match_fraction_to_ast_corpus(vis_num: str, vis_den: str, corpus_equations: L
                 d_jacc = len(ad_atoms & vd_atoms) / max(1, len(ad_atoms | vd_atoms))
                 composite_score = (n_recall + d_recall + n_jacc + d_jacc) / 4.0
 
-                if n_recall >= 0.8 and d_recall >= 0.8 and composite_score >= min_score:
-                    if composite_score > best_score:
-                        best_score = composite_score
-                        best_match = {
-                            "equation_index": eq.get("index"),
-                            "equation_latex": eq.get("latex", "")[:120],
-                            "fraction_index_in_eq": frac_idx + 1,
-                            "composite_match_score": round(composite_score, 3),
-                            "numerator_atoms_matched": list(an_atoms & vn_atoms),
-                            "denominator_atoms_matched": list(ad_atoms & vd_atoms),
-                        }
+                candidates.append({
+                    "target_key": target_key,
+                    "equation_index": eq.get("index"),
+                    "equation_latex": eq.get("latex", "")[:120],
+                    "fraction_index_in_eq": frac_idx + 1,
+                    "composite_match_score": round(composite_score, 3),
+                    "n_recall": round(n_recall, 3),
+                    "d_recall": round(d_recall, 3),
+                    "numerator_atoms_matched": sorted(list(an_atoms & vn_atoms)),
+                    "denominator_atoms_matched": sorted(list(ad_atoms & vd_atoms)),
+                })
         except Exception:
             continue
-    return best_match
+
+    if not candidates:
+        return None
+
+    # Sort descending by composite match score
+    candidates.sort(key=lambda x: x["composite_match_score"], reverse=True)
+
+    # Filter out already claimed targets for strict one-to-one assignment
+    available = [c for c in candidates if c["target_key"] not in excluded_targets]
+    if not available:
+        return None
+
+    top = available[0]
+    runner_up = available[1] if len(available) > 1 else None
+
+    # Enforce minimum thresholds
+    if top["n_recall"] < 0.8 or top["d_recall"] < 0.8 or top["composite_match_score"] < min_score:
+        return None
+
+    top["runner_up_score"] = runner_up["composite_match_score"] if runner_up else None
+    top["score_margin"] = round(top["composite_match_score"] - runner_up["composite_match_score"], 3) if runner_up else None
+    return top
 
 
 INDEX_FILE = ROOT / "DATASETS" / "zotero_pdf_index.json"
@@ -188,8 +218,9 @@ def audit_paper_discrepancies(paper_id: str, max_pages: int = 5) -> List[Dict[st
         num_pages = min(max_pages, len(doc))
         doc.close()
 
+        claimed_targets = set()
         for page_idx in range(num_pages):
-            page_data = analyze_pdf_page(pdf_path, page_idx, dpi=120)
+            page_data = analyze_pdf_page(pdf_path, page_idx, dpi=120, enable_raster=False)
             vector_fracs = page_data.get("vector_fractions", [])
 
             for vf in vector_fracs:
@@ -218,9 +249,13 @@ def audit_paper_discrepancies(paper_id: str, max_pages: int = 5) -> List[Dict[st
                     })
                     continue
 
-                # Phase 3 Structural Subtree Match: verify against 1D MathML ASTs and LaTeX text
-                ast_match = match_fraction_to_ast_corpus(num, den, corpus_data.get("equations", []), min_score=0.85)
+                # Phase 3 Structural Subtree Match: verify against 1D MathML ASTs
+                ast_match = match_fraction_to_ast_corpus(
+                    num, den, corpus_data.get("equations", []),
+                    min_score=0.85, excluded_targets=claimed_targets
+                )
                 if ast_match:
+                    claimed_targets.add(ast_match["target_key"])
                     reports.append({
                         "paper_id": paper_id,
                         "pdf_sha256": pdf_sha256,
@@ -236,29 +271,27 @@ def audit_paper_discrepancies(paper_id: str, max_pages: int = 5) -> List[Dict[st
                         "matched_equation_latex": ast_match["equation_latex"],
                         "fraction_index_in_eq": ast_match["fraction_index_in_eq"],
                         "composite_match_score": ast_match["composite_match_score"],
-                        "details": f"Visually parsed fraction structurally matched to 1D equation {ast_match['equation_index']} fraction {ast_match['fraction_index_in_eq']} with score {ast_match['composite_match_score']}.",
+                        "runner_up_score": ast_match["runner_up_score"],
+                        "score_margin": ast_match["score_margin"],
+                        "details": f"Visually parsed fraction structurally matched to 1D equation {ast_match['equation_index']} fraction {ast_match['fraction_index_in_eq']} with score {ast_match['composite_match_score']} (margin: {ast_match['score_margin']}).",
                     })
                     continue
 
-                found_in_text = any(
-                    (num in t and den in t) or (vis_latex in t) or ("\\frac" in t and (num in t or den in t))
-                    for t in eq_texts
-                )
-                if not found_in_text:
-                    reports.append({
-                        "paper_id": paper_id,
-                        "pdf_sha256": pdf_sha256,
-                        "page": page_idx + 1,
-                        "structure_type": "fraction",
-                        "status": "candidate_visual_structure",
-                        "issue_kind": "skipped_division",
-                        "bbox": vf["vinculum_rect"],
-                        "visually_parsed_latex": vis_latex,
-                        "numerator": num,
-                        "denominator": den,
-                        "source": "vector_layout",
-                        "details": f"Visually parsed fraction {vis_latex} has no matching 2D fraction in 1D parsed equations.",
-                    })
+                # If not matched via AST, it is recorded directly as a true candidate discrepancy
+                reports.append({
+                    "paper_id": paper_id,
+                    "pdf_sha256": pdf_sha256,
+                    "page": page_idx + 1,
+                    "structure_type": "fraction",
+                    "status": "candidate_visual_structure",
+                    "issue_kind": "skipped_division",
+                    "bbox": vf["vinculum_rect"],
+                    "visually_parsed_latex": vis_latex,
+                    "numerator": num,
+                    "denominator": den,
+                    "source": "vector_layout",
+                    "details": f"Visually parsed fraction {vis_latex} has no matching 2D fraction in 1D parsed equations.",
+                })
 
     except Exception as e:
         print(f"Error auditing {paper_id}: {e}", file=sys.stderr)
@@ -287,7 +320,7 @@ def run_full_discrepancy_audit() -> Dict[str, Any]:
                     "filename_mislabeled": pinfo.get("filename_mislabeled", False),
                     "page_count": pinfo.get("page_count"),
                 }
-            discreps = audit_paper_discrepancies(pid, max_pages=3)
+            discreps = audit_paper_discrepancies(pid, max_pages=9999)
             all_reports.extend(discreps)
 
             p_detected = len(discreps)
@@ -315,7 +348,7 @@ def run_full_discrepancy_audit() -> Dict[str, Any]:
             "neural_engine_info": "pix2tex_vit_cpu_v0.1 (available, not enabled for batch audit)",
             "index_file": rel_index_file,
             "audited_paper_hashes": paper_metadata,
-            "audit_scope": "First 3 pages per paper across 8 indexed corpus papers",
+            "audit_scope": "Full page count across all 8 indexed corpus papers (100% coverage)",
         },
         "total_papers_audited": audited_papers,
         "total_candidates_detected": len(all_reports),

@@ -512,11 +512,12 @@ def _merge_rects(rects: List, gap: float = 8.0) -> List:
 # ---------------------------------------------------------------------------
 
 def analyze_pdf_page(pdf_path: Path, page_num: int, dpi: int = 150,
+                     enable_raster: bool = True,
                      enable_neural: bool = False) -> Dict[str, Any]:
     """
     Analyze a single PDF page with a dual-substrate visual engine:
-      - Raster K-Means connected-component analysis (existing)
-      - Tier 1: Vector vinculum fraction extraction (deterministic)
+      - Raster K-Means connected-component analysis (optional, enable_raster=True)
+      - Tier 1: Vector vinculum fraction extraction (deterministic, zero-latency)
       - Tier 2: pix2tex neural LaTeX OCR (optional, enable_neural=True)
     """
     doc = pymupdf.open(pdf_path)
@@ -526,15 +527,18 @@ def analyze_pdf_page(pdf_path: Path, page_num: int, dpi: int = 150,
 
     page = doc[page_num]
 
-    # --- Raster substrate (existing) ---
-    mat = pymupdf.Matrix(dpi / 72, dpi / 72)
-    pix = page.get_pixmap(matrix=mat)
-    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-    img_array = np.array(img)
+    # --- Raster substrate (K-Means + flood fill) ---
+    regions = []
+    structures = []
+    if enable_raster:
+        mat = pymupdf.Matrix(dpi / 72, dpi / 72)
+        pix = page.get_pixmap(matrix=mat)
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        img_array = np.array(img)
 
-    centroids, assignments, palette = kmeans_quantize(img_array, max_colors=16)
-    regions = find_visual_regions(img_array, assignments, palette)
-    structures = detect_2d_structures(regions)
+        centroids, assignments, palette = kmeans_quantize(img_array, max_colors=16)
+        regions = find_visual_regions(img_array, assignments, palette)
+        structures = detect_2d_structures(regions)
 
     # --- Tier 1: Vector layout fractions ---
     vector_fractions = extract_vector_fractions(page, page_num)

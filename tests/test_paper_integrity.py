@@ -9,7 +9,9 @@ from pathlib import Path
 import pytest
 import pymupdf
 
+import sys
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
 INDEX_FILE = ROOT / "DATASETS" / "zotero_pdf_index.json"
 CORPUS_DIR = ROOT / "DATASETS" / "arxiv_html_corpus"
 REGISTRY_FILE = ROOT / "DATASETS" / "paper_registry.json"
@@ -110,3 +112,58 @@ def test_matched_structures_recorded_with_scores_and_equation_ids() -> None:
         assert "fraction_index_in_eq" in item
         assert "composite_match_score" in item
         assert item["composite_match_score"] >= 0.85
+
+
+def test_matcher_disambiguates_swapped_tokens() -> None:
+    """
+    Unit test for match_fraction_to_ast_corpus:
+    Given Eq 23 with two fractions differing by w vs l,
+    a fraction with 'w' must match fraction 1, not fraction 2.
+    A fraction with 'l' must match fraction 2, not fraction 1.
+    If 'w' is already claimed, an identical 'w' fraction cannot claim fraction 1 again.
+    """
+    from chroma_usage_finder import match_fraction_to_ast_corpus
+    corpus_json = CORPUS_DIR / "2605.06070.json"
+    assert corpus_json.exists()
+    eqs = json.loads(corpus_json.read_text(encoding="utf-8")).get("equations", [])
+
+    # Fraction with w
+    vis_w_num = "πθ(xw 0 |c)"
+    vis_w_den = "πref(xw 0 |c)"
+    match_w = match_fraction_to_ast_corpus(vis_w_num, vis_w_den, eqs, min_score=0.85)
+    assert match_w is not None
+    assert match_w["equation_index"] == 23
+    assert match_w["fraction_index_in_eq"] == 1
+    assert "w" in match_w["numerator_atoms_matched"]
+    assert "l" not in match_w["numerator_atoms_matched"]
+
+    # Fraction with l
+    vis_l_num = "πθ(xl 0 |c)"
+    vis_l_den = "πref(xl 0 |c)"
+    match_l = match_fraction_to_ast_corpus(vis_l_num, vis_l_den, eqs, min_score=0.85)
+    assert match_l is not None
+    assert match_l["equation_index"] == 23
+    assert match_l["fraction_index_in_eq"] == 2
+    assert "l" in match_l["numerator_atoms_matched"]
+    assert "w" not in match_l["numerator_atoms_matched"]
+
+    # One-to-one uniqueness check:
+    # If target (23, 1) is already claimed by w, a second w fraction cannot claim it
+    claimed = {(23, 1)}
+    match_w_second = match_fraction_to_ast_corpus(vis_w_num, vis_w_den, eqs, min_score=0.85, excluded_targets=claimed)
+    # Runner-up (23, 2) has 'l' which lacks 'w', so score < 0.85 -> returns None
+    assert match_w_second is None, "Matcher must refuse duplicate claim on already-assigned target"
+
+
+def test_matcher_rejects_absent_fractions() -> None:
+    """
+    Negative control: a fraction not present anywhere in the paper must return None.
+    """
+    from chroma_usage_finder import match_fraction_to_ast_corpus
+    corpus_json = CORPUS_DIR / "2605.06070.json"
+    assert corpus_json.exists()
+    eqs = json.loads(corpus_json.read_text(encoding="utf-8")).get("equations", [])
+
+    # Completely fictional fraction
+    fake_match = match_fraction_to_ast_corpus("alpha + zeta^3", "gamma_99 * rho", eqs, min_score=0.85)
+    assert fake_match is None, "Matcher must return None for absent fractions"
