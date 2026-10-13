@@ -91,3 +91,22 @@ def test_rejected_diagrams_retained_in_discrepancies_artifact() -> None:
         assert item["status"] == "rejected_diagram"
         assert len(item["rejection_reason"]) > 0
         assert "pdf_sha256" in item
+
+
+def test_matched_structures_recorded_with_scores_and_equation_ids() -> None:
+    """
+    Invariant: Structurally matched candidates must be recorded in matched_structures
+    with equation index, fraction index, and composite match score >= 0.85.
+    """
+    disc_file = ROOT / "DATASETS" / "chroma_visual_discrepancies.json"
+    assert disc_file.exists()
+    data = json.loads(disc_file.read_text(encoding="utf-8"))
+
+    assert "matched_structures" in data, "matched_structures list must be present"
+    assert len(data["matched_structures"]) > 0, "Must have recorded matched visual structures"
+    for item in data["matched_structures"]:
+        assert item["status"] == "matched_structure"
+        assert "matched_equation_index" in item
+        assert "fraction_index_in_eq" in item
+        assert "composite_match_score" in item
+        assert item["composite_match_score"] >= 0.85
