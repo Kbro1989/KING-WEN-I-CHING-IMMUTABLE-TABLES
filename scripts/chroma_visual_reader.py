@@ -348,6 +348,37 @@ def extract_vector_fractions(page, page_num: int,
                 if any(w in num_txt.lower() or w in den_txt.lower() for w in prose_words):
                     continue
 
+                # Font classification check:
+                # Math fractions are set in TeX math fonts (CMR, CMMI, CMSY, CMEX, NimbusRom, MathJax)
+                # Diagrams and UI boxes are set in sans-serif fonts (Helvetica, Arial, NimbusSans)
+                raw_num = page.get_text("rawdict", clip=num_clip)
+                raw_den = page.get_text("rawdict", clip=den_clip)
+                fonts = []
+                for b in raw_num.get("blocks", []) + raw_den.get("blocks", []):
+                    for l in b.get("lines", []):
+                        for s in l.get("spans", []):
+                            f = s.get("font", "")
+                            if f:
+                                fonts.append(f.lower())
+
+                has_math_font = any(mf in f for f in fonts for mf in ["cm", "nimbusrom", "math", "times", "stix", "euler"])
+                has_diagram_font = any(df in f for f in fonts for df in ["helvetica", "arial", "sans"])
+                has_math_char = any(c in (num_txt + den_txt) for c in ["\\", "+", "-", "=", "*", "/", "^", "_", "π", "θ", "σ", "β", "λ", "μ", "γ"])
+
+                # Diagram and Flowchart filter:
+                # Math equations have very low box-drawing density (< 3 closed rects nearby).
+                # Diagrams/flowcharts have dozens of bounding box drawings nearby.
+                nearby_boxes = sum(
+                    1 for od in drawings
+                    if abs(od["rect"].y0 - r.y0) < 50.0 and abs(od["rect"].x0 - r.x0) < 80.0
+                    and (od["rect"].width > 12.0 and od["rect"].height > 10.0)
+                )
+                if nearby_boxes >= 3:
+                    continue
+
+                if has_diagram_font and not has_math_font and not has_math_char:
+                    continue
+
                 latex = f"\\frac{{{num_txt}}}{{{den_txt}}}"
                 fractions.append(VectorFraction(
                     page=page_num,
