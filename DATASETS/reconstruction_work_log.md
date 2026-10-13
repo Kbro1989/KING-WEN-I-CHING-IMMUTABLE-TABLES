@@ -5,39 +5,54 @@ Corpus: **3409 occurrences** across **14 papers**.
 This log shows what the pipeline actually attempted and produced.
 Every row is a real record from real execution — no fabrication.
 
-## Pipeline reach (2026-10-12 — oxide empty-base fix + alttext cross-checker)
+## Pipeline reach (2026-10-12 — oxide empty-base fix + connected alttext cross-checker)
 
+### Corpus-level reach (denominator: 3,409 occurrences)
 | Stage | Count | Share |
 | --- | ---: | ---: |
-| Source occurrences | 3409 | 100% |
+| Source occurrences | 3409 | 100.0% |
 | Parsed via MathML tree | 3233 | 94.8% |
 | Parsed via LaTeX fallback | 176 | 5.2% |
-| Solver accepted | 344 | 10.1% |
-| Independently verified | 181 | 5.3% |
-| Verification refuted (stage 1 structural fail) | 32 | 0.9% |
-| Verification inconclusive | 131 | 3.8% |
+| Solver accepted (candidates) | 344 | 10.1% |
 
-## AltText cross-check (2026-10-12)
+### Candidate-level evaluation (denominator: 344 solver-accepted records)
+| Stage | Count | Share |
+| --- | ---: | ---: |
+| Candidate equations | 344 | 100.0% |
+| Independently verified passed | 180 | 52.3% |
+| Verification failed | 33 | 9.6% |
+| — Failed Stage 1 (structural divergence) | 32 | 9.3% |
+| — Failed AltText gap (recognized token dropped) | 1 | 0.3% |
+| Verification inconclusive (unverifiable) | 131 | 38.1% |
 
-The alttext reader compares every equation's LaTeX `alttext` attribute against
-the MathML-derived expr. **226 of 3409 records** have at least one recognized
-token in the alttext that does not appear in the expr.
+Total checks: 180 passed + 33 failed + 131 unverifiable = 344 (100.0%).
 
-| Missing from expr | # equations |
+## AltText cross-check & Gap x Verdict Cross-Tab (2026-10-12)
+
+The alttext reader compares every equation's source LaTeX `alttext` attribute against
+the MathML-derived expr.
+
+Across all 3,409 occurrences, **169 records** have at least one recognized
+token in the alttext that does not appear in the expr:
+
+| Missing from expr | # occurrences |
 | --- | ---: |
-| Named operator (`:=`, `\approx`, `\sim` …) | 76 |
-| Large operator (∑ ∫ ∏ …) | 72 |
+| Named operator (`:=`, `\approx`, `\sim` …) | 75 |
 | Number literal | 62 |
 | Plain identifier | 49 |
 | Greek letter | 21 |
 | Accent (hat, bar, tilde …) | 12 |
 | Bracket / norm | 10 |
+| Large operator (∑ ∫ ∏ …) | 1 |
 
-These are the *categories* the parser still under-represents after the oxide
-empty-base fix. The named-operator gap (`:=`, `\coloneqq`) is the largest
-remaining class — those definitions appear in display equations where the MathML
-renders `:=` as two separate `<mo>` siblings that the current join logic absorbs
-into `=` rather than `:=`.
+### Gap x Verdict Cross-Tab (on 344 candidate equations)
+AltText gaps are now connected directly to verification verdicts: any candidate equation dropping recognized source tokens is rejected (`passed: False`, `failed_alttext_gap: True`).
+
+| Verdict | Total | With AltText Gap | Gap Breakdown |
+| --- | ---: | ---: | --- |
+| **passed** | 180 | 0 | None (0% contaminated) |
+| **failed** | 33 | 3 | Number: 2, Named operator: 1 |
+| **unverifiable** | 131 | 4 | Plain identifier: 3, Named operator: 1 |
 
 ## Where the pipeline stops, and why
 
