@@ -286,7 +286,12 @@ MATH_SYMBOL_LOOKUP = {
     '≅': {'name': 'cong', 'category': 'operator', 'unicode': '≅', 'latex': '\\cong'},
     '⊕': {'name': 'oplus', 'category': 'operator', 'unicode': '⊕', 'latex': '\\oplus'},
     '⊗': {'name': 'otimes', 'category': 'operator', 'unicode': '⊗', 'latex': '\\otimes'},
+    '⊙': {'name': 'odot', 'category': 'operator', 'unicode': '⊙', 'latex': '\\odot'},
     '⨯': {'name': 'cross', 'category': 'operator', 'unicode': '⨯', 'latex': '\\times'},
+    '≔': {'name': 'coloneqq', 'category': 'operator', 'unicode': '≔', 'latex': '\\coloneqq'},
+    '≝': {'name': 'eqdef', 'category': 'operator', 'unicode': '≝', 'latex': '\\triangleq'},
+    '₊': {'name': 'sub_plus', 'category': 'operator', 'unicode': '₊', 'latex': '_+'},
+    '₋': {'name': 'sub_minus', 'category': 'operator', 'unicode': '₋', 'latex': '_-'},
     
     # Additional calculus
     '∮': {'name': 'oint', 'category': 'calculus', 'unicode': '∮', 'latex': '\\oint'},
@@ -418,6 +423,98 @@ def classify_symbol(ocr_text, aspect_ratio, fill_ratio, normalized_stroke, regio
     classifications.sort(key=lambda x: x['confidence'], reverse=True)
     
     return classifications
+
+
+def resolve_glyph_scripts_and_accents(chars_or_spans: list) -> list:
+    """
+    Deterministic glyph-layout resolver: detects sub/superscripts and atop diacritics
+    (e.g., ^ hat, ~ tilde, bar) from geometric bounding boxes and baseline offsets.
+
+    Input: list of char or span dicts with keys:
+        'c' (character text), 'font', 'size', 'bbox' (x0, y0, x1, y1), 'origin' (x, y)
+    Returns: list of structured tokens with resolved roles:
+        'base', 'superscript', 'subscript', 'accent_hat', 'accent_tilde', 'accent_bar'
+    """
+    if not chars_or_spans:
+        return []
+
+    # Filter out empty or whitespace-only items
+    items = [c for c in chars_or_spans if c.get('c', '').strip()]
+    if not items:
+        return []
+
+    # Estimate median font size as the base body font size
+    sizes = sorted(c.get('size', 10.0) for c in items)
+    median_size = sizes[len(sizes) // 2]
+    script_threshold = median_size * 0.85
+
+    resolved = []
+    skip_indices = set()
+
+    for i, curr in enumerate(items):
+        if i in skip_indices:
+            continue
+
+        c_char = curr.get('c', '')
+        c_size = curr.get('size', 10.0)
+        c_bbox = curr.get('bbox', [0, 0, 0, 0])
+        c_origin = curr.get('origin', (0, 0))
+
+        # Check for atop diacritic: is there a diacritic glyph directly above this character?
+        # A diacritic sits above (y1_accent <= y0_base + margin) and overlaps in X (> 50%)
+        is_accented = False
+        accent_token = None
+        for j, other in enumerate(items):
+            if i == j or j in skip_indices:
+                continue
+            o_char = other.get('c', '')
+            if o_char in ['^', 'ˆ', '~', '˜', '¯', '˙', '¨', '⃗']:
+                o_bbox = other.get('bbox', [0, 0, 0, 0])
+                # Horizontal overlap
+                h_overlap = min(c_bbox[2], o_bbox[2]) - max(c_bbox[0], o_bbox[0])
+                c_width = c_bbox[2] - c_bbox[0]
+                if c_width > 0 and (h_overlap / c_width) > 0.4:
+                    # Vertical position: accent must be above or at top edge of base
+                    if o_bbox[3] <= c_bbox[1] + 4.0:
+                        is_accented = True
+                        accent_map = {'^': 'hat', 'ˆ': 'hat', '~': 'tilde', '˜': 'tilde', '¯': 'bar', '˙': 'dot', '¨': 'ddot', '⃗': 'vec'}
+                        accent_token = accent_map.get(o_char, 'accent')
+                        skip_indices.add(j)
+                        break
+
+        # Check for subscript or superscript by size and origin baseline
+        is_script = c_size < script_threshold
+        role = 'base'
+        if is_script:
+            # Baseline y-origin comparison against neighboring base
+            # In PDF coords (y points down):
+            # Superscript has smaller y_origin (higher on page)
+            # Subscript has larger or equal y_origin (lower on page)
+            prev_base = next((resolved[k] for k in range(len(resolved) - 1, -1, -1) if resolved[k]['role'] == 'base'), None)
+            if prev_base:
+                prev_y = prev_base['origin'][1]
+                if c_origin[1] < prev_y - 1.5:
+                    role = 'superscript'
+                else:
+                    role = 'subscript'
+            else:
+                role = 'superscript' if c_origin[1] < c_bbox[1] + (c_bbox[3] - c_bbox[1]) * 0.5 else 'subscript'
+
+        token_record = {
+            'char': c_char,
+            'font': curr.get('font', ''),
+            'size': c_size,
+            'role': role,
+            'origin': c_origin,
+            'bbox': c_bbox,
+        }
+        if is_accented and accent_token:
+            token_record['accent'] = accent_token
+
+        resolved.append(token_record)
+
+    return resolved
+
 
 def classify_regions(regions):
     """

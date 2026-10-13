@@ -287,12 +287,14 @@ def detect_2d_structures(regions: List[VisualRegion]) -> List[VisualMathStructur
 
 @dataclass
 class VectorFraction:
-    """A fraction detected from the PDF vector drawing layer (zero hallucination)."""
+    """A fraction candidate detected from the PDF vector drawing layer."""
     page: int
     vinculum_rect: Tuple[float, float, float, float]  # (x0, y0, x1, y1)
     numerator_text: str
     denominator_text: str
     assembled_latex: str
+    status: str = "confirmed_math_fraction"
+    rejection_reason: str = ""
 
 
 @dataclass
@@ -362,7 +364,7 @@ def extract_vector_fractions(page, page_num: int,
                                 fonts.append(f.lower())
 
                 has_math_font = any(mf in f for f in fonts for mf in ["cm", "nimbusrom", "math", "times", "stix", "euler"])
-                has_diagram_font = any(df in f for f in fonts for df in ["helvetica", "arial", "sans"])
+                has_diagram_font = any(df in f for f in fonts for df in ["helvetica", "arial", "sans", "calibri", "tahoma", "segoe"])
                 has_math_char = any(c in (num_txt + den_txt) for c in ["\\", "+", "-", "=", "*", "/", "^", "_", "π", "θ", "σ", "β", "λ", "μ", "γ"])
 
                 # Diagram and Flowchart filter:
@@ -374,9 +376,27 @@ def extract_vector_fractions(page, page_num: int,
                     and (od["rect"].width > 12.0 and od["rect"].height > 10.0)
                 )
                 if nearby_boxes >= 3:
+                    fractions.append(VectorFraction(
+                        page=page_num,
+                        vinculum_rect=(r.x0, r.y0, r.x1, r.y1),
+                        numerator_text=num_txt,
+                        denominator_text=den_txt,
+                        assembled_latex=f"\\frac{{{num_txt}}}{{{den_txt}}}",
+                        status="rejected_diagram",
+                        rejection_reason=f"high_nearby_box_density ({nearby_boxes} boxes within 50pt)",
+                    ))
                     continue
 
                 if has_diagram_font and not has_math_font and not has_math_char:
+                    fractions.append(VectorFraction(
+                        page=page_num,
+                        vinculum_rect=(r.x0, r.y0, r.x1, r.y1),
+                        numerator_text=num_txt,
+                        denominator_text=den_txt,
+                        assembled_latex=f"\\frac{{{num_txt}}}{{{den_txt}}}",
+                        status="rejected_diagram",
+                        rejection_reason=f"diagram_font_without_math_symbols ({fonts[:3]})",
+                    ))
                     continue
 
                 latex = f"\\frac{{{num_txt}}}{{{den_txt}}}"
@@ -386,6 +406,8 @@ def extract_vector_fractions(page, page_num: int,
                     numerator_text=num_txt,
                     denominator_text=den_txt,
                     assembled_latex=latex,
+                    status="confirmed_math_fraction",
+                    rejection_reason="",
                 ))
 
     return fractions
@@ -545,6 +567,8 @@ def analyze_pdf_page(pdf_path: Path, page_num: int, dpi: int = 150,
                 "denominator": vf.denominator_text,
                 "latex": vf.assembled_latex,
                 "source": "vector_layout",
+                "status": vf.status,
+                "rejection_reason": vf.rejection_reason,
             }
             for vf in vector_fractions
         ],
