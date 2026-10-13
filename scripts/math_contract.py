@@ -95,6 +95,7 @@ NODE_KINDS = frozenset({
     "inner_product",  # ⟨a,b⟩ — inner product, NOT a tuple
     "named_operator", # \\operatorname{sgn}(x) — named function, NOT identifier
     "norm",           # ‖x‖_p — norm with parameter, NOT absolute value
+    "cases",          # piecewise cases structure with branches
 })
 
 

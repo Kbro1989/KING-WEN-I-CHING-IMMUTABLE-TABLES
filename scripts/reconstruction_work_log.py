@@ -43,12 +43,21 @@ def main() -> int:
     total = len(recs)
     tree = sum(1 for r in recs if r["parse_path"] == "tree")
     fb = sum(1 for r in recs if r["parse_path"] == "latex_fallback")
-    solved = [r for r in recs if r["solved"]]
-    vpass = [r for r in recs if r["validation"]["passed"] is True]
-    vfail = [r for r in recs if r["validation"]["passed"] is False]
-    vunv_all = [r for r in recs if r["solved"] and r["validation"]["passed"] is None]
+    # Candidate population: strictly equations where a solution was produced
+    candidates = [r for r in recs if r["solved"]]
+    vpass = [r for r in candidates if r["validation"]["passed"] is True]
+    vfail = [r for r in candidates if r["validation"]["passed"] is False]
+    vunv_all = [r for r in candidates if r["validation"]["passed"] is None]
     vunv_attempted = [r for r in vunv_all if r["validation"]["attempted"]]
     vunv_unattempted = [r for r in vunv_all if not r["validation"]["attempted"]]
+
+    # Hard invariant enforcement: mutual exclusivity & exhaustiveness
+    assert len(vpass) + len(vfail) + len(vunv_all) == len(candidates), (
+        f"Partition mismatch: {len(vpass)} + {len(vfail)} + {len(vunv_all)} != {len(candidates)}"
+    )
+    # Ensure no unsolved record leaked into validation outcomes
+    unsolved_leaks = [r for r in recs if not r["solved"] and r["validation"]["passed"] is not None]
+    assert len(unsolved_leaks) == 0, f"Unsolved records have non-None validation: {len(unsolved_leaks)}"
 
     # Error taxonomy for the non-solved records
     errs = Counter()
@@ -91,14 +100,14 @@ def main() -> int:
     L.append(f"| Source occurrences | {total} | 100.0% |")
     L.append(f"| Parsed via MathML tree | {tree} | {100*tree/total:.1f}% |")
     L.append(f"| Parsed via LaTeX fallback | {fb} | {100*fb/total:.1f}% |")
-    L.append(f"| Solver accepted (candidates) | {len(solved)} | {100*len(solved)/total:.1f}% |")
-    L.append(f"| — Independently verified passed | {len(vpass)} | {100*len(vpass)/len(solved):.1f}% of candidates |")
-    L.append(f"| — Verification refuted (failed) | {len(vfail)} | {100*len(vfail)/len(solved):.1f}% of candidates |")
-    L.append(f"| — Verification inconclusive | {len(vunv_all)} | {100*len(vunv_all)/len(solved):.1f}% of candidates |")
-    L.append(f"|   · Attempted residual non-zero | {len(vunv_attempted)} | {100*len(vunv_attempted)/len(solved):.1f}% of candidates |")
-    L.append(f"|   · Unattempted (parse/syntax limit) | {len(vunv_unattempted)} | {100*len(vunv_unattempted)/len(solved):.1f}% of candidates |")
+    L.append(f"| Solver accepted (candidates) | {len(candidates)} | {100*len(candidates)/total:.1f}% |")
+    L.append(f"| — Independently verified passed | {len(vpass)} | {100*len(vpass)/len(candidates):.1f}% of candidates |")
+    L.append(f"| — Verification failed (fidelity/gap) | {len(vfail)} | {100*len(vfail)/len(candidates):.1f}% of candidates |")
+    L.append(f"| — Verification inconclusive | {len(vunv_all)} | {100*len(vunv_all)/len(candidates):.1f}% of candidates |")
+    L.append(f"|   · Attempted residual non-zero | {len(vunv_attempted)} | {100*len(vunv_attempted)/len(candidates):.1f}% of candidates |")
+    L.append(f"|   · Unattempted (parse/syntax limit) | {len(vunv_unattempted)} | {100*len(vunv_unattempted)/len(candidates):.1f}% of candidates |")
     L.append("")
-    L.append(f"Sum of candidate verdicts: {len(vpass)} passed + {len(vfail)} refuted + {len(vunv_all)} inconclusive = {len(vpass) + len(vfail) + len(vunv_all)} (100.0% of {len(solved)} candidates).")
+    L.append(f"Sum of candidate verdicts: {len(vpass)} passed + {len(vfail)} failed + {len(vunv_all)} inconclusive = {len(vpass) + len(vfail) + len(vunv_all)} (100.0% of {len(candidates)} candidates).")
     L.append("")
     L.append("## Where the pipeline stops, and why")
     L.append("")
@@ -180,19 +189,19 @@ def main() -> int:
     L.append("")
     L.append("## Verdict")
     L.append("")
-    L.append(f"- {len(vfail)} equations were solved to a result that failed independent")
-    L.append("  verification (failed Stage 1 source fidelity or AltText gap).")
+    L.append(f"- {len(vfail)} equations were solved to a result that failed verification")
+    L.append("  (failed Stage 1 source fidelity or AltText token gap).")
     L.append(f"- {len(vpass)} equations were solved and independently verified.")
     L.append(f"- {len(vunv_all)} solutions are inconclusive ({len(vunv_attempted)} attempted non-zero residuals, {len(vunv_unattempted)} unattempted parse/syntax limits).")
-    L.append(f"- Category reconciliation: {len(vpass)} passed + {len(vfail)} refuted + {len(vunv_all)} inconclusive = {len(vpass) + len(vfail) + len(vunv_all)} (exactly 100.0% of {len(solved)} candidates).")
-    L.append("- Solver acceptance alone ({}) is not treated as correctness.".format(len(solved)))
+    L.append(f"- Category reconciliation: {len(vpass)} passed + {len(vfail)} failed + {len(vunv_all)} inconclusive = {len(vpass) + len(vfail) + len(vunv_all)} (exactly 100.0% of {len(candidates)} candidates).")
+    L.append("- Solver acceptance alone ({}) is not treated as correctness.".format(len(candidates)))
     L.append("")
 
     OUT.write_text("\n".join(L) + "\n", encoding="utf-8")
     print(f"Wrote {OUT}")
-    print(f"  verified:     {len(vpass)}")
-    print(f"  refuted:      {len(vfail)}")
-    print(f"  inconclusive: {len(vunv_all)} ({len(vunv_attempted)} attempted, {len(vunv_unattempted)} unattempted)")
+    print(f"  verified passed:     {len(vpass)}")
+    print(f"  verification failed: {len(vfail)}")
+    print(f"  inconclusive:        {len(vunv_all)} ({len(vunv_attempted)} attempted, {len(vunv_unattempted)} unattempted)")
     return 0
 
 
