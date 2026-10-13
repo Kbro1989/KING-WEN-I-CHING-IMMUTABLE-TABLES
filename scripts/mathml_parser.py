@@ -105,7 +105,7 @@ MO_MAP = {
     # misc
     "!": "", "%": "/100", ",": ",", ";": ";", ":": ":",
     ".": ".", "…": "", "⋯": "", "⋮": "", "⋱": "",
-    "′": "", "″": "", "‴": "",
+    "′": "_prime", "″": "_prime_prime", "‴": "_prime_prime_prime",
     # invisible operators -> drop
     "\u2061": "", "\u200b": "", "\u2060": "", "\u200c": "", "\u200d": "",
     "\ufeff": "", "\u00ad": "",
@@ -117,7 +117,7 @@ MO_MAP = {
 # constraint set, or the bound.
 BIG_OP_BASES = {
     "Sum", "Prod", "Integral", "ContourIntegral", "DoubleIntegral", "TripleIntegral",
-    "Limit", "Max", "Min", "sup", "inf",
+    "Limit", "Max", "Min", "max", "min", "sup", "inf",
     "argmax", "argmin", "limsup", "liminf",
     "Union", "Intersect",
 }
@@ -347,6 +347,8 @@ class MathMLParser:
             sub = self._walk(kids[1])
             if base is None or sub is None:
                 return None
+            if base in BIG_OP_BASES:
+                return f"{base}_{self._limit_token(sub)}"
             return f"{base}_{self._subscript_token(sub)}"
 
         if tag == "msubsup":
@@ -543,14 +545,93 @@ class MathMLParser:
         return ""
 
     def _handle_mrow(self, node):
-        """Sequence. Insert '*' between adjacent atoms (implicit product)."""
+        """Sequence. Insert '*' between adjacent atoms (implicit product).
+
+        LaTeXML oxide (v0.7.6+) emits 'empty-base' <msub>/<msup>/<msubsup>
+        where the first child is <mrow/> (empty text) and the actual host is
+        the PRECEDING sibling in this same <mrow>. Examples:
+          <mstyle>∑</mstyle> <msub base='' val='ℓ=1'/> <msup base='' val='G'/>
+          <mi>s</mi> <msub base='' val='r'/> <msup base='' val='2'/>
+
+        When we see such a node and there is already a parsed result in `parts`,
+        we graft the sub/sup onto that result instead of producing an orphan.
+        """
         kids = self._children(node)
         parts = []
+
         for k in kids:
+            tag = self._tag(k)
+            k_kids = self._children(k)
+
+            # --- Oxide empty-base detection -----------------------------------
+            # Condition: tag is msub/msup/msubsup, first child exists but has
+            # no text content (empty <mrow/>), and we already have a prior atom.
+            is_oxide_orphan = (
+                tag in ("msub", "msup", "msubsup")
+                and k_kids
+                and not self._text(k_kids[0]).strip()
+                and parts
+            )
+            if is_oxide_orphan:
+                prev_tag, prev_expr = parts.pop()
+                if tag == "msub":
+                    sub = self._walk(k_kids[1]) if len(k_kids) > 1 else ""
+                    if sub is None:
+                        sub = ""
+                    if prev_expr in BIG_OP_BASES:
+                        parts.append((prev_tag, f"{prev_expr}_{self._limit_token(sub)}"))
+                    else:
+                        parts.append((prev_tag, f"{prev_expr}_{self._subscript_token(sub)}"))
+
+                elif tag == "msup":
+                    sup = self._walk(k_kids[1]) if len(k_kids) > 1 else ""
+                    if sup is None:
+                        sup = ""
+                    raw = (self._text(k_kids[1]) if len(k_kids) > 1 else "").strip()
+                    if raw in ("⊤", "\\top") or sup == "T":
+                        parts.append((prev_tag, f"{prev_expr}_T"))
+                    elif raw in ("†", "\\dagger") or sup == "dagger":
+                        parts.append((prev_tag, f"{prev_expr}_dag"))
+                    elif raw in ("⊥",):
+                        parts.append((prev_tag, f"{prev_expr}_perp"))
+                    elif raw in ("′", "\\prime", "'"):
+                        parts.append((prev_tag, f"{prev_expr}_prime"))
+                    elif raw in ("∗", "⋆", "\\ast", "\\star", "*"):
+                        parts.append((prev_tag, f"{prev_expr}_star"))
+                    elif raw in ("∞", "\\infty"):
+                        parts.append((prev_tag, f"(({prev_expr})**(oo))"))
+                    else:
+                        # Check if previous result was a big-op with a lower
+                        # limit already attached (e.g. Sum_l_eq_1).
+                        if any(prev_expr.startswith(f"{op}_") for op in BIG_OP_BASES):
+                            parts.append((prev_tag, f"{prev_expr}_{self._limit_token(sup)}"))
+                        else:
+                            parts.append((prev_tag, f"(({prev_expr})**({sup}))"))
+
+                elif tag == "msubsup":
+                    sub = self._walk(k_kids[1]) if len(k_kids) > 1 else ""
+                    sup = self._walk(k_kids[2]) if len(k_kids) > 2 else ""
+                    if sub is None:
+                        sub = ""
+                    if sup is None:
+                        sup = ""
+                    raw_sup = (self._text(k_kids[2]) if len(k_kids) > 2 else "").strip()
+                    if prev_expr in BIG_OP_BASES:
+                        parts.append((prev_tag, f"{prev_expr}_{self._limit_token(sub)}_{self._limit_token(sup)}"))
+                    elif raw_sup in ("⊤", "\\top") or sup == "T":
+                        parts.append((prev_tag, f"{prev_expr}_{self._subscript_token(sub)}_T"))
+                    elif raw_sup in ("′", "\\prime", "'"):
+                        parts.append((prev_tag, f"{prev_expr}_{self._subscript_token(sub)}_prime"))
+                    elif raw_sup in ("∗", "⋆", "\\ast", "\\star", "*"):
+                        parts.append((prev_tag, f"{prev_expr}_{self._subscript_token(sub)}_star"))
+                    else:
+                        parts.append((prev_tag, f"{prev_expr}_{self._subscript_token(sub)}**({sup})"))
+                continue
+            # --- Normal path --------------------------------------------------
             r = self._walk(k)
             if r is None:
                 return None
-            parts.append((self._tag(k), r))
+            parts.append((tag, r))
 
         out = []
         for i, (tag, r) in enumerate(parts):

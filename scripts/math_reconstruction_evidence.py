@@ -24,6 +24,7 @@ Output:
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from collections import Counter
@@ -32,6 +33,11 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
+
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 from math_contract import SourceOccurrence, occurrence_key  # noqa: E402
 
@@ -94,6 +100,10 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
         "attempted": False,
         "passed": None,
         "detail": None,
+        "failed_stage1": False,
+        "refuted_stage2": False,
+        "cannot_isolate": False,
+        "vacuous_echo": False,
     }
     if not solution:
         result["stage2_computational_validity"] = {
@@ -187,6 +197,10 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
                     'ϕ': 'phi', '\u03d5': 'phi', 'φ': 'phi', '\u03c6': 'phi',
                     '∇': 'grad', '\u2207': 'grad',
                     'ϵ': 'epsilon', '\u03f5': 'epsilon', 'ε': 'epsilon', '\u03b5': 'epsilon',
+                    # prime marks — parser now emits _prime/_prime_prime
+                    '′': 'prime', '″': 'prime', '‴': 'prime',
+                    # transpose — parser emits _T
+                    '⊤': 'T',
                 }
 
                 def _norm(s: str) -> str:
@@ -302,13 +316,38 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
             "checks": stage1_checks,
             "detail": stage1_detail,
         }
+        if stage1_passed is False:
+            result["failed_stage1"] = True
 
         # --- STAGE 2: Computational validity ---------------------------
         # Substitute the solution back into the recovered expression.
         # This checks computational validity, NOT source fidelity.
-        lhs_s, _, rhs_s = recovered.partition("=")
-        lhs = parse_expr(lhs_s.strip(), transformations=transforms, evaluate=True)
-        rhs = parse_expr(rhs_s.strip(), transformations=transforms, evaluate=True)
+
+        # Pre-clean: strip sentence-ending punctuation that leaked from MathML
+        # (trailing commas, periods, stars from enumerate/display rows).
+        import re as _re
+        recovered_clean = recovered.strip()
+        recovered_clean = _re.sub(r"[\*\.\,;\s]+$", "", recovered_clean)
+        recovered_clean = _re.sub(r"^[\*\.\,;\s]+", "", recovered_clean)
+        # Normalize curly braces to parens for SymPy
+        recovered_clean = recovered_clean.replace("{", "(").replace("}", ")")
+
+        lhs_s, _, rhs_s = recovered_clean.partition("=")
+        lhs_s = _re.sub(r"[\*\.\,;\s]+$", "", lhs_s.strip())
+        rhs_s = _re.sub(r"[\*\.\,;\s]+$", "", rhs_s.strip())
+        rhs_s = rhs_s.replace("{", "(").replace("}", ")")
+
+        lhs = parse_expr(lhs_s, transformations=transforms, evaluate=True)
+        rhs = parse_expr(rhs_s, transformations=transforms, evaluate=True)
+
+        # parse_expr can return a tuple when the expression contains commas
+        # (e.g. "i=2,...,n" parses as (2, ..., n)). Unwrap single-element tuples;
+        # multi-element tuples mean we cannot isolate a variable anyway.
+        if isinstance(lhs, tuple):
+            lhs = lhs[0] if len(lhs) == 1 else lhs
+        if isinstance(rhs, tuple):
+            rhs = rhs[0] if len(rhs) == 1 else rhs
+
         sol = sympy.sympify(sol_expr)
 
         # Identify the isolated variable: the one present on one side only.
@@ -323,13 +362,15 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
             var = next(iter(only_rhs))
             target, other = rhs, lhs
         else:
+            result["cannot_isolate"] = True
             result["stage2_computational_validity"] = {
-                "attempted": True,
+                "attempted": False,
                 "passed": None,
                 "detail": f"cannot isolate: only_lhs={len(only_lhs)} only_rhs={len(only_rhs)}",
             }
-            result["attempted"] = True
+            result["attempted"] = False
             if stage1_passed is False:
+                result["failed_stage1"] = True
                 result["passed"] = False
                 result["detail"] = f"stage1 failed: {stage1_detail} (stage2 cannot isolate)"
             else:
@@ -347,13 +388,15 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
         except Exception:
             sol_free = set()
         if var in sol_free:
+            result["vacuous_echo"] = True
             result["stage2_computational_validity"] = {
-                "attempted": True,
+                "attempted": False,
                 "passed": None,
                 "detail": f"solution for {var} still contains {var}; substitution is vacuous (echo, not an isolation) -- unverifiable",
             }
-            result["attempted"] = True
+            result["attempted"] = False
             if stage1_passed is False:
+                result["failed_stage1"] = True
                 result["passed"] = False
                 result["detail"] = f"stage1 failed: {stage1_detail} (stage2 vacuous echo)"
             else:
@@ -382,6 +425,7 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
             }
             result["attempted"] = True
             if stage1_passed is False:
+                result["failed_stage1"] = True
                 result["passed"] = False
                 result["detail"] = f"stage1 failed: {stage1_detail} (stage2 infinite/undefined residual)"
             else:
@@ -425,6 +469,7 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
             }
             result["attempted"] = True
             if stage1_passed is False:
+                result["failed_stage1"] = True
                 result["passed"] = False
                 result["detail"] = f"stage1 failed: {stage1_detail} (stage2 symbolic residual)"
             else:
@@ -443,8 +488,9 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
         # Stage 1 explicit FAIL => overall fail (structural element dropped).
         # Stage 2 PASS + Stage 1 passed    => verified (both stages passed).
         # Stage 2 PASS + Stage 1 skipped   => stage2_only (not fully verified).
-        # Stage 2 FAIL                     => overall fail.
+        # Stage 2 FAIL                     => overall fail (refuted by numeric residual).
         if stage1_passed is False:
+            result["failed_stage1"] = True
             result["passed"] = False
             result["detail"] = f"stage1 failed: {stage1_detail}"
             return result
@@ -457,11 +503,13 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
             result["passed"] = True
             result["detail"] = "stage2 passed; stage1 skipped (no canonical tree)"
         else:
+            result["refuted_stage2"] = True
             result["passed"] = False
             result["detail"] = f"stage2 failed: residual={residual}{note}"
         return result
     except Exception as e:
         if stage1_passed is False:
+            result["failed_stage1"] = True
             result["passed"] = False
             result["detail"] = f"stage1 failed: {stage1_detail} (exception: {type(e).__name__}: {e})"
         else:
@@ -471,6 +519,11 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
 
 def main() -> int:
     pins = load_pins()
+
+    try:
+        from alttext_cross_checker import cross_check as _alttext_cross_check
+    except ImportError:
+        _alttext_cross_check = None
 
     # Index recovery records by (paper, occurrence)
     recovery: dict[tuple[str, int], dict[str, Any]] = {}
@@ -484,12 +537,28 @@ def main() -> int:
 
     records: list[dict[str, Any]] = []
     m = Counter()
+    seen_papers: set[str] = set()
+    paper_hashes: dict[str, str] = {}
 
     for jf in sorted(CORPUS_DIR.glob("*.json")):
         data = json.loads(jf.read_text(encoding="utf-8"))
         paper_id = data.get("arxiv_id", jf.stem)
+        if paper_id in seen_papers:
+            raise ValueError(f"Duplicate paper ID in corpus: {paper_id} (file: {jf.name})")
+        seen_papers.add(paper_id)
+
+        eqs = data.get("equations", [])
+        payload = json.dumps([e.get("latex") for e in eqs], sort_keys=True)
+        content_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        if content_hash in paper_hashes:
+            dup_id = paper_hashes[content_hash]
+            raise ValueError(
+                f"Corpus content collision: {paper_id} ({jf.name}) has identical equation payload to {dup_id}"
+            )
+        paper_hashes[content_hash] = paper_id
+
         version = pins.get(paper_id, "unpinned")
-        for i, eq in enumerate(data.get("equations", [])):
+        for i, eq in enumerate(eqs):
             occ = SourceOccurrence(
                 paper_id=paper_id, paper_version=version,
                 source_locator=f"math[{i}]", occurrence_index=i,
@@ -542,8 +611,17 @@ def main() -> int:
             if solved:
                 m["solver_accepted"] += 1
                 m["candidate_equations"] += 1
-                if validation["attempted"]:
+                if validation.get("cannot_isolate"):
+                    m["cannot_isolate"] += 1
+                    m["parsed_equations"] += 1
+                elif validation.get("vacuous_echo"):
+                    m["vacuous_echo"] += 1
+                    m["parsed_equations"] += 1
+                    m["isolatable_equations"] += 1
+                elif validation["attempted"]:
                     m["substitution_attempted"] += 1
+                    m["parsed_equations"] += 1
+                    m["isolatable_equations"] += 1
                 else:
                     m["unattempted_exceptions"] += 1
 
@@ -553,6 +631,23 @@ def main() -> int:
                     m["validation_failed"] += 1
                 else:
                     m["validation_unverifiable"] += 1
+
+                if validation.get("failed_stage1"):
+                    m["failed_stage1"] += 1
+                if validation.get("refuted_stage2"):
+                    m["refuted_stage2"] += 1
+
+            is_display = eq.get("is_display", True)
+            eqno = eq.get("eqno") or eq.get("equation_number")
+            scope = (
+                "display_numbered" if (is_display and eqno)
+                else "display_unnumbered" if is_display
+                else "inline_context"
+            )
+            alttext_diff = (
+                _alttext_cross_check(latex, recovered or "", scope=scope)
+                if _alttext_cross_check else {}
+            )
 
             records.append({
                 "occurrence_key": okey,
@@ -569,6 +664,7 @@ def main() -> int:
                 "solution": solution,
                 "solve_error": error,
                 "validation": validation,
+                "alttext_diff": alttext_diff,
             })
 
     with open(OUT_JSONL, "w", encoding="utf-8") as f:
@@ -578,6 +674,16 @@ def main() -> int:
     # Sample: one solved+validated, one rejected
     solved_sample = next((r for r in records if r["solved"] and r["validation"]["passed"]), None)
     rejected_sample = next((r for r in records if not r["solved"]), None)
+
+    # Alttext gap summary
+    gap_counter: dict[str, int] = {}
+    records_with_gaps = 0
+    for r in records:
+        ad = r.get("alttext_diff") or {}
+        if ad.get("missing_from_expr"):
+            records_with_gaps += 1
+            for cat in ad.get("gap_categories") or []:
+                gap_counter[cat] = gap_counter.get(cat, 0) + 1
 
     summary = {
         "date": "2026-10-12",
@@ -589,16 +695,26 @@ def main() -> int:
             "parse_path_none": m["path_none"],
             "solver_accepted": m["solver_accepted"],
             "candidate_equations": m["candidate_equations"],
+            "parsed_equations": m["parsed_equations"],
+            "isolatable_equations": m["isolatable_equations"],
             "substitution_attempted": m["substitution_attempted"],
             "unattempted_exceptions": m["unattempted_exceptions"],
+            "cannot_isolate": m["cannot_isolate"],
+            "vacuous_echo": m["vacuous_echo"],
             "validation_passed": m["validation_passed"],
             "validation_failed": m["validation_failed"],
+            "failed_stage1": m["failed_stage1"],
+            "refuted_stage2": m["refuted_stage2"],
             "validation_unverifiable": m["validation_unverifiable"],
             "stage1_breakdown": {
                 "evaluated_with_checks": m["stage1_evaluated_with_checks"],
                 "evaluated_vacuously": m["stage1_evaluated_vacuously"],
                 "skipped": m["stage1_skipped"],
                 "failed": m["stage1_failed"],
+            },
+            "alttext_gap": {
+                "records_with_gaps": records_with_gaps,
+                "gap_by_category": dict(sorted(gap_counter.items(), key=lambda kv: -kv[1])),
             },
         },
         "note": (
@@ -622,10 +738,16 @@ def main() -> int:
     print(f"  parse path none            {m['path_none']}")
     print(f"  solver accepted            {m['solver_accepted']}")
     print(f"  candidate equations        {m['candidate_equations']}")
+    print(f"  parsed equations           {m['parsed_equations']}")
+    print(f"  isolatable equations       {m['isolatable_equations']}")
     print(f"  substitution attempted     {m['substitution_attempted']}")
     print(f"  unattempted exceptions     {m['unattempted_exceptions']}")
+    print(f"  cannot isolate             {m['cannot_isolate']}")
+    print(f"  vacuous echo               {m['vacuous_echo']}")
     print(f"  validation passed          {m['validation_passed']}")
     print(f"  validation failed          {m['validation_failed']}")
+    print(f"    failed stage 1 (source)  {m['failed_stage1']}")
+    print(f"    refuted stage 2 (calc)   {m['refuted_stage2']}")
     print(f"  validation unverifiable    {m['validation_unverifiable']}")
     print("  Stage 1 Breakdown:")
     print(f"    evaluated with checks    {m['stage1_evaluated_with_checks']}")
@@ -644,6 +766,12 @@ def main() -> int:
         print("  SAMPLE (rejected, with reason):")
         print(f"    latex:      {rejected_sample['source_latex'][:70]}")
         print(f"    error:      {rejected_sample['solve_error']}")
+    print()
+    print(f"  AltText Cross-Check: {records_with_gaps} records have gaps between alttext and expr")
+    if gap_counter:
+        print("  Gap categories (# equations where each is missing from expr):")
+        for cat, n in sorted(gap_counter.items(), key=lambda kv: -kv[1]):
+            print(f"    {n:4d} equations missing: {cat}")
     print()
     print(f"Wrote {OUT_JSONL}")
     print(f"Wrote {OUT_JSON}")

@@ -187,9 +187,22 @@ def parse_display_equations(html, parser_factory):
             expr = exprs[0]
         elif len(exprs) > 1:
             # A multi-node row is usually LHS/RHS or a labelled system.
-            # Join with '=' only if exactly two and neither already has '='.
-            if len(exprs) == 2 and "=" not in exprs[0] and "=" not in exprs[1]:
-                expr = f"{exprs[0]}={exprs[1]}"
+            # When aligned across table cells, cell 1 has the LHS, and cell 2
+            # starts with the relation operator (e.g. '=', ':=', '<=', etc.).
+            REL_SYM_PREFIXES = ('=', ':=', '≝', '≔', '≕', '!=', '≠', '<=', '≤', '⩾', '>=', '≥', '<', '>')
+            REL_WORD_PREFIXES = ('in', 'notin', 'sim', 'approx', 'equiv', 'propto')
+            e0 = exprs[0]
+            e1_strip = exprs[1].lstrip()
+            has_rel_0 = any(r in e0 for r in ('=', ':=', '<=', '>=', '<', '>', '!='))
+
+            if not has_rel_0 and e1_strip.startswith(REL_SYM_PREFIXES):
+                head = f"{e0}{e1_strip}"
+                expr = head if len(exprs) == 2 else f"{head} " + " ".join(exprs[2:])
+            elif not has_rel_0 and e1_strip.startswith(REL_WORD_PREFIXES):
+                head = f"{e0} {e1_strip}"
+                expr = head if len(exprs) == 2 else f"{head} " + " ".join(exprs[2:])
+            elif len(exprs) == 2 and not has_rel_0 and not any(r in exprs[1] for r in ('=', ':=', '<=', '>=', '<', '>', '!=')):
+                expr = f"{e0}={exprs[1]}"
             else:
                 expr = " ".join(exprs)
         else:
