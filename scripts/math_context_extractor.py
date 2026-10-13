@@ -81,24 +81,65 @@ def find_math_regions(image_array, assignments, palette, min_size=50, max_size=5
         stroke_width = np.sqrt(len(region_pixels) / (np.pi * max(w, h)))
         normalized_stroke = stroke_width / max(w, h)
         
-        # Determine if this looks like math (not just text)
+        # Classify region type by shape: fraction bars, large brackets,
+        # cases braces, sqrt vinculums, scripts, and general symbols.
+        # This prevents lossy guessing by identifying 2D structures
+        # (stretched delimiters, vertical fractions, binomial stacks)
+        # that naive horizontal text readers would collapse or skip.
         is_math = False
         math_indicators = []
-        
-        # Check for math-like shapes
-        if aspect_ratio < 0.3 or aspect_ratio > 3.0:
+        region_type = 'text'
+
+        # Fraction bar / horizontal vinculum (sinc example: cos z / z)
+        if aspect_ratio > 3.0 and fill_ratio > 0.3:
             is_math = True
+            region_type = 'fraction_bar'
+            math_indicators.append('fraction_bar')
+        # Square root vinculum (horizontal line with hook)
+        elif aspect_ratio > 2.0 and fill_ratio < 0.15 and fill_ratio > 0.02:
+            is_math = True
+            region_type = 'sqrt_vinculum'
+            math_indicators.append('sqrt_vinculum')
+        # Cases brace / large curly bracket spanning multiple rows
+        # (sinc example: piecewise definition with tall {)
+        elif aspect_ratio < 0.25 and h > 60:
+            is_math = True
+            region_type = 'cases_brace'
+            math_indicators.append('cases_brace')
+        # Large bracket / tall delimiter (\left( \right), \langle, etc.)
+        elif aspect_ratio < 0.4 and h > 40:
+            is_math = True
+            region_type = 'large_bracket'
+            math_indicators.append('large_bracket')
+        # Vertical bar / norm delimiter
+        elif aspect_ratio < 0.3:
+            is_math = True
+            region_type = 'vertical_bar'
+            math_indicators.append('vertical_bar')
+        # Extreme horizontal (summation/integral bounds bar)
+        elif aspect_ratio > 3.0:
+            is_math = True
+            region_type = 'horizontal_bar'
             math_indicators.append('extreme_aspect')
-        if fill_ratio < 0.05:
+        # Subscript / superscript (small region)
+        elif w < 20 and h < 20:
             is_math = True
+            region_type = 'script'
+            math_indicators.append('script')
+        # Sparse fill or thin stroke — likely a math symbol
+        elif fill_ratio < 0.05:
+            is_math = True
+            region_type = 'symbol'
             math_indicators.append('sparse_fill')
-        if normalized_stroke < 0.05:
+        elif normalized_stroke < 0.05:
             is_math = True
+            region_type = 'symbol'
             math_indicators.append('thin_stroke')
-        
-        # Check for math symbols in OCR (if available)
-        # This is a placeholder - actual OCR would go here
-        
+
+        # Flag structural properties for downstream consumers
+        has_large_delimiters = region_type in ('cases_brace', 'large_bracket', 'vertical_bar')
+        has_vertical_fraction = region_type == 'fraction_bar'
+
         regions.append({
             'bbox': (int(x_min), int(y_min), int(w), int(h)),
             'pixel_count': int(len(region_pixels)),
@@ -106,7 +147,10 @@ def find_math_regions(image_array, assignments, palette, min_size=50, max_size=5
             'fill_ratio': float(fill_ratio),
             'normalized_stroke': float(normalized_stroke),
             'is_math': is_math,
+            'region_type': region_type,
             'math_indicators': math_indicators,
+            'has_large_delimiters': has_large_delimiters,
+            'has_vertical_fraction': has_vertical_fraction,
             'centroid': (int(np.mean(xs)), int(np.mean(ys))),
         })
     
@@ -319,7 +363,7 @@ def main():
         'results': results,
     }
     
-    with open(args.output, 'w') as f:
+    with open(args.output, 'w', encoding='utf-8') as f:
         json.dump(output, f, indent=2)
     
     print(f"\nProcessed {len(results)} pages")

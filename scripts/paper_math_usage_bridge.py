@@ -63,6 +63,9 @@ def main() -> int:
         freq_row = freq.get(aid, {})
         math_rows = math_by_paper.get(aid, [])
 
+        gh_repos_file = ROOT / "DATASETS" / "zotero_recovered_github_repos.json"
+        gh_map = json.loads(gh_repos_file.read_text(encoding="utf-8")) if gh_repos_file.exists() else {}
+
         record = {
             "arxiv_id": aid,
             "title": var.get("title"),
@@ -82,6 +85,7 @@ def main() -> int:
             "symbol_density": freq_row.get("symbol_density"),
             "usable_math_count": len(math_rows),
             "usable_math": math_rows,
+            "github_repos": gh_map.get(aid, []),
         }
         out.append(record)
 

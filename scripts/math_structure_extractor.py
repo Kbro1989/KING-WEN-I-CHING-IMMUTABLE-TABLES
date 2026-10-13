@@ -345,7 +345,7 @@ def main():
         'results': results,
     }
     
-    with open(args.output, 'w') as f:
+    with open(args.output, 'w', encoding='utf-8') as f:
         json.dump(output, f, indent=2)
     
     print(f"\nProcessed {len(results)} pages")
