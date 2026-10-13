@@ -39,25 +39,36 @@ CORPUS_DIR = ROOT / "DATASETS" / "arxiv_html_corpus"
 ZOTERO_DIR = ROOT / ".." / "zotero" / "learning-corpus"
 
 
-def find_pdf_for_paper(paper_id: str) -> Path | None:
-    """Find source PDF for a given arXiv ID in zotero learning corpus."""
-    if not ZOTERO_DIR.exists():
-        return None
-    for pdf in ZOTERO_DIR.rglob("*.pdf"):
-        if paper_id in pdf.name:
-            return pdf
-    return None
+INDEX_FILE = ROOT / "DATASETS" / "zotero_pdf_index.json"
+
+
+def find_pdf_for_paper(paper_id: str) -> Tuple[Path | None, Dict[str, Any] | None]:
+    """Find source PDF for a given arXiv ID using the persistent hash index."""
+    if INDEX_FILE.exists():
+        idx_data = json.loads(INDEX_FILE.read_text(encoding="utf-8"))
+        if paper_id in idx_data:
+            pinfo = idx_data[paper_id]
+            return Path(pinfo["pdf_path"]), pinfo
+
+    # Fallback to direct directory scan if index not yet generated
+    if ZOTERO_DIR.exists():
+        for pdf in ZOTERO_DIR.rglob("*.pdf"):
+            if paper_id in pdf.name:
+                return pdf, None
+    return None, None
 
 
 def audit_paper_discrepancies(paper_id: str, max_pages: int = 5) -> List[Dict[str, Any]]:
     """
     Audit discrepancies for a single paper between actual visually parsed
     formulas (Tier 1 vector vinculum + Tier 2 neural OCR) and 1D parsed text.
-    Every reported discrepancy includes the real visually parsed LaTeX expression.
+    Every reported discrepancy includes the real visually parsed LaTeX expression and PDF hash.
     """
-    pdf_path = find_pdf_for_paper(paper_id)
+    pdf_path, pinfo = find_pdf_for_paper(paper_id)
     if not pdf_path or not pdf_path.exists():
         return []
+
+    pdf_sha256 = pinfo.get("sha256") if pinfo else None
 
     corpus_json = CORPUS_DIR / f"{paper_id}.json"
     if not corpus_json.exists():
@@ -82,8 +93,7 @@ def audit_paper_discrepancies(paper_id: str, max_pages: int = 5) -> List[Dict[st
                 num = vf["numerator"]
                 den = vf["denominator"]
                 vis_latex = vf["latex"]
-                # A true math fraction has mathematical tokens (not prose captions)
-                # Check whether this visually parsed fraction exists in the 1D text stream
+                # Structural check: verify whether this fraction exists in 1D text
                 found_in_text = any(
                     (num in t and den in t) or (vis_latex in t) or ("\\frac" in t and (num in t or den in t))
                     for t in eq_texts
@@ -91,8 +101,10 @@ def audit_paper_discrepancies(paper_id: str, max_pages: int = 5) -> List[Dict[st
                 if not found_in_text:
                     reports.append({
                         "paper_id": paper_id,
+                        "pdf_sha256": pdf_sha256,
                         "page": page_idx + 1,
                         "structure_type": "fraction",
+                        "status": "candidate_visual_structure",
                         "issue_kind": "skipped_division",
                         "bbox": vf["vinculum_rect"],
                         "visually_parsed_latex": vis_latex,
@@ -109,23 +121,39 @@ def audit_paper_discrepancies(paper_id: str, max_pages: int = 5) -> List[Dict[st
 
 
 def run_full_discrepancy_audit() -> Dict[str, Any]:
-    """Run audit across all papers in the corpus."""
+    """Run audit across all papers in the corpus using indexed hashes and execution metadata."""
+    import datetime
     all_discrepancies = []
     audited_papers = 0
+    paper_metadata = {}
 
     for jf in sorted(CORPUS_DIR.glob("*.json")):
         pid = jf.stem
-        pdf = find_pdf_for_paper(pid)
+        pdf, pinfo = find_pdf_for_paper(pid)
         if pdf:
             audited_papers += 1
-            discreps = audit_paper_discrepancies(pid, max_pages=2)
+            if pinfo:
+                paper_metadata[pid] = {
+                    "pdf_sha256": pinfo.get("sha256"),
+                    "filename": pinfo.get("filename"),
+                    "page_count": pinfo.get("page_count")
+                }
+            discreps = audit_paper_discrepancies(pid, max_pages=3)
             all_discrepancies.extend(discreps)
 
     summary = {
+        "metadata": {
+            "run_timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "vector_engine_active": True,
+            "neural_ocr_active": False,
+            "neural_engine_info": "pix2tex_vit_cpu_v0.1 (available, not enabled for batch audit)",
+            "index_file": str(INDEX_FILE),
+            "audited_paper_hashes": paper_metadata,
+        },
         "total_papers_audited": audited_papers,
         "total_discrepancies_found": len(all_discrepancies),
         "discrepancies": all_discrepancies,
-        "note": "Flags instances where 2D visual structures (fractions, cases) in PDF were not represented in 1D parsed text.",
+        "note": "Candidate 2D visual structures in PDF not matched in 1D parsed text stream.",
     }
 
     OUT_FILE.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
