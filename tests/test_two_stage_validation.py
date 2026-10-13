@@ -413,6 +413,66 @@ def test_minus_to_plus_swap_fails_stage1() -> None:
     print("PASS: minus-to-plus swap detected and failed")
 
 
+def test_stretched_norm_delimiters_fail_stage1() -> None:
+    """
+    Stretched norm delimiters ||e_i - pi||_1:
+    Source has norm and inequality in sum bound (j != i).
+    If the 1D parser drops the relation or flattens norm into ordinary products,
+    Stage 1 MUST fail.
+    """
+    from math_contract import ExprNode
+
+    norm_tree = ExprNode(
+        kind="norm",
+        value="norm",
+        children=(
+            ExprNode(kind="operator", value="-", children=(
+                ExprNode(kind="identifier", value="e_i"),
+                ExprNode(kind="identifier", value="pi"),
+            )),
+        ),
+        attributes={"p": "1"},
+    )
+    # Recovered expression dropped the norm structure and relation '≠'
+    recovered = "e_i - pi = 2*(1 - pi_i)"
+    solution = "[2*(1 - pi_i) + pi]"
+    source = r"\left\lVert e_{i}-\pi\right\rVert_{1}=|1-\pi_{i}|+\sum_{j\neq i}\pi_{j}=2(1-\pi_{i})"
+
+    result = validate_solution(recovered, solution, source, canonical_tree=norm_tree)
+    s1 = result["stage1_source_fidelity"]
+    assert s1["passed"] is False, f"Stage 1 must catch dropped norm structure: {s1}"
+    assert result["passed"] is False, f"Overall result must fail: {result}"
+    print("PASS: stretched norm delimiter failure caught by Stage 1")
+
+
+def test_summation_limit_relation_dropped_fails_stage1() -> None:
+    """
+    Summation limit relation j in H:
+    Source has relation 'in' (∈) in subscript bounds.
+    If 1D linear parser drops the relation into an identifier 'Sum_jinH',
+    Stage 1 MUST fail.
+    """
+    tree_rel = {
+        "kind": "group",
+        "children": [
+            {"kind": "identifier", "value": "P_teacher"},
+            {"kind": "relation", "value": "="},
+            {"kind": "relation", "value": "∈"},
+            {"kind": "identifier", "value": "H"},
+        ],
+    }
+    # Recovered form flattened 'j in H' into an alphanumeric slug 'Sum_jinH'
+    recovered = "P_teacher = sg(sigma(Sum_jinH * w_j))"
+    solution = "[sg(sigma(Sum_jinH * w_j))]"
+    source = r"P_{\text{teacher}}=\text{sg}\left(\sigma\left(\sum_{j\in\mathcal{H}}\tilde{w}_{j}M_{j}\right)\right)"
+
+    result = validate_solution(recovered, solution, source, canonical_tree=tree_rel)
+    s1 = result["stage1_source_fidelity"]
+    assert s1["passed"] is False, f"Stage 1 must detect dropped 'in' relation: {s1}"
+    assert result["passed"] is False, f"Overall result must fail: {result}"
+    print("PASS: dropped limit relation caught by Stage 1")
+
+
 if __name__ == "__main__":
     test_old_single_stage_would_false_positive()
     test_new_validator_correct_pass()
@@ -421,6 +481,8 @@ if __name__ == "__main__":
     test_dict_tree_checks_leaves_and_operators()
     test_operator_swap_fails_stage1()
     test_minus_to_plus_swap_fails_stage1()
+    test_stretched_norm_delimiters_fail_stage1()
+    test_summation_limit_relation_dropped_fails_stage1()
     test_no_canonical_tree_skips_stage1()
     test_vacuous_substitution_still_caught()
     test_infinite_residual_unverifiable()

@@ -14,12 +14,12 @@ Every row is a real record from real execution — no fabrication.
 | Parsed via LaTeX fallback | 176 | 5.2% |
 | Solver accepted (candidates) | 344 | 10.1% |
 | — Independently verified passed | 191 | 55.5% of candidates |
-| — Verification refuted (failed) | 22 | 6.4% of candidates |
+| — Verification failed (fidelity/gap) | 22 | 6.4% of candidates |
 | — Verification inconclusive | 131 | 38.1% of candidates |
 |   · Attempted residual non-zero | 35 | 10.2% of candidates |
 |   · Unattempted (parse/syntax limit) | 96 | 27.9% of candidates |
 
-Sum of candidate verdicts: 191 passed + 22 refuted + 131 inconclusive = 344 (100.0% of 344 candidates).
+Sum of candidate verdicts: 191 passed + 22 failed + 131 inconclusive = 344 (100.0% of 344 candidates).
 
 ## Where the pipeline stops, and why
 
@@ -157,10 +157,10 @@ as inconclusive rather than passed or failed.
 
 ## Verdict
 
-- 22 equations were solved to a result that failed independent
-  verification (failed Stage 1 source fidelity or AltText gap).
+- 22 equations were solved to a result that failed verification
+  (failed Stage 1 source fidelity or AltText token gap).
 - 191 equations were solved and independently verified.
 - 131 solutions are inconclusive (35 attempted non-zero residuals, 96 unattempted parse/syntax limits).
-- Category reconciliation: 191 passed + 22 refuted + 131 inconclusive = 344 (exactly 100.0% of 344 candidates).
+- Category reconciliation: 191 passed + 22 failed + 131 inconclusive = 344 (exactly 100.0% of 344 candidates).
 - Solver acceptance alone (344) is not treated as correctness.
 
