@@ -146,13 +146,21 @@ def _latex_tokens(alttext: str) -> list[dict]:
 
     # Helper: scan for all occurrences of a dict of patterns
     def scan(mapping: dict, kind: str) -> None:
-        for pat, name in mapping.items():
-            # Escape for regex but keep \\ as literal backslash
+        # Sort keys longest-first so longer patterns match before prefixes (e.g. \infty before \inf)
+        sorted_pats = sorted(mapping.keys(), key=lambda k: -len(k))
+        for pat in sorted_pats:
+            name = mapping[pat]
             escaped = re.escape(pat)
-            for m in re.finditer(escaped, alttext):
+            if pat.startswith("\\") and pat[1:].isalpha():
+                regex = escaped + r"(?![A-Za-z])"
+            else:
+                regex = escaped
+            for m in re.finditer(regex, alttext):
                 start = m.start()
-                if start not in seen_positions:
-                    seen_positions.add(start)
+                end = m.end()
+                # Check that this span doesn't overlap with any previously matched token
+                if not any(pos in seen_positions for pos in range(start, end)):
+                    seen_positions.update(range(start, end))
                     tokens.append({"kind": kind, "latex": pat, "name": name, "pos": start})
 
     scan(GREEK_CMD, "greek")
@@ -258,18 +266,17 @@ def cross_check(alttext: str, expr: str | None, scope: str, context_role: str | 
                 continue
             missing.append(tok)
 
-    # Extra tokens in expr not in alttext (usually harmless normalization artifacts)
-    # We detect these by finding word-tokens in expr not covered by alttext tokens
-    expr_words = set(re.findall(r"[A-Za-z][A-Za-z0-9_]*", expr or ""))
+    # Tokens in expr: extract both alphanumeric words and numbers
+    expr_tokens = set(re.findall(r"[A-Za-z][A-Za-z0-9_]*|\d+(?:\.\d+)?", expr or ""))
     alttext_names = {t["name"].lower() for t in tokens}
-    extra = [w for w in expr_words if w.lower() not in alttext_names and len(w) > 1]
+    extra = [w for w in expr_tokens if w.lower() not in alttext_names and len(w) > 1]
 
     gap_cats = list({KIND_CATEGORY.get(t["kind"], t["kind"]) for t in missing})
 
     return {
         "alttext": alttext,
         "tokens": [{"kind": t["kind"], "name": t["name"]} for t in tokens],
-        "expr_tokens": list(expr_words),
+        "expr_tokens": sorted(list(expr_tokens)),
         "missing_from_expr": [{"kind": t["kind"], "name": t["name"], "latex": t["latex"]} for t in missing],
         "extra_in_expr": extra[:10],  # cap to avoid noise
         "gap_categories": gap_cats,

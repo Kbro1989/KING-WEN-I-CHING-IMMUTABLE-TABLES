@@ -62,36 +62,21 @@ def load_pins() -> dict[str, str]:
     return pins
 
 
-def validate_solution(recovered: str, solution: Any, original: str, canonical_tree: Any = None) -> dict[str, Any]:
+def validate_solution(
+    recovered: str,
+    solution: Any,
+    original: str,
+    canonical_tree: Any = None,
+    alttext_diff: Any = None,
+) -> dict[str, Any]:
     """
-    Two-stage validation. Solver acceptance is NOT evidence of correctness.
+    Two-stage validation with independent AltText source verification.
+    Solver acceptance is NOT evidence of correctness.
 
-    Stage 1 -- Operator/relation inventory check.
-    Extracts the structural signature (operator kinds, relation types, named
-    operators, inner products, norms) from the canonical ExprNode tree and
-    checks that none are absent from the recovered string. This catches cases
-    where the parser dropped or altered a key operator or relation.
-
-    Limitation: this is a necessary condition, not sufficient. The tree and
-    the recovered string both come from the same parser, so Stage 1 cannot
-    detect all forms of parser error — only dropped or substituted structural
-    elements. It is NOT a source-to-AST round-trip check.
-
-    The `original` parameter is retained for provenance logging but is not
-    yet parsed independently (that requires a separate source-to-tree path
-    outside this module).
-
-    Stage 2 -- Computational validity.
-    Substitutes the solution into the recovered equation and verifies the
-    residual is zero. This checks algebra, NOT source fidelity.
-
-    Final verdict:
-      - If Stage 1 explicitly FAILS (structural element dropped): passed=False
-      - If Stage 2 PASSES and Stage 1 passed or was skipped: passed=True
-        EXCEPT: if Stage 1 was skipped (no tree), result is marked with
-        stage1_skipped=True so callers know only Stage 2 was checked.
-      - If Stage 2 fails: passed=False
-      - Inconclusive (symbolic residual, vacuous echo): passed=None
+    Stage 1 -- Operator/relation inventory check from AST.
+    Stage 2 -- Computational validity (substitution & residual).
+    Independent Source Check -- AltText cross-checker. If recognized source tokens
+    are missing from the recovered form on an attempted equation, it is rejected.
     """
     result: dict[str, Any] = {
         "method": "two_stage_source_guided",
@@ -102,6 +87,7 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
         "detail": None,
         "failed_stage1": False,
         "refuted_stage2": False,
+        "failed_alttext_gap": False,
         "cannot_isolate": False,
         "vacuous_echo": False,
     }
@@ -486,6 +472,7 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
 
         # --- Final verdict --------------------------------------------
         # Stage 1 explicit FAIL => overall fail (structural element dropped).
+        # Independent AltText gap => fail (recognized source token missing from expr).
         # Stage 2 PASS + Stage 1 passed    => verified (both stages passed).
         # Stage 2 PASS + Stage 1 skipped   => stage2_only (not fully verified).
         # Stage 2 FAIL                     => overall fail (refuted by numeric residual).
@@ -497,11 +484,24 @@ def validate_solution(recovered: str, solution: Any, original: str, canonical_tr
 
         result["attempted"] = True
         if stage2_passed and stage1_passed is True:
-            result["passed"] = True
-            result["detail"] = "both stages passed"
+            # Independent AltText validation
+            if alttext_diff and alttext_diff.get("missing_from_expr"):
+                missing_items = [m.get("latex", m.get("name")) for m in alttext_diff["missing_from_expr"]]
+                result["failed_alttext_gap"] = True
+                result["passed"] = False
+                result["detail"] = f"alttext gap: tokens missing from recovered expression: {missing_items[:5]}"
+            else:
+                result["passed"] = True
+                result["detail"] = "both stages passed"
         elif stage2_passed and stage1_skipped:
-            result["passed"] = True
-            result["detail"] = "stage2 passed; stage1 skipped (no canonical tree)"
+            if alttext_diff and alttext_diff.get("missing_from_expr"):
+                missing_items = [m.get("latex", m.get("name")) for m in alttext_diff["missing_from_expr"]]
+                result["failed_alttext_gap"] = True
+                result["passed"] = False
+                result["detail"] = f"alttext gap: tokens missing from recovered expression: {missing_items[:5]}"
+            else:
+                result["passed"] = True
+                result["detail"] = "stage2 passed; stage1 skipped (no canonical tree)"
         else:
             result["refuted_stage2"] = True
             result["passed"] = False
@@ -587,7 +587,21 @@ def main() -> int:
             error = (rec or {}).get("error")
             tree = (rec or {}).get("canonical_tree")
 
-            validation = validate_solution(recovered or "", solution, latex, canonical_tree=tree)
+            is_display = eq.get("is_display", True)
+            eqno = eq.get("eqno") or eq.get("equation_number")
+            scope = (
+                "display_numbered" if (is_display and eqno)
+                else "display_unnumbered" if is_display
+                else "inline_context"
+            )
+            alttext_diff = (
+                _alttext_cross_check(latex, recovered or "", scope=scope)
+                if _alttext_cross_check else {}
+            )
+
+            validation = validate_solution(
+                recovered or "", solution, latex, canonical_tree=tree, alttext_diff=alttext_diff
+            )
 
             m["total"] += 1
             if tree is not None:
@@ -636,18 +650,8 @@ def main() -> int:
                     m["failed_stage1"] += 1
                 if validation.get("refuted_stage2"):
                     m["refuted_stage2"] += 1
-
-            is_display = eq.get("is_display", True)
-            eqno = eq.get("eqno") or eq.get("equation_number")
-            scope = (
-                "display_numbered" if (is_display and eqno)
-                else "display_unnumbered" if is_display
-                else "inline_context"
-            )
-            alttext_diff = (
-                _alttext_cross_check(latex, recovered or "", scope=scope)
-                if _alttext_cross_check else {}
-            )
+                if validation.get("failed_alttext_gap"):
+                    m["failed_alttext_gap"] += 1
 
             records.append({
                 "occurrence_key": okey,
@@ -675,15 +679,36 @@ def main() -> int:
     solved_sample = next((r for r in records if r["solved"] and r["validation"]["passed"]), None)
     rejected_sample = next((r for r in records if not r["solved"]), None)
 
-    # Alttext gap summary
+    # Alttext gap summary & gap x verdict cross-tab
     gap_counter: dict[str, int] = {}
     records_with_gaps = 0
+    verdict_cross_tab = {
+        "passed": {"total": 0, "with_gap": 0, "gap_categories": Counter()},
+        "failed": {"total": 0, "with_gap": 0, "gap_categories": Counter()},
+        "unverifiable": {"total": 0, "with_gap": 0, "gap_categories": Counter()},
+    }
+
     for r in records:
         ad = r.get("alttext_diff") or {}
-        if ad.get("missing_from_expr"):
+        has_g = bool(ad.get("missing_from_expr"))
+        if has_g:
             records_with_gaps += 1
             for cat in ad.get("gap_categories") or []:
                 gap_counter[cat] = gap_counter.get(cat, 0) + 1
+
+        if r.get("solved"):
+            v = r.get("validation", {})
+            if v.get("passed") is True:
+                verdict_k = "passed"
+            elif v.get("passed") is False:
+                verdict_k = "failed"
+            else:
+                verdict_k = "unverifiable"
+            verdict_cross_tab[verdict_k]["total"] += 1
+            if has_g:
+                verdict_cross_tab[verdict_k]["with_gap"] += 1
+                for cat in ad.get("gap_categories") or []:
+                    verdict_cross_tab[verdict_k]["gap_categories"][cat] += 1
 
     summary = {
         "date": "2026-10-12",
@@ -705,6 +730,7 @@ def main() -> int:
             "validation_failed": m["validation_failed"],
             "failed_stage1": m["failed_stage1"],
             "refuted_stage2": m["refuted_stage2"],
+            "failed_alttext_gap": m["failed_alttext_gap"],
             "validation_unverifiable": m["validation_unverifiable"],
             "stage1_breakdown": {
                 "evaluated_with_checks": m["stage1_evaluated_with_checks"],
@@ -715,6 +741,14 @@ def main() -> int:
             "alttext_gap": {
                 "records_with_gaps": records_with_gaps,
                 "gap_by_category": dict(sorted(gap_counter.items(), key=lambda kv: -kv[1])),
+                "verdict_cross_tab": {
+                    k: {
+                        "total": v["total"],
+                        "with_gap": v["with_gap"],
+                        "gap_by_category": dict(sorted(v["gap_categories"].items(), key=lambda kv: -kv[1])),
+                    }
+                    for k, v in verdict_cross_tab.items()
+                },
             },
         },
         "note": (
@@ -748,6 +782,7 @@ def main() -> int:
     print(f"  validation failed          {m['validation_failed']}")
     print(f"    failed stage 1 (source)  {m['failed_stage1']}")
     print(f"    refuted stage 2 (calc)   {m['refuted_stage2']}")
+    print(f"    failed alttext gap       {m['failed_alttext_gap']}")
     print(f"  validation unverifiable    {m['validation_unverifiable']}")
     print("  Stage 1 Breakdown:")
     print(f"    evaluated with checks    {m['stage1_evaluated_with_checks']}")
@@ -772,6 +807,13 @@ def main() -> int:
         print("  Gap categories (# equations where each is missing from expr):")
         for cat, n in sorted(gap_counter.items(), key=lambda kv: -kv[1]):
             print(f"    {n:4d} equations missing: {cat}")
+    print()
+    print("  Gap x Verdict Cross-Tab (on candidate equations):")
+    for vk, vdata in verdict_cross_tab.items():
+        print(f"    {vk:12s}: {vdata['total']:3d} total | {vdata['with_gap']:2d} with gaps")
+        if vdata['gap_categories']:
+            cats_s = ", ".join(f"{c}: {n}" for c, n in sorted(vdata['gap_categories'].items(), key=lambda x: -x[1]))
+            print(f"      gaps: {cats_s}")
     print()
     print(f"Wrote {OUT_JSONL}")
     print(f"Wrote {OUT_JSON}")
