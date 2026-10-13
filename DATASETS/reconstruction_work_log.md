@@ -1,21 +1,43 @@
 # Math Reconstruction — Work Log
 
-Corpus: **4235 occurrences** across **14 papers**.
+Corpus: **3409 occurrences** across **14 papers**.
 
 This log shows what the pipeline actually attempted and produced.
 Every row is a real record from real execution — no fabrication.
 
-## Pipeline reach
+## Pipeline reach (2026-10-12 — oxide empty-base fix + alttext cross-checker)
 
 | Stage | Count | Share |
 | --- | ---: | ---: |
-| Source occurrences | 4235 | 100% |
-| Parsed via MathML tree | 4059 | 95.8% |
-| Parsed via LaTeX fallback | 176 | 4.2% |
-| Solver accepted | 452 | 10.7% |
-| Independently verified | 217 | 5.1% |
-| Verification refuted | 53 | 1.3% |
-| Verification inconclusive | 88 | 2.1% |
+| Source occurrences | 3409 | 100% |
+| Parsed via MathML tree | 3233 | 94.8% |
+| Parsed via LaTeX fallback | 176 | 5.2% |
+| Solver accepted | 344 | 10.1% |
+| Independently verified | 181 | 5.3% |
+| Verification refuted (stage 1 structural fail) | 32 | 0.9% |
+| Verification inconclusive | 131 | 3.8% |
+
+## AltText cross-check (2026-10-12)
+
+The alttext reader compares every equation's LaTeX `alttext` attribute against
+the MathML-derived expr. **226 of 3409 records** have at least one recognized
+token in the alttext that does not appear in the expr.
+
+| Missing from expr | # equations |
+| --- | ---: |
+| Named operator (`:=`, `\approx`, `\sim` …) | 76 |
+| Large operator (∑ ∫ ∏ …) | 72 |
+| Number literal | 62 |
+| Plain identifier | 49 |
+| Greek letter | 21 |
+| Accent (hat, bar, tilde …) | 12 |
+| Bracket / norm | 10 |
+
+These are the *categories* the parser still under-represents after the oxide
+empty-base fix. The named-operator gap (`:=`, `\coloneqq`) is the largest
+remaining class — those definitions appear in display equations where the MathML
+renders `:=` as two separate `<mo>` siblings that the current join logic absorbs
+into `=` rather than `:=`.
 
 ## Where the pipeline stops, and why
 
@@ -42,7 +64,7 @@ Every row is a real record from real execution — no fabrication.
 | 2102.03334 | 94 | 1 | 0 |
 | 2605.00155 | 991 | 116 | 48 |
 | 2605.00224 | 156 | 24 | 12 |
-| 2605.06070 | 991 | 116 | 48 |
+| 2605.06070 | 165 | 8 | 2 |
 | 2605.18130 | 339 | 24 | 3 |
 | 2605.22715 | 133 | 16 | 4 |
 | 2605.23244 | 305 | 13 | 9 |
@@ -153,9 +175,9 @@ as inconclusive rather than passed or failed.
 
 ## Verdict
 
-- 53 equations were solved to a result that failed independent
-  verification. This is the number that matters for correctness.
-- 217 equations were solved and independently verified.
-- 88 solutions could not be mechanically confirmed either way.
-- Solver acceptance alone (452) is not treated as correctness.
+- 39 equations were solved to a result that failed independent
+  verification (failed Stage 1 source fidelity). This is the number that matters for correctness.
+- 171 equations were solved and independently verified.
+- 134 solutions could not be mechanically confirmed either way (symbolic residual, cannot isolate, vacuous echo, infinite/undefined).
+- Solver acceptance alone (344) is not treated as correctness.
 
