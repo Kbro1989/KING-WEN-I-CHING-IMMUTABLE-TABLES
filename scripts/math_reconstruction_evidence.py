@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sys
 from collections import Counter
 from pathlib import Path
@@ -62,6 +63,35 @@ def load_pins() -> dict[str, str]:
     return pins
 
 
+def split_clauses_depth0(s: str) -> list[str]:
+    """Split comma-separated multi-clause statements only at bracket depth 0 where all parts contain =."""
+    import re as _re
+    s = s.strip()
+    s = _re.sub(r'[\*\.\,;\s]+$', '', s)
+    s = _re.sub(r'^[\*\.\,;\s]+', '', s)
+    parts: list[str] = []
+    current: list[str] = []
+    depth = 0
+    for char in s:
+        if char in '([{':
+            depth += 1
+        elif char in ')]}':
+            depth = max(0, depth - 1)
+        elif char == ',' and depth == 0:
+            part = ''.join(current).strip()
+            if part:
+                parts.append(part)
+            current = []
+            continue
+        current.append(char)
+    part = ''.join(current).strip()
+    if part:
+        parts.append(part)
+    if len(parts) > 1 and all('=' in p for p in parts):
+        return [_re.sub(r'[\*\.\,;\s]+$', '', p).strip() for p in parts]
+    return [s]
+
+
 def validate_solution(
     recovered: str,
     solution: Any,
@@ -90,6 +120,10 @@ def validate_solution(
         "failed_alttext_gap": False,
         "cannot_isolate": False,
         "vacuous_echo": False,
+        "is_definition": False,
+        "is_system": False,
+        "verified_algebraic": False,
+        "definition_recorded": False,
     }
     if not solution:
         result["stage2_computational_validity"] = {
@@ -187,6 +221,8 @@ def validate_solution(
                     '′': 'prime', '″': 'prime', '‴': 'prime',
                     # transpose — parser emits _T
                     '⊤': 'T',
+                    # conditioning bar / vertical divider
+                    '∣': '|', '\u2223': '|',
                 }
 
                 def _norm(s: str) -> str:
@@ -305,9 +341,13 @@ def validate_solution(
         if stage1_passed is False:
             result["failed_stage1"] = True
 
-        # --- STAGE 2: Computational validity ---------------------------
-        # Substitute the solution back into the recovered expression.
-        # This checks computational validity, NOT source fidelity.
+        # Classification check: definition vs algebraic
+        is_def = (
+            ":=" in original or "≔" in original or ":=" in recovered
+            or any(recovered.strip().startswith(op) for op in ("Integral", "min", "max"))
+        )
+        if is_def:
+            result["is_definition"] = True
 
         # Pre-clean: strip sentence-ending punctuation that leaked from MathML
         # (trailing commas, periods, stars from enumerate/display rows).
@@ -315,16 +355,43 @@ def validate_solution(
         recovered_clean = recovered.strip()
         recovered_clean = _re.sub(r"[\*\.\,;\s]+$", "", recovered_clean)
         recovered_clean = _re.sub(r"^[\*\.\,;\s]+", "", recovered_clean)
-        # Normalize curly braces to parens for SymPy
-        recovered_clean = recovered_clean.replace("{", "(").replace("}", ")")
 
-        lhs_s, _, rhs_s = recovered_clean.partition("=")
+        clauses = split_clauses_depth0(recovered_clean)
+        if len(clauses) > 1:
+            result["is_system"] = True
+
+        # If is_definition, record definition structurally without claiming algebraic solve
+        if is_def:
+            result["stage2_computational_validity"] = {
+                "attempted": False,
+                "passed": None,
+                "detail": "definition recorded structurally; stage2 algebraic substitution bypassed",
+            }
+            result["attempted"] = False
+            result["definition_recorded"] = True
+            result["passed"] = None
+            result["detail"] = "definition recorded (opaque operator or :=)"
+            return result
+
+        local_dict = {
+            "E": sympy.Symbol("E"),
+            "beta": sympy.Symbol("beta"),
+            "gamma": sympy.Symbol("gamma"),
+            "I": sympy.Symbol("I"),
+            "S": sympy.Symbol("S"),
+            "N": sympy.Symbol("N"),
+            "Deltanu": sympy.Symbol("Deltanu"),
+        }
+
+        eval_clause = clauses[0]
+        eval_clause = eval_clause.replace("{", "(").replace("}", ")")
+        lhs_s, _, rhs_s = eval_clause.partition("=")
         lhs_s = _re.sub(r"[\*\.\,;\s]+$", "", lhs_s.strip())
         rhs_s = _re.sub(r"[\*\.\,;\s]+$", "", rhs_s.strip())
         rhs_s = rhs_s.replace("{", "(").replace("}", ")")
 
-        lhs = parse_expr(lhs_s, transformations=transforms, evaluate=True)
-        rhs = parse_expr(rhs_s, transformations=transforms, evaluate=True)
+        lhs = parse_expr(lhs_s, transformations=transforms, evaluate=True, local_dict=local_dict)
+        rhs = parse_expr(rhs_s, transformations=transforms, evaluate=True, local_dict=local_dict)
 
         # parse_expr can return a tuple when the expression contains commas
         # (e.g. "i=2,...,n" parses as (2, ..., n)). Unwrap single-element tuples;
@@ -334,7 +401,7 @@ def validate_solution(
         if isinstance(rhs, tuple):
             rhs = rhs[0] if len(rhs) == 1 else rhs
 
-        sol = sympy.sympify(sol_expr)
+        sol = sympy.sympify(sol_expr, locals=local_dict)
 
         # Identify the isolated variable: the one present on one side only.
         lhs_syms = lhs.free_symbols
@@ -370,7 +437,7 @@ def validate_solution(
         #   'd = 3-5' solved to -2 is a REAL check (constant RHS).
         #   'E = 5.6e37*E' solved to 5.6e37*E is an ECHO.
         try:
-            sol_free = sympy.sympify(sol_expr).free_symbols
+            sol_free = sympy.sympify(sol_expr, locals=local_dict).free_symbols
         except Exception:
             sol_free = set()
         if var in sol_free:
@@ -492,6 +559,7 @@ def validate_solution(
                 result["detail"] = f"alttext gap: tokens missing from recovered expression: {missing_items[:5]}"
             else:
                 result["passed"] = True
+                result["verified_algebraic"] = True
                 result["detail"] = "both stages passed"
         elif stage2_passed and stage1_skipped:
             if alttext_diff and alttext_diff.get("missing_from_expr"):
@@ -501,6 +569,7 @@ def validate_solution(
                 result["detail"] = f"alttext gap: tokens missing from recovered expression: {missing_items[:5]}"
             else:
                 result["passed"] = True
+                result["verified_algebraic"] = True
                 result["detail"] = "stage2 passed; stage1 skipped (no canonical tree)"
         else:
             result["refuted_stage2"] = True
@@ -558,6 +627,23 @@ def main() -> int:
         paper_hashes[content_hash] = paper_id
 
         version = pins.get(paper_id, "unpinned")
+        arxiv_url = data.get("url") or f"https://arxiv.org/html/{paper_id}"
+        generator = data.get("generator")  # e.g. "LaTeXML oxide (version 0.7.6)"
+        github_repos = data.get("github_repos") or (data.get("structure") or {}).get("github_repos") or []
+        if not github_repos:
+            # Fallback regex search on paper payload (abstract, text, contexts)
+            full_paper_str = json.dumps(data)
+            gh_m = re.findall(r'https?://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)', full_paper_str)
+            strip_chars = '.,;:)>\'"'
+            seen_r = set()
+            for r in gh_m:
+                cleaned = r.rstrip(strip_chars)
+                if not cleaned.startswith(('brucemiller/', 'arXiv/', 'git-lfs/')) and not cleaned.endswith('/issues'):
+                    repo_url = f"https://github.{'com'}/{cleaned}"
+                    if repo_url not in seen_r:
+                        seen_r.add(repo_url)
+                        github_repos.append(repo_url)
+
         for i, eq in enumerate(eqs):
             occ = SourceOccurrence(
                 paper_id=paper_id, paper_version=version,
@@ -652,11 +738,23 @@ def main() -> int:
                     m["refuted_stage2"] += 1
                 if validation.get("failed_alttext_gap"):
                     m["failed_alttext_gap"] += 1
+                if validation.get("verified_algebraic"):
+                    m["verified_algebraic"] += 1
+                if validation.get("definition_recorded"):
+                    m["definition_recorded"] += 1
+
+            # Extract prose context (theory context around the math)
+            prose_ctx = {
+                "context_before": eq.get("context_before", ""),
+                "context_after": eq.get("context_after", ""),
+                "section_title": eq.get("section") or eq.get("section_title", ""),
+            }
 
             records.append({
                 "occurrence_key": okey,
                 "paper_id": paper_id,
                 "paper_version": version,
+                "arxiv_url": arxiv_url,
                 "source_locator": occ.source_locator,
                 "source_latex": latex,
                 "source_mathml_len": len(mathml),
@@ -669,6 +767,9 @@ def main() -> int:
                 "solve_error": error,
                 "validation": validation,
                 "alttext_diff": alttext_diff,
+                "prose_context": prose_ctx,
+                "generator": generator,
+                "github_repos": github_repos,
             })
 
     with open(OUT_JSONL, "w", encoding="utf-8") as f:
@@ -727,6 +828,8 @@ def main() -> int:
             "cannot_isolate": m["cannot_isolate"],
             "vacuous_echo": m["vacuous_echo"],
             "validation_passed": m["validation_passed"],
+            "verified_algebraic": m["verified_algebraic"],
+            "definition_recorded": m["definition_recorded"],
             "validation_failed": m["validation_failed"],
             "failed_stage1": m["failed_stage1"],
             "refuted_stage2": m["refuted_stage2"],
@@ -779,6 +882,8 @@ def main() -> int:
     print(f"  cannot isolate             {m['cannot_isolate']}")
     print(f"  vacuous echo               {m['vacuous_echo']}")
     print(f"  validation passed          {m['validation_passed']}")
+    print(f"    verified algebraic       {m['verified_algebraic']}")
+    print(f"    definition recorded      {m['definition_recorded']}")
     print(f"  validation failed          {m['validation_failed']}")
     print(f"    failed stage 1 (source)  {m['failed_stage1']}")
     print(f"    refuted stage 2 (calc)   {m['refuted_stage2']}")

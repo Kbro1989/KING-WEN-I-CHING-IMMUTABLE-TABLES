@@ -104,6 +104,19 @@ def extract_paper_identity(html, arxiv_id=None):
         ident["canonical_abs"] = f"https://arxiv.org/abs/{ident['arxiv_id']}"
         ident["canonical_html"] = f"https://arxiv.org/html/{ident['arxiv_id']}"
 
+    # --- 5. github repos
+    gh_matches = re.findall(r'https?://github\.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)', full_text)
+    ignored_prefixes = ('brucemiller/', 'arXiv/', 'git-lfs/')
+    seen_repos = set()
+    ident["github_repos"] = []
+    for repo_match in gh_matches:
+        repo = repo_match.rstrip('.,;:)>\'"')
+        if not any(repo.startswith(p) for p in ignored_prefixes) and not repo.endswith('/issues'):
+            full_url = f"https://github.com/{repo}"
+            if full_url not in seen_repos:
+                seen_repos.add(full_url)
+                ident["github_repos"].append(full_url)
+
     return ident
 
 

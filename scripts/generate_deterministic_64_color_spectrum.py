@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 Deterministic 64-Color Hexagram Spectrum Generator (Shotgun Engine)
 ===================================================================

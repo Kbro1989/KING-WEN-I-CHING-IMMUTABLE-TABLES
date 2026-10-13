@@ -1349,6 +1349,10 @@ def solve_recovered(recovered, original=None):
     # as a multiplied atom (Sum*D_KL) they must be Symbols, not sympy classes.
     for op in ("Sum", "Prod", "Integral", "Limit"):
         local_dict.setdefault(op, sympy.Symbol(op))
+    # SymPy builtin name collision guard for common scientific math symbols:
+    for sym_name in ("E", "beta", "gamma", "I", "S", "N", "Deltanu"):
+        if sym_name not in funcnames:
+            local_dict[sym_name] = sympy.Symbol(sym_name)
     for fname in funcnames:
         try:
             local_dict[fname] = sympy.Function(fname)
