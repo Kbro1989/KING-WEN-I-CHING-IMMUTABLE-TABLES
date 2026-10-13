@@ -39,6 +39,88 @@ CORPUS_DIR = ROOT / "DATASETS" / "arxiv_html_corpus"
 ZOTERO_DIR = ROOT / ".." / "zotero" / "learning-corpus"
 
 
+import unicodedata
+from bs4 import BeautifulSoup
+from structural_ast_extractor import StructuralASTExtractor
+
+_AST_EXTRACTOR = StructuralASTExtractor()
+
+_GREEK_MAP = {
+    "pi": "π", "theta": "θ", "sigma": "σ", "beta": "β", "lambda": "λ", "mu": "μ", "gamma": "γ",
+    "alpha": "α", "delta": "δ", "epsilon": "ε", "rho": "ρ", "phi": "φ", "psi": "ψ", "omega": "ω"
+}
+
+
+def extract_canonical_math_atoms(tokens: List[str]) -> set:
+    """Extract normalized mathematical identifier atoms from string or AST tokens."""
+    atoms = set()
+    for t in tokens:
+        tl = t.lower().strip()
+        if tl in _GREEK_MAP:
+            atoms.add(_GREEK_MAP[tl])
+            continue
+        t_norm = unicodedata.normalize("NFKD", t)
+        for ch in t_norm:
+            chl = ch.lower()
+            if "a" <= chl <= "z" or chl in _GREEK_MAP.values():
+                atoms.add(chl)
+    return atoms
+
+
+def _get_ast_leaves(node: Any) -> List[str]:
+    """Recursively collect leaf token strings from an ExprNode."""
+    leaves = []
+    if getattr(node, "value", None):
+        leaves.append(node.value)
+    for c in getattr(node, "children", ()):
+        leaves.extend(_get_ast_leaves(c))
+    return leaves
+
+
+def match_fraction_to_ast_corpus(vis_num: str, vis_den: str, corpus_equations: List[Dict[str, Any]]) -> bool:
+    """
+    Phase 3 Structural Subtree Matcher:
+    Compares visual fraction tokens against actual MathML fraction subtrees extracted
+    by StructuralASTExtractor, replacing naive substring search.
+    """
+    vn_atoms = extract_canonical_math_atoms([vis_num])
+    vd_atoms = extract_canonical_math_atoms([vis_den])
+    if not vn_atoms or not vd_atoms:
+        return False
+
+    for eq in corpus_equations:
+        mathml = eq.get("mathml", "")
+        if not mathml or "mfrac" not in mathml:
+            continue
+        try:
+            soup = BeautifulSoup(mathml, "html.parser")
+            math_el = soup.find("math")
+            if not math_el:
+                continue
+            ast = _AST_EXTRACTOR.extract(math_el)
+
+            frac_nodes = []
+            def _find_fracs(n):
+                if getattr(n, "kind", None) == "fraction" and len(getattr(n, "children", ())) >= 2:
+                    frac_nodes.append(n)
+                for c in getattr(n, "children", ()):
+                    _find_fracs(c)
+            _find_fracs(ast)
+
+            for fn in frac_nodes:
+                an_atoms = extract_canonical_math_atoms(_get_ast_leaves(fn.children[0]))
+                ad_atoms = extract_canonical_math_atoms(_get_ast_leaves(fn.children[1]))
+                if not an_atoms or not ad_atoms:
+                    continue
+                n_recall = len(an_atoms & vn_atoms) / max(1, len(an_atoms))
+                d_recall = len(ad_atoms & vd_atoms) / max(1, len(ad_atoms))
+                if n_recall >= 0.8 and d_recall >= 0.8:
+                    return True
+        except Exception:
+            continue
+    return False
+
+
 INDEX_FILE = ROOT / "DATASETS" / "zotero_pdf_index.json"
 
 
@@ -48,7 +130,11 @@ def find_pdf_for_paper(paper_id: str) -> Tuple[Path | None, Dict[str, Any] | Non
         idx_data = json.loads(INDEX_FILE.read_text(encoding="utf-8"))
         if paper_id in idx_data:
             pinfo = idx_data[paper_id]
-            return Path(pinfo["pdf_path"]), pinfo
+            raw_path = pinfo.get("pdf_rel_path") or pinfo.get("pdf_path")
+            p = Path(raw_path)
+            if not p.is_absolute():
+                p = (ZOTERO_DIR / p).resolve()
+            return p, pinfo
 
     # Fallback to direct directory scan if index not yet generated
     if ZOTERO_DIR.exists():
@@ -93,8 +179,31 @@ def audit_paper_discrepancies(paper_id: str, max_pages: int = 5) -> List[Dict[st
                 num = vf["numerator"]
                 den = vf["denominator"]
                 vis_latex = vf["latex"]
-                # Structural check: verify whether this fraction exists in 1D text
-                found_in_text = any(
+                vf_status = vf.get("status", "confirmed_math_fraction")
+                vf_reason = vf.get("rejection_reason", "")
+
+                # If the fraction was filtered as a diagram/table, record it as a rejected candidate
+                if vf_status == "rejected_diagram":
+                    reports.append({
+                        "paper_id": paper_id,
+                        "pdf_sha256": pdf_sha256,
+                        "page": page_idx + 1,
+                        "structure_type": "fraction",
+                        "status": "rejected_diagram",
+                        "rejection_reason": vf_reason,
+                        "issue_kind": "diagram_rejection",
+                        "bbox": vf["vinculum_rect"],
+                        "visually_parsed_latex": vis_latex,
+                        "numerator": num,
+                        "denominator": den,
+                        "source": "vector_layout",
+                        "details": f"Filtered candidate rejected as diagram: {vf_reason}",
+                    })
+                    continue
+
+                # Phase 3 Structural Subtree Match: verify against 1D MathML ASTs and LaTeX text
+                found_in_ast = match_fraction_to_ast_corpus(num, den, corpus_data.get("equations", []))
+                found_in_text = found_in_ast or any(
                     (num in t and den in t) or (vis_latex in t) or ("\\frac" in t and (num in t or den in t))
                     for t in eq_texts
                 )
@@ -141,23 +250,31 @@ def run_full_discrepancy_audit() -> Dict[str, Any]:
             discreps = audit_paper_discrepancies(pid, max_pages=3)
             all_discrepancies.extend(discreps)
 
+    active_discrepancies = [d for d in all_discrepancies if d.get("status") == "candidate_visual_structure"]
+    rejected_diagrams = [d for d in all_discrepancies if d.get("status") == "rejected_diagram"]
+
+    rel_index_file = str(INDEX_FILE.relative_to(ROOT)).replace("\\", "/")
+
     summary = {
         "metadata": {
             "run_timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
             "vector_engine_active": True,
             "neural_ocr_active": False,
             "neural_engine_info": "pix2tex_vit_cpu_v0.1 (available, not enabled for batch audit)",
-            "index_file": str(INDEX_FILE),
+            "index_file": rel_index_file,
             "audited_paper_hashes": paper_metadata,
         },
         "total_papers_audited": audited_papers,
-        "total_discrepancies_found": len(all_discrepancies),
-        "discrepancies": all_discrepancies,
-        "note": "Candidate 2D visual structures in PDF not matched in 1D parsed text stream.",
+        "total_candidates_detected": len(all_discrepancies),
+        "total_discrepancies_found": len(active_discrepancies),
+        "total_diagrams_rejected": len(rejected_diagrams),
+        "discrepancies": active_discrepancies,
+        "rejected_diagram_candidates": rejected_diagrams,
+        "note": "Candidate 2D visual structures in PDF not matched in 1D parsed text stream, alongside retained diagram rejections for verification.",
     }
 
     OUT_FILE.write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
-    print(f"Audited {audited_papers} papers -> Found {len(all_discrepancies)} discrepancies -> Wrote {OUT_FILE}")
+    print(f"Audited {audited_papers} papers -> Found {len(active_discrepancies)} active discrepancies, {len(rejected_diagrams)} rejected diagrams -> Wrote {OUT_FILE}")
     return summary
 
 
