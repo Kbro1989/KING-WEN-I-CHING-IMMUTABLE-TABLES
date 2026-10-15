@@ -40,7 +40,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 RECOVERY_DIR = ROOT / "DATASETS" / "math_recovery"
 FAILURE_SRC = ROOT / "DATASETS" / "math_failure_corpus.jsonl"
+PROVENANCE_SRC = ROOT / "DATASETS" / "paper_repository_provenance.jsonl"
 OUT_JSON = ROOT / "DATASETS" / "equation_count_reconciliation.json"
+
+# Papers in the 14-paper baseline (has provenance + HTML corpus)
+BASELINE_PAPERS = {
+    "2009.00031", "2102.03334", "2605.00155", "2605.00224",
+    "2605.06070", "2605.18130", "2605.22715", "2605.23244",
+    "2605.24807", "2605.24856", "2605.25036", "2605.25334",
+    "2605.28615", "2605.28896",
+}
 
 
 def main() -> int:
@@ -54,14 +63,19 @@ def main() -> int:
             if l.strip():
                 failure_records.append(json.loads(l))
 
-    # Build per-paper reconciliation
+    # Build per-paper reconciliation — ONLY for baseline papers
     papers = {}
+    excluded = []
 
     for rf in recovery_files:
         d = json.loads(rf.read_text(encoding="utf-8"))
         stats = d.get("stats", {})
         results = d.get("results", [])
         arxiv_id = stats.get("arxiv_id", rf.stem.replace("_recovery", ""))
+
+        if arxiv_id not in BASELINE_PAPERS:
+            excluded.append({"arxiv_id": arxiv_id, "reason": "not in 14-paper baseline"})
+            continue
 
         # Count states from results
         recovered = 0
@@ -151,10 +165,13 @@ def main() -> int:
     out = {
         "grand_totals": grand,
         "papers": papers,
+        "excluded_from_baseline": excluded,
         "method": (
             "Every equation is in exactly one state: recovered, rejected, "
             "not_assessed, or empty_input. Solvable is a SUBSET of recovered. "
-            "States are mutually exclusive and exhaustive."
+            "States are mutually exclusive and exhaustive. "
+            "Only the 14-paper baseline is included; other recovery files "
+            "(e.g. 1406.2661) are excluded and listed separately."
         ),
     }
 
