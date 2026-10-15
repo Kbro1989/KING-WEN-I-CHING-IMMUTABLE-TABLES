@@ -41,15 +41,43 @@ ROOT = Path(__file__).resolve().parents[1]
 RECOVERY_DIR = ROOT / "DATASETS" / "math_recovery"
 FAILURE_SRC = ROOT / "DATASETS" / "math_failure_corpus.jsonl"
 PROVENANCE_SRC = ROOT / "DATASETS" / "paper_repository_provenance.jsonl"
+HTML_CORPUS_DIR = ROOT / "DATASETS" / "arxiv_html_corpus"
 OUT_JSON = ROOT / "DATASETS" / "equation_count_reconciliation.json"
 
-# Papers in the 14-paper baseline (has provenance + HTML corpus)
-BASELINE_PAPERS = {
-    "2009.00031", "2102.03334", "2605.00155", "2605.00224",
-    "2605.06070", "2605.18130", "2605.22715", "2605.23244",
-    "2605.24807", "2605.24856", "2605.25036", "2605.25334",
-    "2605.28615", "2605.28896",
-}
+
+def derive_baseline_papers() -> set[str]:
+    """Return the manually pinned 14-paper baseline cohort.
+
+    The provenance file is incomplete (missing 9 of 14 baseline papers),
+    so it cannot serve as the eligibility criterion. The baseline is a
+    manually pinned cohort of papers that have BOTH:
+    1. A recovery file in math_recovery/
+    2. An HTML corpus file in arxiv_html_corpus/
+
+    This function validates the pinned list against the HTML corpus
+    inventory and reports any discrepancies.
+    """
+    pinned = {
+        "2009.00031", "2102.03334", "2605.00155", "2605.00224",
+        "2605.06070", "2605.18130", "2605.22715", "2605.23244",
+        "2605.24807", "2605.24856", "2605.25036", "2605.25334",
+        "2605.28615", "2605.28896",
+    }
+
+    # Validate against HTML corpus
+    html_papers = set()
+    if HTML_CORPUS_DIR.exists():
+        for f in HTML_CORPUS_DIR.glob("*.json"):
+            html_papers.add(f.stem)
+
+    missing_html = pinned - html_papers
+    if missing_html:
+        print(f"WARNING: {len(missing_html)} pinned papers missing HTML corpus: {sorted(missing_html)}")
+
+    return pinned
+
+
+BASELINE_PAPERS = derive_baseline_papers()
 
 
 def main() -> int:
@@ -127,8 +155,11 @@ def main() -> int:
         s = r.get("state", "UNKNOWN")
         failure_by_paper[p]["states"][s] = failure_by_paper[p]["states"].get(s, 0) + 1
 
-    # Merge failure data
+    # Merge failure data — ONLY for baseline papers
     for p, data in failure_by_paper.items():
+        if p not in BASELINE_PAPERS:
+            excluded.append({"arxiv_id": p, "reason": "failure corpus record not in 14-paper baseline"})
+            continue
         if p in papers:
             papers[p]["failure_corpus_count"] = data["count"]
             papers[p]["failure_corpus_states"] = data["states"]
