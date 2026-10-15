@@ -124,18 +124,26 @@ def main() -> int:
                 )
 
     # Check 7: HTML source hash matches manifest (content integrity)
+    # Fails if the hash is missing from the manifest, not just if it mismatches.
     for p in manifest["papers"]:
         pid = p["paper_id"]
         html_path = HTML_CORPUS / f"{pid}.json"
-        if html_path.exists() and p.get("html_source_sha256"):
-            actual_hash = sha256_file(html_path)
-            if actual_hash != p["html_source_sha256"]:
-                errors.append(
-                    f"{pid}: HTML hash mismatch "
-                    f"(manifest={p['html_source_sha256'][:16]}... actual={actual_hash[:16]}...)"
-                )
+        if not html_path.exists():
+            continue  # already caught by check 3
+        manifest_hash = p.get("html_source_sha256")
+        if not manifest_hash:
+            errors.append(f"{pid}: html_source_sha256 missing from manifest")
+            continue
+        actual_hash = sha256_file(html_path)
+        if actual_hash != manifest_hash:
+            errors.append(
+                f"{pid}: HTML hash mismatch "
+                f"(manifest={manifest_hash[:16]}... actual={actual_hash[:16]}...)"
+            )
 
     # Check 8: reference equations match HTML corpus node-by-node
+    # Verifies node identity (reference_id contains the correct node_id
+    # that appears in the HTML MathML), not just sequential LaTeX match.
     if REF_JSONL.exists():
         ref_by_paper = {}
         for line in REF_JSONL.read_text(encoding="utf-8").splitlines():
@@ -160,10 +168,26 @@ def main() -> int:
                     )
                     continue
 
-                # Verify each reference equation matches the HTML source
                 for i, (html_eq, ref_eq) in enumerate(zip(html_eqs, ref_eqs)):
                     html_latex = html_eq.get("latex", "")
                     ref_latex = ref_eq.get("latex", "")
+                    ref_id = ref_eq.get("reference_id", "")
+                    ref_node_id = ref_eq.get("node_id")
+                    html_mathml = html_eq.get("mathml", "")
+
+                    # Verify node identity: reference_id must contain the node_id
+                    # that appears in the HTML MathML
+                    if ref_node_id:
+                        if ref_node_id not in html_mathml:
+                            errors.append(
+                                f"{pid}: eq {i} node_id {ref_node_id} not in HTML MathML"
+                            )
+                        if ref_id != f"{pid}:{ref_node_id}":
+                            errors.append(
+                                f"{pid}: eq {i} reference_id {ref_id} != {pid}:{ref_node_id}"
+                            )
+
+                    # Then compare LaTeX content
                     if html_latex != ref_latex:
                         errors.append(
                             f"{pid}: eq {i} LaTeX mismatch "
