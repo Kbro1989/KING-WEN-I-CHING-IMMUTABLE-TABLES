@@ -71,11 +71,15 @@ def main() -> int:
     records = []
     missing_papers = []
     count_mismatches = []
+    errors = []
+    node_id_count = 0
+    fallback_count = 0
 
     for pid in sorted(BASELINE_PAPERS):
         html_path = HTML_CORPUS / f"{pid}.json"
         if not html_path.exists():
             missing_papers.append(pid)
+            errors.append(f"{pid}: HTML corpus not found")
             continue
 
         d = json.loads(html_path.read_text(encoding="utf-8"))
@@ -94,6 +98,12 @@ def main() -> int:
                 "html_count": len(equations),
                 "manifest_count": expected,
             })
+            errors.append(
+                f"{pid}: HTML count {len(equations)} != manifest {expected}"
+            )
+
+        # Check for duplicate node IDs within this paper
+        seen_node_ids = set()
 
         for i, eq in enumerate(equations):
             mathml = eq.get("mathml", "")
@@ -102,9 +112,14 @@ def main() -> int:
 
             # Build stable ID: use node_id if available, else sequential
             if node_id:
+                if node_id in seen_node_ids:
+                    errors.append(f"{pid}: duplicate node ID {node_id}")
+                seen_node_ids.add(node_id)
                 eq_id = f"{pid}:{node_id}"
+                node_id_count += 1
             else:
                 eq_id = f"{pid}:eq{i:04d}"
+                fallback_count += 1
 
             record = {
                 "reference_id": eq_id,
@@ -128,15 +143,44 @@ def main() -> int:
         for r in records:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
+    # ID credibility summary
+    id_summary = {
+        "total": len(records),
+        "with_node_id": node_id_count,
+        "with_fallback_id": fallback_count,
+        "node_id_coverage_pct": round(100 * node_id_count / len(records), 2) if records else 0,
+    }
+
     print(f"total reference equations: {len(records)}")
     print(f"papers covered: {len(BASELINE_PAPERS) - len(missing_papers)}")
+    print(f"ID credibility: {id_summary['with_node_id']} node ID, "
+          f"{id_summary['with_fallback_id']} fallback "
+          f"({id_summary['node_id_coverage_pct']}% coverage)")
     if missing_papers:
         print(f"missing papers: {missing_papers}")
     if count_mismatches:
         print(f"count mismatches: {count_mismatches}")
-    else:
+    if not missing_papers and not count_mismatches and not errors:
         print("all counts match manifest")
+    else:
+        print("ERRORS:")
+        for e in errors:
+            print(f"  - {e}")
+
+    # Write summary alongside
+    summary_path = OUT_JSONL.with_suffix(".summary.json")
+    summary_path.write_text(json.dumps({
+        "id_credibility": id_summary,
+        "missing_papers": missing_papers,
+        "count_mismatches": count_mismatches,
+        "errors": errors,
+    }, indent=2, ensure_ascii=False), encoding="utf-8")
+
     print(f"\nwrote {OUT_JSONL.relative_to(ROOT)}")
+    print(f"wrote {summary_path.relative_to(ROOT)}")
+
+    if errors:
+        return 1
     return 0
 
 

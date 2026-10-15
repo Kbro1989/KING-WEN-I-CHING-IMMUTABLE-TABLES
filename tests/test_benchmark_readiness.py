@@ -123,6 +123,53 @@ def main() -> int:
                     f"{pid}: HTML count {html_count} != manifest {p['reference_equation_count']}"
                 )
 
+    # Check 7: HTML source hash matches manifest (content integrity)
+    for p in manifest["papers"]:
+        pid = p["paper_id"]
+        html_path = HTML_CORPUS / f"{pid}.json"
+        if html_path.exists() and p.get("html_source_sha256"):
+            actual_hash = sha256_file(html_path)
+            if actual_hash != p["html_source_sha256"]:
+                errors.append(
+                    f"{pid}: HTML hash mismatch "
+                    f"(manifest={p['html_source_sha256'][:16]}... actual={actual_hash[:16]}...)"
+                )
+
+    # Check 8: reference equations match HTML corpus node-by-node
+    if REF_JSONL.exists():
+        ref_by_paper = {}
+        for line in REF_JSONL.read_text(encoding="utf-8").splitlines():
+            if line.strip():
+                r = json.loads(line)
+                pid = r["paper_id"]
+                if pid not in ref_by_paper:
+                    ref_by_paper[pid] = []
+                ref_by_paper[pid].append(r)
+
+        for p in manifest["papers"]:
+            pid = p["paper_id"]
+            html_path = HTML_CORPUS / f"{pid}.json"
+            if html_path.exists() and pid in ref_by_paper:
+                d = json.loads(html_path.read_text(encoding="utf-8"))
+                html_eqs = d.get("equations", [])
+                ref_eqs = ref_by_paper[pid]
+
+                if len(html_eqs) != len(ref_eqs):
+                    errors.append(
+                        f"{pid}: reference count {len(ref_eqs)} != HTML count {len(html_eqs)}"
+                    )
+                    continue
+
+                # Verify each reference equation matches the HTML source
+                for i, (html_eq, ref_eq) in enumerate(zip(html_eqs, ref_eqs)):
+                    html_latex = html_eq.get("latex", "")
+                    ref_latex = ref_eq.get("latex", "")
+                    if html_latex != ref_latex:
+                        errors.append(
+                            f"{pid}: eq {i} LaTeX mismatch "
+                            f"(html={html_latex[:40]}... ref={ref_latex[:40]}...)"
+                        )
+
     # Report
     if errors:
         print("FAIL")
@@ -136,6 +183,8 @@ def main() -> int:
     print("  all reference IDs unique")
     print("  all recovery files present")
     print("  all HTML counts match manifest")
+    print("  all HTML source hashes match manifest")
+    print("  reference equations match HTML corpus node-by-node")
     return 0
 
 
