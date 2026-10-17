@@ -20,6 +20,9 @@ import json
 import os
 import re
 import sys
+import urllib.request
+import zipfile
+from io import BytesIO
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -29,8 +32,23 @@ except ImportError:
     print("ERROR: PyMuPDF required. Install: pip install pymupdf", file=sys.stderr)
     sys.exit(2)
 
+# ── ArXiv HTML MathML parser (canonical source for math extraction) ─────────────
+# arXiv HTML carries MathML + x-tex annotations. 991 equations verified on 2605.00155.
+try:
+    from mathml_parser import parse_mathml_tree, create_expr_node
+    from extract_tex_macros import substitute_macros
+    MATHML_AVAILABLE = True
+except ImportError:
+    MATHML_AVAILABLE = False
+    print("WARNING: mathml_parser not importable. Install from scripts/ or use PDF fallback.",
+          file=sys.stderr)
 
-# ── Math symbol detection ──────────────────────────────────
+try:
+    from arxiv_html_parser import fetch_arxiv_html, extract_mathml_x_tex
+    ARXIV_AVAILABLE = True
+except ImportError:
+    ARXIV_AVAILABLE = False
+    print("WARNING: arxiv_html_parser not importable. Install from scripts/.", file=sys.stderr)
 MATH_SYMBOLS = set(
     "φψχωΩΨΧπΠΣ∆∂∇αβγδεζηθικλμνξρστυϕ"
     "≡≠≤≥≈∝∞∈∉⊂⊃⊆⊇∪∩∀∃∅ℝℕℤℚℂ"
@@ -159,6 +177,109 @@ def is_math_word(word: str) -> bool:
     if "$" in word or "\\" in word:
         return True
     return False
+
+
+def fetch_arxiv_html(arxiv_id: str) -> str:
+    """Fetch arXiv HTML page for math source.\n\n    Falls back to arXiv e-print tarball if HTML fetch fails.\n    """
+    base_url = f"https://arxiv.org/html/{arxiv_id}"
+    try:
+        req = urllib.request.Request(base_url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+            return html
+    except Exception as e:
+        print(f"  HTML fetch failed ({arxiv_id}): {e}", file=sys.stderr)
+        # Try e-print tarball fallback
+        try:
+            eprint_url = f"https://arxiv.org/e-print/{arxiv_id}"
+            req = urllib.request.Request(eprint_url)
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                data = resp.read()
+                if data[:2] == b"PK":  # zip
+                    zf = zipfile.ZipFile(BytesIO(data))
+                    # Find tex files
+                    tex_files = [n for n in zf.namelist() if n.endswith('.tex')]
+                    if tex_files:
+                        return zf.read(tex_files[0]).decode("utf-8", errors="replace")
+        except Exception as e2:
+            print(f"  E-print fetch failed: {e2}", file=sys.stderr)
+        raise
+
+
+def extract_mathml_x_tex_chain(arxiv_id: str) -> List[Dict[str, Any]]:
+    """Extract equations from arXiv HTML MathML + x-tex annotations.\n\n    The canonical source. Each <annotation encoding="application/x-tex"> is the\n    LaTeX source. MathML provides the structural tree. Both are used together.\n    """
+    if not MATHML_AVAILABLE or not ARXIV_AVAILABLE:
+        return []
+
+    equations = []
+    try:
+        html = fetch_arxiv_html(arxiv_id)
+        equations = extract_mathml_x_tex(html, arxiv_id)
+    except Exception as e:
+        print(f"  arXiv HTML extraction failed ({arxiv_id}): {e}", file=sys.stderr)
+
+    # Resolve macros if the equation has TeX source
+    for eq in equations:
+        if eq.get("latex") and "\\" in eq["latex"]:
+            eq["latex"] = substitute_macros(eq["latex"])
+
+    return equations
+
+
+def extract_from_arxiv_html(arxiv_id: str, paper_label: str = None) -> Dict[str, Any]:
+    """Extract math from arXiv HTML MathML tree + x-tex annotations.\n\n    This is the canonical path. PDF text extraction is the fallback only.\n    """
+    if not MATHML_AVAILABLE or not ARXIV_AVAILABLE:
+        return {"source": "arxiv_html", "arxiv_id": arxiv_id, "error": "Dependencies unavailable", "expressions": [], "solved": 0}
+
+    result = {
+        "source": "arxiv_html",
+        "arxiv_id": arxiv_id,
+        "paper_label": paper_label or arxiv_id,
+        "expressions": [],
+        "solved": 0,
+        "mathml_parsed": 0,
+        "solved_expressions": [],
+        "total_pages": 0,
+    }
+
+    try:
+        html = fetch_arxiv_html(arxiv_id)
+        result["raw_html_bytes"] = len(html.encode("utf-8"))
+    except Exception as e:
+        result["error"] = f"arXiv HTML fetch failed: {e}"
+        return result
+
+    # Parse MathML + x-tex annotations
+    from arxiv_html_parser import extract_mathml_x_tex
+    equations = extract_mathml_x_tex(html, arxiv_id)
+
+    result["mathml_parsed"] = len(equations)
+
+    # Resolve macros in each equation
+    for eq in equations:
+        if eq.get("latex") and "\\" in eq["latex"]:
+            eq["latex"] = substitute_macros(eq["latex"])
+
+    # Extract AST from each MathML node
+    from mathml_parser import create_expr_node
+    from structural_ast_extractor import extract_ast_from_mathml
+
+    result["expressions"] = equations
+
+    # Try solving
+    from solve_all import solve_expression
+    for eq in equations:
+        if eq.get("type") == "equation" and eq.get("latex"):
+            try:
+                solution = solve_expression(eq["latex"])
+                if solution.get("solvable", False):
+                    result["solved"] += 1
+                    eq["solution"] = solution
+                    result["solved_expressions"].append(eq)
+            except Exception:
+                pass
+
+    return result
 
 
 def extract_math_expressions(text: str) -> List[Dict[str, Any]]:
@@ -390,11 +511,26 @@ def extract_pdf_math(pdf_path: str) -> Dict[str, Any]:
     }
 
 
+def extract_from_source(source_id: str, source_type: str = "arxiv", paper_label: str = None) -> Dict[str, Any]:
+    """Extract math from either arXiv HTML or PDF file.
+
+    Priority: (1) arXiv HTML MathML + x-tex (canonical, 991 eqns), (2) PDF text (fallback).
+    """
+    if source_type == "arxiv":
+        return extract_from_arxiv_html(source_id, paper_label)
+    elif source_type == "pdf":
+        return extract_pdf_math(source_id)
+    else:
+        raise ValueError(f"Unknown source type: {source_type}")
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Extract semantic math from PDFs")
+    parser = argparse.ArgumentParser(description="Extract semantic math from PDFs or arXiv HTML")
     parser.add_argument("--pdf", help="Single PDF file")
     parser.add_argument("--pdf-dir", help="Directory of PDFs")
     parser.add_argument("--recursive", action="store_true", help="Search subdirectories")
+    parser.add_argument("--arxiv", help="arXiv ID (e.g. 2605.30912) - preferred source for math extraction")
+    parser.add_argument("--arxiv-dir", help="Directory of arXiv HTML files or e-print tarballs")
     parser.add_argument("--out", default="DATASETS/semantic_math_zotero_full.json", help="Output JSON path")
     args = parser.parse_args()
 

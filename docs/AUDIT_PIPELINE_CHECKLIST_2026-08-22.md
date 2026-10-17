@@ -68,11 +68,24 @@ indexBuffers=[[]]  (structurally valid point cloud ✓)
 - Workaround used: `terminal find/grep` with native Windows paths.
 - **Status:** ENVIRONMENT — affects tool reliability, not pipeline correctness. Document for future sessions.
 
-### GAP-4 — Orchestrator "100% parity" claim is stage-exit-based only
-- `run_all_unified_pipeline.py:55` increments `stage_passed` on `res.returncode == 0` only.
-- It does NOT validate output struct correctness (that was done manually this session via the hex_01 load test).
-- **Risk:** a stage can exit 0 while emitting malformed data; pipeline reports "100% parity" falsely.
-- **Status:** DESIGN NOTE — recommend post-stage struct assertion in the orchestrator.
+### GAP-5 — Numerical pipeline root cause: PyMuPDF extracts rendered glyphs, NOT LaTeX source
+- `math_pdf_parser.py` and `semantic_math_extractor.py` both capture rendered text via PyMuPDF. PDF is pixels, not source.
+- LaTeX commands appear as literal text (`\frac`, `\sqrt`, `\mathbf`); Unicode equations fragmented.
+- Confirmed: arXiv HTML x-tex annotations = 991 == local HTML == parser stack == prose extractor (all 991).
+- Fix: fetch arXiv HTML MathML + x-tex; download e-print tarball for native LaTeX; use Tesseract as fallback.
+- **Status:** OPEN — requires pipeline rewrite (flat-regex PDF → MathML tree walk).
+
+### GAP-6 — `semantic_math_extractor.py` uses flat regex, not MathML tree walk
+- `semantic_math_extractor.py` does NOT import `mathml_parser.py` — the pipeline is not wired to the MathML parser.
+- Fix: import `mathml_parser` and use tree-walk parser.
+- **Status:** BLOCKER — see GAP-5.
+
+### GAP-7 — Only 1/4,218 equations solvable
+- PyMuPDF captures rendered text. The 1 solvable equation is `αi = ϵ σ²`.
+- Fix: (a) switch to arXiv HTML MathML source; (b) arXiv e-print tarball for native LaTeX.
+- **Status:** OPEN — same as GAP-5.
+
+---
 
 ---
 
@@ -83,8 +96,50 @@ indexBuffers=[[]]  (structurally valid point cloud ✓)
 | King Wen drives avatar geometry | ✅ | kit_*.json hexagram_id → shap-E prompt → 729-vert PLY |
 | Output is rsmv-loadable | ✅ | hex_01_models.json asserts clean against models.d.ts |
 | No fabrication in compliance layer | ✅ | transform_object_rsmv.py:24 "No RNG. No placeholder verts." — PLY verts are real |
-| Moparscape feeds worldgen | ⚠️ PARTIAL | Text (npc.cfg) usable; binary cache format-incompatible (GAP-1) |
-| kit packets clean | ❌ | B6: 205 polluted extra[] (GAP-2) |
+| arXiv HTML MathML parsed | ✅ | 991/991 equations verified (2605.00155) |
+| arXiv HTML x-tex == parser stack | ✅ | 991 == 991 == 991 |
+| PyMuPDF extracts math | ✅ | 245 papers, 4,218 expr, but 1/4,218 solvable |
+| MathML tree walk in pipeline | ❌ | `semantic_math_extractor.py` uses flat regex, not MathML tree walk |
+| LaTeX source recovered from PDF | ❌ | PDF is rendered glyphs only; no LaTeX source |
+| End-to-end pipeline | ❌ | 1/4,218 solvable; relative error 0.0 for solved equation |
+| Validator correct | ✅ | `test_structural_conservation.py` 21/21 |
+
+### Numerical Extraction & Vision Pipeline Audit (2026-10-17)
+
+| # | Layer | Component | Path (verified) | Role |
+|---|-------|-----------|-----------------|------|
+| 8 | Input | arXiv HTML corpus | `https://arxiv.org/html/{id}` | 991 equations per paper (MathML + x-tex) |
+| 9 | Source | arXiv HTML parser | `scripts/arxiv_html_parser.py` | Extract MathML + LaTex from HTML |
+| 10 | Source | arXiv provenance | `scripts/arxiv_provenance.py` | Version chain: abs → html → pdf → source |
+| 11 | Source | LaTex macro extractor | `scripts/extract_tex_macros.py` | Resolve paper-local macros |
+| 12 | MathML parser | `mathml_parser.py` | `scripts/mathml_parser.py:1` | Walk MathML tree → typed AST |
+| 13 | Identity fix | `delimiter_identity.py` | `scripts/delimiter_identity.py:1` | P0 fix: paired delimiter pairing |
+| 14 | AST extractor | `structural_ast_extractor.py` | `scripts/structural_ast_extractor.py` | MathML → `ExprNode` tree |
+| 15 | Structure extractor | `math_structure_extractor.py` | `scripts/math_structure_extractor.py` | Extract LHS/RHS/operators |
+| 16 | Context extractor | `math_context_extractor.py` | `scripts/math_context_extractor.py` | Prose context + variable placement |
+| 17 | Display extractor | `display_equation_extractor.py` | `scripts/display_equation_extractor.py` | Inline (p) vs display (d) |
+| 18 | PDF parser | `math_pdf_parser.py` | `scripts/math_pdf_parser.py` | PyMuPDF text extraction |
+| 19 | Cleaner | `extract_math_clean.py` | `scripts/extract_math_clean.py` | Clean raw PDF text |
+| 20 | Prose extractor | `prose_math_extractor.py` | `scripts/prose_math_extractor.py` | Math from prose context |
+| 21 | End-to-end | `semantic_math_extractor.py` | `scripts/semantic_math_extractor.py` | Pipeline: PDF → vision → OCR → JSON |
+| 22 | Symbol classifier | `math_symbol_classifier.py` | `scripts/math_symbol_classifier.py` | Classify math symbols |
+| 23 | Vision hooks | `math_symbol_vision_hooks.py` | `scripts/math_symbol_vision_hooks.py` | Region discovery (K-Means) |
+| 24 | Solve backend | `solve_all.py` | `scripts/solve_all.py` | SymPy equation solver |
+| 25 | Notation map | `math_notation_mapping.py` | `scripts/math_notation_mapping.py` | Unicode → SymPy/Wolfram |
+| 26 | Verification | `verify_math_jacobian_hamiltonian.py` | `scripts/verify_math_jacobian_hamiltonian.py` | Verify math derivations |
+| 27 | Verification | `verify_registry.py` | `scripts/verify_registry.py` | Verify registry integrity |
+| 28 | Verification | `verify_output_mismatches.py` | `scripts/verify_output_mismatches.py` | Output mismatch check |
+| 29 | Verification | `verify_quality.py` | `scripts/verify_quality.py` | Quality verification |
+| 30 | Verification | `cross_stage_drop_trace.py` | `scripts/cross_stage_drop_trace.py` | Cross-stage drop trace |
+| 31 | Recovery debug | `math_recovery_tool.py` | `scripts/math_recovery_tool.py` | Recover LaTeX from MathML |
+| 32 | Recovery debug | `math_nesting_proof.py` | `scripts/math_nesting_proof.py` | Nested argument recovery test |
+| 33 | Failure corpus | `math_failure_corpus.py` | `scripts/math_failure_corpus.py` | Corpus of failing equations |
+| 34 | Failure taxonomy | `math_failure_taxonomy.py` | `scripts/math_failure_taxonomy.py` | Categorize failure types |
+| 35 | Integrity | `math_corruption_test.py` | `scripts/math_corruption_test.py` | Verify no silent corruption |
+| 36 | Regression | `math_regression_hunt.py` | `scripts/math_regression_hunt.py` | Diff between recovery runs |
+| 37 | Unknowns | `math_unknown_inventory.py` | `scripts/math_unknown_inventory.py` | Inventory unknown commands |
+| 38 | Micro-test | `math_micro_test.py` | `scripts/math_micro_test.py` | Micro-test command recovery |
+| 39 | Expression type | `expr_type.py` (verify) | `scripts/expr_type.py` | Verify expression type consistency |
 
 ---
 
