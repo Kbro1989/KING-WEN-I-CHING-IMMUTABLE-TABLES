@@ -1,0 +1,871 @@
+{
+  "arxiv_id": "2312.11514",
+  "version": null,
+  "url": "https://arxiv.org/html/2312.11514",
+  "structure": {
+    "title": "LLMin a flash:Efficient Large Language Model Inference with Limited MemoryThanks:{kalizadehvahid, imirzadeh, d_belenko, skhatamifard, minsik, cdelmundo, mrastegari, farajtabar}@apple.com",
+    "authors": [
+      "Keivan Alizadeh",
+      "Iman Mirzadeh",
+      "Dmitry Belenko11footnotemark:1",
+      "S. Karen Khatamifard"
+    ],
+    "abstract": "AbstractLarge language models (LLMs) are central to modern natural language processing, delivering exceptional performance in various tasks. However, their substantial computational and memory requirements present challenges, especially for devices with limited DRAM capacity. This paper tackles the challenge of efficiently running LLMs that exceed the available DRAM capacity by storing the model parameters in flash memory, but bringing them on demand to DRAM.\nOur method involves constructing an inference cost model that takes into account the characteristics of flash memory, guiding us to optimize in two critical areas: reducing the volume of data transferred from flash and reading data in larger, more contiguous chunks. Within this hardware-informed framework, we introduce two principal techniques. First, “windowing” strategically reduces data transfer by reusing previously activated neurons, and second, “row-column bundling”, tailored to the sequential data access strengths of flash memory, increases the size of data chunks read from flash memory. These methods collectively enable running models up to twice the size of the available DRAM, with up to 4x and 20x increase in inference speed compared to naive loading approaches in CPU and GPU, respectively. Our integration of sparsity awareness, context-adaptive loading, and a hardware-oriented design paves the way for effective inference of LLMs on devices with limited memory.",
+    "sections": [
+      {
+        "level": "h2",
+        "title": "1Introduction"
+      },
+      {
+        "level": "h2",
+        "title": "2Flash Memory & LLM Inference"
+      },
+      {
+        "level": "h3",
+        "title": "2.1Bandwidth and Energy Constraints"
+      },
+      {
+        "level": "h3",
+        "title": "2.2Read Throughput"
+      },
+      {
+        "level": "h2",
+        "title": "3Load From Flash"
+      },
+      {
+        "level": "h3",
+        "title": "3.1Reducing Data Transfer"
+      },
+      {
+        "level": "h3",
+        "title": "3.2Increasing Transfer Throughput"
+      },
+      {
+        "level": "h3",
+        "title": "3.3Optimized Data Management in DRAM"
+      },
+      {
+        "level": "h2",
+        "title": "4Experiments and Results"
+      },
+      {
+        "level": "h3",
+        "title": "4.1Experimental Setup"
+      },
+      {
+        "level": "h3",
+        "title": "4.2Faster Load From Flash"
+      },
+      {
+        "level": "h3",
+        "title": "4.3The Memory-Latency Tradeoff"
+      },
+      {
+        "level": "h2",
+        "title": "5Ablation analysis"
+      },
+      {
+        "level": "h3",
+        "title": "5.1The Impact of Longer Generation"
+      },
+      {
+        "level": "h3",
+        "title": "5.2Speculative Decoding"
+      },
+      {
+        "level": "h3",
+        "title": "5.3A Note on Power Consumption"
+      },
+      {
+        "level": "h2",
+        "title": "6Related Works"
+      },
+      {
+        "level": "h2",
+        "title": "7Discussion"
+      },
+      {
+        "level": "h2",
+        "title": "8Limitations"
+      },
+      {
+        "level": "h2",
+        "title": "Acknowledgements"
+      },
+      {
+        "level": "h2",
+        "title": "References"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix AAppendix Overview"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix BLow-Rank Activation Predictor: Additional Results"
+      },
+      {
+        "level": "h3",
+        "title": "B.1Sparsity patterns of predictors"
+      },
+      {
+        "level": "h3",
+        "title": "B.2Accuracy of models using predictors"
+      },
+      {
+        "level": "h3",
+        "title": "B.3Overhead of predictors"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix CExtended Results"
+      },
+      {
+        "level": "h3",
+        "title": "C.1Results for OPT 6.7B Model"
+      },
+      {
+        "level": "h3",
+        "title": "C.2Results for Falcon 7B Model"
+      },
+      {
+        "level": "h3",
+        "title": "C.3Persimmon 8B"
+      },
+      {
+        "level": "h3",
+        "title": "C.4Phi-2"
+      },
+      {
+        "level": "h3",
+        "title": "C.5Llama 2"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix DBundling Based on Co-activation"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix EExtended Related Works"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix FSmall Device Implications"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix GQualitative Evaluations"
+      },
+      {
+        "level": "h2",
+        "title": "Instructions for reporting errors"
+      }
+    ],
+    "github_repos": []
+  },
+  "equations": [
+    {
+      "index": 0,
+      "latex": "k",
+      "mathml": "<math alttext=\"k\" class=\"ltx_Math\" display=\"inline\" id=\"S3.F4.m3\" intent=\":literal\"><semantics><mi>k</mi><annotation encoding=\"application/x-tex\">k</annotation></semantics></math>",
+      "mathml_len": 179,
+      "context_before": "(b)",
+      "context_after": "k=5k=5",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 1,
+      "latex": "k=5",
+      "mathml": "<math alttext=\"k=5\" class=\"ltx_Math\" display=\"inline\" id=\"S3.F4.m4\" intent=\":literal\"><semantics><mrow><mi>k</mi><mo>=</mo><mn>5</mn></mrow><annotation encoding=\"application/x-tex\">k=5</annotation></semantics></math>",
+      "mathml_len": 216,
+      "context_before": "kk",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 2,
+      "latex": "s_{\\text{agg}}(k)",
+      "mathml": "<math alttext=\"s_{\\text{agg}}(k)\" class=\"ltx_Math\" display=\"inline\" id=\"S3.SS1.p7.m1\" intent=\":literal\"><semantics><mrow><msub><mi>s</mi><mtext>agg</mtext></msub><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo stretchy=\"false\">(</mo><mi>k</mi><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">s_{\\text{agg}}(k)</annotation></semantics></math>",
+      "mathml_len": 372,
+      "context_before": "",
+      "context_after": "kk",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 3,
+      "latex": "k",
+      "mathml": "<math alttext=\"k\" class=\"ltx_Math\" display=\"inline\" id=\"S3.SS1.p7.m2\" intent=\":literal\"><semantics><mi>k</mi><annotation encoding=\"application/x-tex\">k</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "sagg​(k)s_{\\text{agg}}(k)",
+      "context_after": "sagg​(k)s_{\\text{agg}}(k)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 4,
+      "latex": "s_{\\text{agg}}(k)",
+      "mathml": "<math alttext=\"s_{\\text{agg}}(k)\" class=\"ltx_Math\" display=\"inline\" id=\"S3.SS1.p7.m3\" intent=\":literal\"><semantics><mrow><msub><mi>s</mi><mtext>agg</mtext></msub><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo stretchy=\"false\">(</mo><mi>k</mi><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">s_{\\text{agg}}(k)</annotation></semantics></math>",
+      "mathml_len": 372,
+      "context_before": "kk",
+      "context_after": "sagg​(k+1)−sagg​(k)s_{\\text{agg}}(k+1)-s_{\\text{agg}}(k)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 5,
+      "latex": "s_{\\text{agg}}(k+1)-s_{\\text{agg}}(k)",
+      "mathml": "<math alttext=\"s_{\\text{agg}}(k+1)-s_{\\text{agg}}(k)\" class=\"ltx_Math\" display=\"inline\" id=\"S3.SS1.p7.m4\" intent=\":literal\"><semantics><mrow><mrow><msub><mi>s</mi><mtext>agg</mtext></msub><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo stretchy=\"false\">(</mo><mrow><mi>k</mi><mo>+</mo><mn>1</mn></mrow><mo stretchy=\"false\">)</mo></mrow></mrow><mo>−</mo><mrow><msub><mi>s</mi><mtext>agg</mtext></msub><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo stretchy=\"false\">(</mo><mi>k</mi><mo stretchy=\"false\">)</mo></mrow></mrow></mrow><annotation encoding=\"application/x-tex\">s_{\\text{agg}}(k+1)-s_{\\text{agg}}(k)</annotation></semantics></math>",
+      "mathml_len": 635,
+      "context_before": "sagg​(k)s_{\\text{agg}}(k)",
+      "context_after": "kk",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 6,
+      "latex": "k",
+      "mathml": "<math alttext=\"k\" class=\"ltx_Math\" display=\"inline\" id=\"S3.SS1.p7.m5\" intent=\":literal\"><semantics><mi>k</mi><annotation encoding=\"application/x-tex\">k</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "sagg​(k+1)−sagg​(k)s_{\\text{agg}}(k+1)-s_{\\text{agg}}(k)",
+      "context_after": "4(a)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 7,
+      "latex": "k",
+      "mathml": "<math alttext=\"k\" class=\"ltx_Math\" display=\"inline\" id=\"S3.SS1.p7.m6\" intent=\":literal\"><semantics><mi>k</mi><annotation encoding=\"application/x-tex\">k</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "4(a)",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 8,
+      "latex": "i",
+      "mathml": "<math alttext=\"i\" class=\"ltx_Math\" display=\"inline\" id=\"S3.SS2.p2.m1\" intent=\":literal\"><semantics><mi>i</mi><annotation encoding=\"application/x-tex\">i</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "Bundling Columns and Rows.",
+      "context_after": "ii",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 9,
+      "latex": "i",
+      "mathml": "<math alttext=\"i\" class=\"ltx_Math\" display=\"inline\" id=\"S3.SS2.p2.m2\" intent=\":literal\"><semantics><mi>i</mi><annotation encoding=\"application/x-tex\">i</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "ii",
+      "context_after": "ii",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 10,
+      "latex": "i",
+      "mathml": "<math alttext=\"i\" class=\"ltx_Math\" display=\"inline\" id=\"S3.SS2.p2.m3\" intent=\":literal\"><semantics><mi>i</mi><annotation encoding=\"application/x-tex\">i</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "ii",
+      "context_after": "5",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 11,
+      "latex": "d_{model}\\times",
+      "mathml": "<math alttext=\"d_{model}\\times\" class=\"ltx_math_unparsed\" display=\"inline\" id=\"S3.SS2.p2.m4\" intent=\":literal\"><semantics><mrow><mi>d</mi><msub><mrow></mrow><mrow><mi>m</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>o</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>d</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>e</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>l</mi></mrow></msub><mo lspace=\"0.222em\">×</mo></mrow><annotation encoding=\"application/x-tex\">d_{model}\\times</annotation></semantics></math>",
+      "mathml_len": 493,
+      "context_before": "num_bytes",
+      "context_after": "num_bytes",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 12,
+      "latex": "2d_{model}\\times",
+      "mathml": "<math alttext=\"2d_{model}\\times\" class=\"ltx_math_unparsed\" display=\"inline\" id=\"S3.SS2.p2.m5\" intent=\":literal\"><semantics><mrow><mn>2</mn><mi>d</mi><msub><mrow></mrow><mrow><mi>m</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>o</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>d</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>e</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>l</mi></mrow></msub><mo lspace=\"0.222em\">×</mo></mrow><annotation encoding=\"application/x-tex\">2d_{model}\\times</annotation></semantics></math>",
+      "mathml_len": 505,
+      "context_before": "num_bytes",
+      "context_after": "num_bytes",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 13,
+      "latex": "i",
+      "mathml": "<math alttext=\"i\" class=\"ltx_Math\" display=\"inline\" id=\"S3.SS3.p2.m1\" intent=\":literal\"><semantics><mi>i</mi><annotation encoding=\"application/x-tex\">i</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "matrix",
+      "context_after": "Reqi×2​dmodel\\texttt{Req}_{i}\\times 2d_{\\text{model}}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 14,
+      "latex": "\\texttt{Req}_{i}\\times 2d_{\\text{model}}",
+      "mathml": "<math alttext=\"\\texttt{Req}_{i}\\times 2d_{\\text{model}}\" class=\"ltx_Math\" display=\"inline\" id=\"S3.SS3.p2.m2\" intent=\":literal\"><semantics><mrow><mrow><msub><mtext class=\"ltx_mathvariant_monospace\">Req</mtext><mi>i</mi></msub><mo lspace=\"0.222em\" rspace=\"0.222em\">×</mo><mn>2</mn></mrow><mo lspace=\"0em\" rspace=\"0em\">​</mo><msub><mi>d</mi><mtext>model</mtext></msub></mrow><annotation encoding=\"application/x-tex\">\\texttt{Req}_{i}\\times 2d_{\\text{model}}</annotation></semantics></math>",
+      "mathml_len": 485,
+      "context_before": "ii",
+      "context_after": "Reqi\\texttt{Req}_{i}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 15,
+      "latex": "\\texttt{Req}_{i}",
+      "mathml": "<math alttext=\"\\texttt{Req}_{i}\" class=\"ltx_Math\" display=\"inline\" id=\"S3.SS3.p2.m3\" intent=\":literal\"><semantics><msub><mtext class=\"ltx_mathvariant_monospace\">Req</mtext><mi>i</mi></msub><annotation encoding=\"application/x-tex\">\\texttt{Req}_{i}</annotation></semantics></math>",
+      "mathml_len": 278,
+      "context_before": "Reqi×2​dmodel\\texttt{Req}_{i}\\times 2d_{\\text{model}}",
+      "context_after": "last_k_active",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 16,
+      "latex": "k",
+      "mathml": "<math alttext=\"k\" class=\"ltx_Math\" display=\"inline\" id=\"S3.SS3.p2.m4\" intent=\":literal\"><semantics><mi>k</mi><annotation encoding=\"application/x-tex\">k</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "last_k_active",
+      "context_after": "6",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 17,
+      "latex": "O(c)",
+      "mathml": "<math alttext=\"O(c)\" class=\"ltx_Math\" display=\"inline\" id=\"S3.I2.i1.p1.m1\" intent=\":literal\"><semantics><mrow><mi>O</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mi>c</mi><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">O(c)</annotation></semantics></math>",
+      "mathml_len": 291,
+      "context_before": "num_rows",
+      "context_after": "O⁡(c×dmodel)O(c\\times d_{\\text{model}})",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 18,
+      "latex": "O(c\\times d_{\\text{model}})",
+      "mathml": "<math alttext=\"O(c\\times d_{\\text{model}})\" class=\"ltx_Math\" display=\"inline\" id=\"S3.I2.i1.p1.m2\" intent=\":literal\"><semantics><mrow><mi>O</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mrow><mi>c</mi><mo lspace=\"0.222em\" rspace=\"0.222em\">×</mo><msub><mi>d</mi><mtext>model</mtext></msub></mrow><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">O(c\\times d_{\\text{model}})</annotation></semantics></math>",
+      "mathml_len": 437,
+      "context_before": "O⁡(c)O(c)",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 19,
+      "latex": "\\rightarrow",
+      "mathml": "<math alttext=\"\\rightarrow\" class=\"ltx_Math\" display=\"inline\" id=\"S4.T2.m1\" intent=\":literal\"><semantics><mo stretchy=\"false\">→</mo><annotation encoding=\"application/x-tex\">\\rightarrow</annotation></semantics></math>",
+      "mathml_len": 216,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 20,
+      "latex": "\\lambda",
+      "mathml": "<math alttext=\"\\lambda\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS2.p1.m1\" intent=\":literal\"><semantics><mi>λ</mi><annotation encoding=\"application/x-tex\">\\lambda</annotation></semantics></math>",
+      "mathml_len": 195,
+      "context_before": "",
+      "context_after": "kk",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 21,
+      "latex": "k",
+      "mathml": "<math alttext=\"k\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS2.p1.m2\" intent=\":literal\"><semantics><mi>k</mi><annotation encoding=\"application/x-tex\">k</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "λ\\lambda",
+      "context_after": "kk",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 22,
+      "latex": "k",
+      "mathml": "<math alttext=\"k\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS2.p1.m3\" intent=\":literal\"><semantics><mi>k</mi><annotation encoding=\"application/x-tex\">k</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "kk",
+      "context_after": "λ+1\\lambda+1",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 23,
+      "latex": "\\lambda+1",
+      "mathml": "<math alttext=\"\\lambda+1\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS2.p1.m4\" intent=\":literal\"><semantics><mrow><mi>λ</mi><mo>+</mo><mn>1</mn></mrow><annotation encoding=\"application/x-tex\">\\lambda+1</annotation></semantics></math>",
+      "mathml_len": 232,
+      "context_before": "kk",
+      "context_after": "α\\alpha",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 24,
+      "latex": "\\alpha",
+      "mathml": "<math alttext=\"\\alpha\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS2.p1.m5\" intent=\":literal\"><semantics><mi>α</mi><annotation encoding=\"application/x-tex\">\\alpha</annotation></semantics></math>",
+      "mathml_len": 193,
+      "context_before": "λ+1\\lambda+1",
+      "context_after": "kk",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 25,
+      "latex": "k",
+      "mathml": "<math alttext=\"k\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS2.p1.m6\" intent=\":literal\"><semantics><mi>k</mi><annotation encoding=\"application/x-tex\">k</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "α\\alpha",
+      "context_after": "α⁡(λ+1)\\alpha(\\lambda+1)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 26,
+      "latex": "\\alpha(\\lambda+1)",
+      "mathml": "<math alttext=\"\\alpha(\\lambda+1)\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS2.p1.m7\" intent=\":literal\"><semantics><mrow><mi>α</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mrow><mi>λ</mi><mo>+</mo><mn>1</mn></mrow><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">\\alpha(\\lambda+1)</annotation></semantics></math>",
+      "mathml_len": 348,
+      "context_before": "kk",
+      "context_after": "λ=4\\lambda=4",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 27,
+      "latex": "\\lambda=4",
+      "mathml": "<math alttext=\"\\lambda=4\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS2.p1.m8\" intent=\":literal\"><semantics><mrow><mi>λ</mi><mo>=</mo><mn>4</mn></mrow><annotation encoding=\"application/x-tex\">\\lambda=4</annotation></semantics></math>",
+      "mathml_len": 232,
+      "context_before": "α⁡(λ+1)\\alpha(\\lambda+1)",
+      "context_after": "5",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 28,
+      "latex": "2048\\times 2d_{\\text{model}}",
+      "mathml": "<math alttext=\"2048\\times 2d_{\\text{model}}\" class=\"ltx_Math\" display=\"inline\" id=\"footnote2.m1\" intent=\":literal\"><semantics><mrow><mrow><mn>2048</mn><mo lspace=\"0.222em\" rspace=\"0.222em\">×</mo><mn>2</mn></mrow><mo lspace=\"0em\" rspace=\"0em\">​</mo><msub><mi>d</mi><mtext>model</mtext></msub></mrow><annotation encoding=\"application/x-tex\">2048\\times 2d_{\\text{model}}</annotation></semantics></math>",
+      "mathml_len": 399,
+      "context_before": "2",
+      "context_after": "8%8\\%",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 29,
+      "latex": "8\\%",
+      "mathml": "<math alttext=\"8\\%\" class=\"ltx_Math\" display=\"inline\" id=\"footnote2.m2\" intent=\":literal\"><semantics><mrow><mn>8</mn><mo>%</mo></mrow><annotation encoding=\"application/x-tex\">8\\%</annotation></semantics></math>",
+      "mathml_len": 210,
+      "context_before": "2048×2​dmodel2048\\times 2d_{\\text{model}}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 30,
+      "latex": "\\pm",
+      "mathml": "<math alttext=\"\\pm\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T5.m1\" intent=\":literal\"><semantics><mo>±</mo><annotation encoding=\"application/x-tex\">\\pm</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 31,
+      "latex": "\\pm",
+      "mathml": "<math alttext=\"\\pm\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T5.m2\" intent=\":literal\"><semantics><mo>±</mo><annotation encoding=\"application/x-tex\">\\pm</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 32,
+      "latex": "\\pm",
+      "mathml": "<math alttext=\"\\pm\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T5.m3\" intent=\":literal\"><semantics><mo>±</mo><annotation encoding=\"application/x-tex\">\\pm</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 33,
+      "latex": "\\pm",
+      "mathml": "<math alttext=\"\\pm\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T5.m4\" intent=\":literal\"><semantics><mo>±</mo><annotation encoding=\"application/x-tex\">\\pm</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 34,
+      "latex": "\\pm",
+      "mathml": "<math alttext=\"\\pm\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T5.m5\" intent=\":literal\"><semantics><mo>±</mo><annotation encoding=\"application/x-tex\">\\pm</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 35,
+      "latex": "\\pm",
+      "mathml": "<math alttext=\"\\pm\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T5.m6\" intent=\":literal\"><semantics><mo>±</mo><annotation encoding=\"application/x-tex\">\\pm</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 36,
+      "latex": "\\pm",
+      "mathml": "<math alttext=\"\\pm\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T5.m7\" intent=\":literal\"><semantics><mo>±</mo><annotation encoding=\"application/x-tex\">\\pm</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 37,
+      "latex": "\\pm",
+      "mathml": "<math alttext=\"\\pm\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T5.m8\" intent=\":literal\"><semantics><mo>±</mo><annotation encoding=\"application/x-tex\">\\pm</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 38,
+      "latex": "\\pm",
+      "mathml": "<math alttext=\"\\pm\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T5.m9\" intent=\":literal\"><semantics><mo>±</mo><annotation encoding=\"application/x-tex\">\\pm</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 39,
+      "latex": "\\pm",
+      "mathml": "<math alttext=\"\\pm\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T5.m10\" intent=\":literal\"><semantics><mo>±</mo><annotation encoding=\"application/x-tex\">\\pm</annotation></semantics></math>",
+      "mathml_len": 184,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 40,
+      "latex": "\\pm",
+      "mathml": "<math alttext=\"\\pm\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T5.m11\" intent=\":literal\"><semantics><mo>±</mo><annotation encoding=\"application/x-tex\">\\pm</annotation></semantics></math>",
+      "mathml_len": 184,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 41,
+      "latex": "\\pm",
+      "mathml": "<math alttext=\"\\pm\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T5.m12\" intent=\":literal\"><semantics><mo>±</mo><annotation encoding=\"application/x-tex\">\\pm</annotation></semantics></math>",
+      "mathml_len": 184,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 42,
+      "latex": "\\pm",
+      "mathml": "<math alttext=\"\\pm\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T5.m13\" intent=\":literal\"><semantics><mo>±</mo><annotation encoding=\"application/x-tex\">\\pm</annotation></semantics></math>",
+      "mathml_len": 184,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 43,
+      "latex": "\\pm",
+      "mathml": "<math alttext=\"\\pm\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T5.m14\" intent=\":literal\"><semantics><mo>±</mo><annotation encoding=\"application/x-tex\">\\pm</annotation></semantics></math>",
+      "mathml_len": 184,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 44,
+      "latex": "\\pm",
+      "mathml": "<math alttext=\"\\pm\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T5.m15\" intent=\":literal\"><semantics><mo>±</mo><annotation encoding=\"application/x-tex\">\\pm</annotation></semantics></math>",
+      "mathml_len": 184,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 45,
+      "latex": "\\pm",
+      "mathml": "<math alttext=\"\\pm\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T5.m16\" intent=\":literal\"><semantics><mo>±</mo><annotation encoding=\"application/x-tex\">\\pm</annotation></semantics></math>",
+      "mathml_len": 184,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 46,
+      "latex": "\\pm",
+      "mathml": "<math alttext=\"\\pm\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T5.m17\" intent=\":literal\"><semantics><mo>±</mo><annotation encoding=\"application/x-tex\">\\pm</annotation></semantics></math>",
+      "mathml_len": 184,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 47,
+      "latex": "\\pm",
+      "mathml": "<math alttext=\"\\pm\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T5.m18\" intent=\":literal\"><semantics><mo>±</mo><annotation encoding=\"application/x-tex\">\\pm</annotation></semantics></math>",
+      "mathml_len": 184,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 48,
+      "latex": "\\pm 20.90",
+      "mathml": "<math alttext=\"\\pm 20.90\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T5.m19\" intent=\":literal\"><semantics><mrow><mo>±</mo><mn>20.90</mn></mrow><annotation encoding=\"application/x-tex\">\\pm 20.90</annotation></semantics></math>",
+      "mathml_len": 223,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 49,
+      "latex": "\\pm",
+      "mathml": "<math alttext=\"\\pm\" class=\"ltx_Math\" display=\"inline\" id=\"A3.T5.m20\" intent=\":literal\"><semantics><mo>±</mo><annotation encoding=\"application/x-tex\">\\pm</annotation></semantics></math>",
+      "mathml_len": 184,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 50,
+      "latex": "r=128",
+      "mathml": "<math alttext=\"r=128\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS1.p2.m1\" intent=\":literal\"><semantics><mrow><mi>r</mi><mo>=</mo><mn>128</mn></mrow><annotation encoding=\"application/x-tex\">r=128</annotation></semantics></math>",
+      "mathml_len": 226,
+      "context_before": "Predictors.",
+      "context_after": "r=1024r=1024",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 51,
+      "latex": "r=1024",
+      "mathml": "<math alttext=\"r=1024\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS1.p2.m2\" intent=\":literal\"><semantics><mrow><mi>r</mi><mo>=</mo><mn>1024</mn></mrow><annotation encoding=\"application/x-tex\">r=1024</annotation></semantics></math>",
+      "mathml_len": 229,
+      "context_before": "r=128r=128",
+      "context_after": "3(a)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 52,
+      "latex": "k=4",
+      "mathml": "<math alttext=\"k=4\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS1.p3.m1\" intent=\":literal\"><semantics><mrow><mi>k</mi><mo>=</mo><mn>4</mn></mrow><annotation encoding=\"application/x-tex\">k=4</annotation></semantics></math>",
+      "mathml_len": 220,
+      "context_before": "Windowing in the OPT 6.7B Model.",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 53,
+      "latex": "0.24\\times 64.62",
+      "mathml": "<math alttext=\"0.24\\times 64.62\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS1.p4.m1\" intent=\":literal\"><semantics><mrow><mn>0.24</mn><mo lspace=\"0.222em\" rspace=\"0.222em\">×</mo><mn>64.62</mn></mrow><annotation encoding=\"application/x-tex\">0.24\\times 64.62</annotation></semantics></math>",
+      "mathml_len": 287,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 54,
+      "latex": "2d_{\\text{model}}\\times 4\\text{ bytes}=32\\text{ KiB}",
+      "mathml": "<math alttext=\"2d_{\\text{model}}\\times 4\\text{ bytes}=32\\text{ KiB}\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS1.p5.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><mrow><mn>2</mn><mo lspace=\"0em\" rspace=\"0em\">​</mo><msub><mi>d</mi><mtext>model</mtext></msub></mrow><mo lspace=\"0.222em\" rspace=\"0.222em\">×</mo><mn>4</mn></mrow><mo lspace=\"0em\" rspace=\"0em\">​</mo><mtext> bytes</mtext></mrow><mo>=</mo><mrow><mn>32</mn><mo lspace=\"0em\" rspace=\"0em\">​</mo><mtext> KiB</mtext></mrow></mrow><annotation encoding=\"application/x-tex\">2d_{\\text{model}}\\times 4\\text{ bytes}=32\\text{ KiB}</annotation></semantics></math>",
+      "mathml_len": 616,
+      "context_before": "Latency Analysis:",
+      "context_after": "105​m​s105ms",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 55,
+      "latex": "105ms",
+      "mathml": "<math alttext=\"105ms\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS1.p5.m2\" intent=\":literal\"><semantics><mrow><mn>105</mn><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>m</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>s</mi></mrow><annotation encoding=\"application/x-tex\">105ms</annotation></semantics></math>",
+      "mathml_len": 298,
+      "context_before": "2​dmodel×4​bytes=32​KiB2d_{\\text{model}}\\times 4\\text{ bytes}=32\\text{ KiB}",
+      "context_after": "57​m​s57ms",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 56,
+      "latex": "57ms",
+      "mathml": "<math alttext=\"57ms\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS1.p5.m3\" intent=\":literal\"><semantics><mrow><mn>57</mn><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>m</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>s</mi></mrow><annotation encoding=\"application/x-tex\">57ms</annotation></semantics></math>",
+      "mathml_len": 295,
+      "context_before": "105​m​s105ms",
+      "context_after": "162​m​s162ms",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 57,
+      "latex": "162ms",
+      "mathml": "<math alttext=\"162ms\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS1.p5.m4\" intent=\":literal\"><semantics><mrow><mn>162</mn><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>m</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>s</mi></mrow><annotation encoding=\"application/x-tex\">162ms</annotation></semantics></math>",
+      "mathml_len": 298,
+      "context_before": "57​m​s57ms",
+      "context_after": "1",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 58,
+      "latex": "2196ms",
+      "mathml": "<math alttext=\"2196ms\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS1.p5.m5\" intent=\":literal\"><semantics><mrow><mn>2196</mn><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>m</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>s</mi></mrow><annotation encoding=\"application/x-tex\">2196ms</annotation></semantics></math>",
+      "mathml_len": 301,
+      "context_before": "1",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 59,
+      "latex": "30.5ms",
+      "mathml": "<math alttext=\"30.5ms\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS1.p6.m1\" intent=\":literal\"><semantics><mrow><mn>30.5</mn><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>m</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>s</mi></mrow><annotation encoding=\"application/x-tex\">30.5ms</annotation></semantics></math>",
+      "mathml_len": 301,
+      "context_before": "",
+      "context_after": "35​m​s35ms",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 60,
+      "latex": "35ms",
+      "mathml": "<math alttext=\"35ms\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS1.p6.m2\" intent=\":literal\"><semantics><mrow><mn>35</mn><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>m</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>s</mi></mrow><annotation encoding=\"application/x-tex\">35ms</annotation></semantics></math>",
+      "mathml_len": 295,
+      "context_before": "30.5​m​s30.5ms",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 61,
+      "latex": "r=256",
+      "mathml": "<math alttext=\"r=256\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS2.p2.m1\" intent=\":literal\"><semantics><mrow><mi>r</mi><mo>=</mo><mn>256</mn></mrow><annotation encoding=\"application/x-tex\">r=256</annotation></semantics></math>",
+      "mathml_len": 226,
+      "context_before": "Predictors.",
+      "context_after": "r=1152r=1152",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 62,
+      "latex": "r=1152",
+      "mathml": "<math alttext=\"r=1152\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS2.p2.m2\" intent=\":literal\"><semantics><mrow><mi>r</mi><mo>=</mo><mn>1152</mn></mrow><annotation encoding=\"application/x-tex\">r=1152</annotation></semantics></math>",
+      "mathml_len": 229,
+      "context_before": "r=256r=256",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 63,
+      "latex": "0.33\\times 76.8",
+      "mathml": "<math alttext=\"0.33\\times 76.8\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS2.p3.m1\" intent=\":literal\"><semantics><mrow><mn>0.33</mn><mo lspace=\"0.222em\" rspace=\"0.222em\">×</mo><mn>76.8</mn></mrow><annotation encoding=\"application/x-tex\">0.33\\times 76.8</annotation></semantics></math>",
+      "mathml_len": 284,
+      "context_before": "Window configuration.",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 64,
+      "latex": "2d_{\\text{model}}\\times 4\\text{ bytes}",
+      "mathml": "<math alttext=\"2d_{\\text{model}}\\times 4\\text{ bytes}\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS2.p4.m1\" intent=\":literal\"><semantics><mrow><mrow><mrow><mn>2</mn><mo lspace=\"0em\" rspace=\"0em\">​</mo><msub><mi>d</mi><mtext>model</mtext></msub></mrow><mo lspace=\"0.222em\" rspace=\"0.222em\">×</mo><mn>4</mn></mrow><mo lspace=\"0em\" rspace=\"0em\">​</mo><mtext> bytes</mtext></mrow><annotation encoding=\"application/x-tex\">2d_{\\text{model}}\\times 4\\text{ bytes}</annotation></semantics></math>",
+      "mathml_len": 486,
+      "context_before": "Latency Analysis.",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 65,
+      "latex": "41.8",
+      "mathml": "<math alttext=\"41.8\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS5.p5.m1\" intent=\":literal\"><semantics><mn>41.8</mn><annotation encoding=\"application/x-tex\">41.8</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "(Chia et al., 2023)",
+      "context_after": "38.9638.96",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 66,
+      "latex": "38.96",
+      "mathml": "<math alttext=\"38.96\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS5.p5.m2\" intent=\":literal\"><semantics><mn>38.96</mn><annotation encoding=\"application/x-tex\">38.96</annotation></semantics></math>",
+      "mathml_len": 195,
+      "context_before": "41.841.8",
+      "context_after": "Song et al. (2024)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 67,
+      "latex": "38.63",
+      "mathml": "<math alttext=\"38.63\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS5.p5.m3\" intent=\":literal\"><semantics><mn>38.63</mn><annotation encoding=\"application/x-tex\">38.63</annotation></semantics></math>",
+      "mathml_len": 195,
+      "context_before": "Song et al. (2024)",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 68,
+      "latex": "\\frac{1}{3}",
+      "mathml": "<math alttext=\"\\frac{1}{3}\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS5.p6.m1\" intent=\":literal\"><semantics><mfrac><mn>1</mn><mn>3</mn></mfrac><annotation encoding=\"application/x-tex\">\\frac{1}{3}</annotation></semantics></math>",
+      "mathml_len": 228,
+      "context_before": "Alternative approaches.",
+      "context_after": "59\\frac{5}{9}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 69,
+      "latex": "\\frac{5}{9}",
+      "mathml": "<math alttext=\"\\frac{5}{9}\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS5.p6.m2\" intent=\":literal\"><semantics><mfrac><mn>5</mn><mn>9</mn></mfrac><annotation encoding=\"application/x-tex\">\\frac{5}{9}</annotation></semantics></math>",
+      "mathml_len": 228,
+      "context_before": "13\\frac{1}{3}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    }
+  ],
+  "equation_count": 70,
+  "generator": "LaTeXML oxide (version 0.7.6) http://dlmf.nist.gov/LaTeXML/.",
+  "github_repos": []
+}

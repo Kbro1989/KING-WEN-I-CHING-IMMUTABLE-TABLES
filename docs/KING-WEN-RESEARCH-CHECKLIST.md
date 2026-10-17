@@ -200,3 +200,16 @@
 
 **Last updated:** 2026-08-02  
 **Execution log:** Append dated entries with command output for each completed item.
+
+---
+
+**Testbench (2026-09-01): Math Vision + ChromaNumber tools**
+- `scripts/arxiv_html_parser.py` — fetched arXiv 2605.00155: 991 equations, MathML + LaTeX + context. Verified live.
+- `scripts/mathml_parser.py` — walked 991 MathML trees: 300 solvable (1 '='), 57 unsupported correctly refused (no fabrication).
+- `scripts/chroma_visual_reader.py` (610 lines) — PyMuPDF + K-Means + connected component analysis for 2D structure extraction.
+- `scripts/chroma_usage_finder.py` (371 lines) — audited 8 papers: 381 candidates detected, 70 matched, 89 rejected as diagrams, 222 unmatched discrepancies.
+- `chromanumber-api/src/index.ts` — Cloudflare Worker: `/ai/generate` (Llama 3.3, Gemini fallback), `/ai/generate-image` (Flux-1-Schnell).
+- `DATASETS/chroma_visual_discrepancies.json` — live artifact: metadata + per-paper stats + full discrepancy list (314KB).
+
+These tools are now verified working. Routing rule: use Math Vision for equation extraction (reasoning depth), use ChromaNumber for 2D/color extraction (vision + color fidelity).
+

@@ -1,0 +1,1163 @@
+{
+  "arxiv_id": "2212.09720",
+  "version": null,
+  "url": "https://arxiv.org/html/2212.09720",
+  "structure": {
+    "title": "The case for 4-bit precision:k-bit Inference Scaling Laws",
+    "authors": [
+      "Tim Dettmers",
+      "Luke Zettlemoyer"
+    ],
+    "abstract": "AbstractQuantization methods reduce the number of bits required to represent each parameter in a model, trading accuracy for smaller memory footprints and inference latencies. However, the final model size depends on both the number of parameters of the original model and the rate of compression. For example, a 30B 8-bit model and a 60B 4-bit model have the same number of bits but may have very different zero-shot accuracies. In this work, we study this trade-off by developing inference scaling laws of zero-shot performance in Large Language Models (LLMs) to determine the bit-precision and model size that maximizes zero-shot performance. We run more than 35,000 experiments with 16-bit inputs and k-bit parameters to examine which zero-shot quantization methods improve scaling for 3 to 8-bit precision at scales of 19M to 176B parameters across the LLM families BLOOM, OPT, NeoX/Pythia, and GPT-2. We find that it is challenging to improve the bit-level scaling trade-off, with the only improvements being the use of a small block size – splitting the parameters into small independently quantized blocks – and the quantization data type being used (e.g., Int vs Float). Overall, our findings show that 4-bit precision is almost universally optimal for total model bits and zero-shot accuracy.",
+    "sections": [
+      {
+        "level": "h2",
+        "title": "1Introduction"
+      },
+      {
+        "level": "h2",
+        "title": "2Background"
+      },
+      {
+        "level": "h3",
+        "title": "2.1Relationship between inference latency and total model bits"
+      },
+      {
+        "level": "h3",
+        "title": "2.2Data types"
+      },
+      {
+        "level": "h3",
+        "title": "2.3Blocking / grouping"
+      },
+      {
+        "level": "h4",
+        "title": "Blocking/Grouping."
+      },
+      {
+        "level": "h2",
+        "title": "3Outlier-dependent quantization through proxy quantization"
+      },
+      {
+        "level": "h2",
+        "title": "4Experimental setup"
+      },
+      {
+        "level": "h2",
+        "title": "5Results & Analysis"
+      },
+      {
+        "level": "h3",
+        "title": "5.1Bit-level Inference Scaling Laws"
+      },
+      {
+        "level": "h3",
+        "title": "5.2Improving Scaling Laws"
+      },
+      {
+        "level": "h2",
+        "title": "6Related work"
+      },
+      {
+        "level": "h4",
+        "title": "Large language model quantization."
+      },
+      {
+        "level": "h4",
+        "title": "Quantization methods."
+      },
+      {
+        "level": "h4",
+        "title": "Scaling Laws for Inference."
+      },
+      {
+        "level": "h2",
+        "title": "7Recommendations & Future Work"
+      },
+      {
+        "level": "h2",
+        "title": "8Discussion & Limitations"
+      },
+      {
+        "level": "h2",
+        "title": "9Conclusion"
+      },
+      {
+        "level": "h2",
+        "title": "References"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix AData type details"
+      },
+      {
+        "level": "h4",
+        "title": "Quantization as a mapping from integers to values."
+      },
+      {
+        "level": "h4",
+        "title": "Integer data types."
+      },
+      {
+        "level": "h4",
+        "title": "Floating Point data types."
+      },
+      {
+        "level": "h4",
+        "title": "Dynamic Exponent."
+      },
+      {
+        "level": "h4",
+        "title": "Quantile Quantization."
+      },
+      {
+        "level": "h2",
+        "title": "Appendix BFurther negative results: distribution centering"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix CDetailed Scaling Results"
+      },
+      {
+        "level": "h3",
+        "title": "C.1Full Scaling Laws for 3-bit to 16-bit"
+      },
+      {
+        "level": "h3",
+        "title": "C.2Details for scaling improvements at 4-bit precision"
+      },
+      {
+        "level": "h3",
+        "title": "C.3No scaling improvements for 6 to 8-bit models through quantization methods"
+      },
+      {
+        "level": "h3",
+        "title": "C.4Scaling of floating point exponent bits"
+      },
+      {
+        "level": "h3",
+        "title": "C.5Perplexity-based inference scaling laws"
+      },
+      {
+        "level": "h2",
+        "title": "Instructions for reporting errors"
+      }
+    ],
+    "github_repos": []
+  },
+  "equations": [
+    {
+      "index": 0,
+      "latex": "{\\mathbf{b}\\mathbf{W}=\\mathbf{h}}",
+      "mathml": "<math alttext=\"{\\mathbf{b}\\mathbf{W}=\\mathbf{h}}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS1.p2.m1\" intent=\":literal\"><semantics><mrow><mi>𝐛𝐖</mi><mo>=</mo><mi>𝐡</mi></mrow><annotation encoding=\"application/x-tex\">{\\mathbf{b}\\mathbf{W}=\\mathbf{h}}</annotation></semantics></math>",
+      "mathml_len": 281,
+      "context_before": "(Jia et al., 2019)",
+      "context_after": "𝐛\\mathbf{b}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 1,
+      "latex": "\\mathbf{b}",
+      "mathml": "<math alttext=\"\\mathbf{b}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS1.p2.m2\" intent=\":literal\"><semantics><mi>𝐛</mi><annotation encoding=\"application/x-tex\">\\mathbf{b}</annotation></semantics></math>",
+      "mathml_len": 201,
+      "context_before": "𝐛𝐖=𝐡{\\mathbf{b}\\mathbf{W}=\\mathbf{h}}",
+      "context_after": "𝐖\\mathbf{W}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 2,
+      "latex": "\\mathbf{W}",
+      "mathml": "<math alttext=\"\\mathbf{W}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS1.p2.m3\" intent=\":literal\"><semantics><mi>𝐖</mi><annotation encoding=\"application/x-tex\">\\mathbf{W}</annotation></semantics></math>",
+      "mathml_len": 201,
+      "context_before": "𝐛\\mathbf{b}",
+      "context_after": "𝐛\\mathbf{b}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 3,
+      "latex": "\\mathbf{b}",
+      "mathml": "<math alttext=\"\\mathbf{b}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS1.p2.m4\" intent=\":literal\"><semantics><mi>𝐛</mi><annotation encoding=\"application/x-tex\">\\mathbf{b}</annotation></semantics></math>",
+      "mathml_len": 201,
+      "context_before": "𝐖\\mathbf{W}",
+      "context_after": "𝐖\\mathbf{W}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 4,
+      "latex": "\\mathbf{W}",
+      "mathml": "<math alttext=\"\\mathbf{W}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS1.p2.m5\" intent=\":literal\"><semantics><mi>𝐖</mi><annotation encoding=\"application/x-tex\">\\mathbf{W}</annotation></semantics></math>",
+      "mathml_len": 201,
+      "context_before": "𝐛\\mathbf{b}",
+      "context_after": "𝐛{\\mathbf{b}}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 5,
+      "latex": "{\\mathbf{b}}",
+      "mathml": "<math alttext=\"{\\mathbf{b}}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS1.p2.m6\" intent=\":literal\"><semantics><mi>𝐛</mi><annotation encoding=\"application/x-tex\">{\\mathbf{b}}</annotation></semantics></math>",
+      "mathml_len": 205,
+      "context_before": "𝐖\\mathbf{W}",
+      "context_after": "𝐖\\mathbf{W}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 6,
+      "latex": "\\mathbf{W}",
+      "mathml": "<math alttext=\"\\mathbf{W}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS1.p2.m7\" intent=\":literal\"><semantics><mi>𝐖</mi><annotation encoding=\"application/x-tex\">\\mathbf{W}</annotation></semantics></math>",
+      "mathml_len": 201,
+      "context_before": "𝐛{\\mathbf{b}}",
+      "context_after": "𝐛{\\mathbf{b}}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 7,
+      "latex": "{\\mathbf{b}}",
+      "mathml": "<math alttext=\"{\\mathbf{b}}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS1.p2.m8\" intent=\":literal\"><semantics><mi>𝐛</mi><annotation encoding=\"application/x-tex\">{\\mathbf{b}}</annotation></semantics></math>",
+      "mathml_len": 205,
+      "context_before": "𝐖\\mathbf{W}",
+      "context_after": "𝐖\\mathbf{W}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 8,
+      "latex": "\\mathbf{W}",
+      "mathml": "<math alttext=\"\\mathbf{W}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS1.p2.m9\" intent=\":literal\"><semantics><mi>𝐖</mi><annotation encoding=\"application/x-tex\">\\mathbf{W}</annotation></semantics></math>",
+      "mathml_len": 201,
+      "context_before": "𝐛{\\mathbf{b}}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 9,
+      "latex": "\\mathbf{W}",
+      "mathml": "<math alttext=\"\\mathbf{W}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS1.p3.m1\" intent=\":literal\"><semantics><mi>𝐖</mi><annotation encoding=\"application/x-tex\">\\mathbf{W}</annotation></semantics></math>",
+      "mathml_len": 201,
+      "context_before": "",
+      "context_after": "𝐖\\mathbf{W}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 10,
+      "latex": "\\mathbf{W}",
+      "mathml": "<math alttext=\"\\mathbf{W}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS1.p3.m2\" intent=\":literal\"><semantics><mi>𝐖</mi><annotation encoding=\"application/x-tex\">\\mathbf{W}</annotation></semantics></math>",
+      "mathml_len": 201,
+      "context_before": "𝐖\\mathbf{W}",
+      "context_after": "Frantar et al. (2022)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 11,
+      "latex": "2^{E-1},",
+      "mathml": "<math alttext=\"2^{E-1},\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS2.p2.m1\" intent=\":literal\"><semantics><mrow><msup><mn>2</mn><mrow><mi>E</mi><mo>−</mo><mn>1</mn></mrow></msup><mo>,</mo></mrow><annotation encoding=\"application/x-tex\">2^{E-1},</annotation></semantics></math>",
+      "mathml_len": 276,
+      "context_before": "Float",
+      "context_after": "EE",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 12,
+      "latex": "E",
+      "mathml": "<math alttext=\"E\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS2.p2.m2\" intent=\":literal\"><semantics><mi>E</mi><annotation encoding=\"application/x-tex\">E</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "2E−1,2^{E-1},",
+      "context_after": "quantile quantization",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 13,
+      "latex": "n",
+      "mathml": "<math alttext=\"n\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS3.SSS0.Px1.p1.m1\" intent=\":literal\"><semantics><mi>n</mi><annotation encoding=\"application/x-tex\">n</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "",
+      "context_after": "cc",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 14,
+      "latex": "c",
+      "mathml": "<math alttext=\"c\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS3.SSS0.Px1.p1.m2\" intent=\":literal\"><semantics><mi>c</mi><annotation encoding=\"application/x-tex\">c</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "nn",
+      "context_after": "nn",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 15,
+      "latex": "n",
+      "mathml": "<math alttext=\"n\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS3.SSS0.Px1.p1.m3\" intent=\":literal\"><semantics><mi>n</mi><annotation encoding=\"application/x-tex\">n</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "cc",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 16,
+      "latex": "k",
+      "mathml": "<math alttext=\"k\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS3.SSS0.Px1.p3.m1\" intent=\":literal\"><semantics><mi>k</mi><annotation encoding=\"application/x-tex\">k</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "Dettmers et al. (2022b)",
+      "context_after": "BB",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 17,
+      "latex": "B",
+      "mathml": "<math alttext=\"B\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS3.SSS0.Px1.p3.m2\" intent=\":literal\"><semantics><mi>B</mi><annotation encoding=\"application/x-tex\">B</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "kk",
+      "context_after": "𝐓\\mathbf{T}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 18,
+      "latex": "\\mathbf{T}",
+      "mathml": "<math alttext=\"\\mathbf{T}\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS3.SSS0.Px1.p3.m3\" intent=\":literal\"><semantics><mi>𝐓</mi><annotation encoding=\"application/x-tex\">\\mathbf{T}</annotation></semantics></math>",
+      "mathml_len": 210,
+      "context_before": "BB",
+      "context_after": "nn",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 19,
+      "latex": "n",
+      "mathml": "<math alttext=\"n\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS3.SSS0.Px1.p3.m4\" intent=\":literal\"><semantics><mi>n</mi><annotation encoding=\"application/x-tex\">n</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "𝐓\\mathbf{T}",
+      "context_after": "n/Bn/B",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 20,
+      "latex": "n/B",
+      "mathml": "<math alttext=\"n/B\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS3.SSS0.Px1.p3.m5\" intent=\":literal\"><semantics><mrow><mi>n</mi><mo>/</mo><mi>B</mi></mrow><annotation encoding=\"application/x-tex\">n/B</annotation></semantics></math>",
+      "mathml_len": 229,
+      "context_before": "nn",
+      "context_after": "𝐐kmap​(⋅)\\mathbf{{Q}}_{k}^{\\text{map}}(\\cdot)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 21,
+      "latex": "\\mathbf{{Q}}_{k}^{\\text{map}}(\\cdot)",
+      "mathml": "<math alttext=\"\\mathbf{{Q}}_{k}^{\\text{map}}(\\cdot)\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS3.SSS0.Px1.p3.m6\" intent=\":literal\"><semantics><mrow><msubsup><mi>𝐐</mi><mi>k</mi><mtext>map</mtext></msubsup><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo stretchy=\"false\">(</mo><mo lspace=\"0em\" rspace=\"0em\">⋅</mo><mo stretchy=\"false\">)</mo></mrow></mrow><annotation encoding=\"application/x-tex\">\\mathbf{{Q}}_{k}^{\\text{map}}(\\cdot)</annotation></semantics></math>",
+      "mathml_len": 461,
+      "context_before": "n/Bn/B",
+      "context_after": "0..n/B0..n/B",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 22,
+      "latex": "0..n/B",
+      "mathml": "<math alttext=\"0..n/B\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS3.SSS0.Px1.p3.m7\" intent=\":literal\"><semantics><mrow><mrow><mn>0</mn><mo lspace=\"0em\" rspace=\"0.0835em\">.</mo></mrow><mo lspace=\"0.0835em\" rspace=\"0.167em\">.</mo><mrow><mi>n</mi><mo>/</mo><mi>B</mi></mrow></mrow><annotation encoding=\"application/x-tex\">0..n/B</annotation></semantics></math>",
+      "mathml_len": 357,
+      "context_before": "𝐐kmap​(⋅)\\mathbf{{Q}}_{k}^{\\text{map}}(\\cdot)",
+      "context_after": "bb",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 23,
+      "latex": "b",
+      "mathml": "<math alttext=\"b\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS3.SSS0.Px1.p3.m8\" intent=\":literal\"><semantics><mi>b</mi><annotation encoding=\"application/x-tex\">b</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "0..n/B0..n/B",
+      "context_after": "mb=max⁡(|𝐓b|)m_{b}=\\max(|\\mathbf{T}_{b}|)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 24,
+      "latex": "m_{b}=\\max(|\\mathbf{T}_{b}|)",
+      "mathml": "<math alttext=\"m_{b}=\\max(|\\mathbf{T}_{b}|)\" class=\"ltx_Math\" display=\"inline\" id=\"S2.SS3.SSS0.Px1.p3.m9\" intent=\":literal\"><semantics><mrow><msub><mi>m</mi><mi>b</mi></msub><mo>=</mo><mrow><mi>max</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mrow><mo stretchy=\"false\">|</mo><msub><mi>𝐓</mi><mi>b</mi></msub><mo stretchy=\"false\">|</mo></mrow><mo stretchy=\"false\">)</mo></mrow></mrow></mrow><annotation encoding=\"application/x-tex\">m_{b}=\\max(|\\mathbf{T}_{b}|)</annotation></semantics></math>",
+      "mathml_len": 494,
+      "context_before": "bb",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 25,
+      "latex": "\\mathbf{T}_{bi}^{Q_{k}^{\\text{map}}}=\\argmin\\limits_{j=0}^{n=2^{k}}|\\mathbf{{Q}}_{k}^{\\text{map}}(j)-\\frac{\\mathbf{T}_{bi}}{m_{b}}|{\\bigg\\rvert}_{0<i<B},",
+      "mathml": "<math alttext=\"\\mathbf{T}_{bi}^{Q_{k}^{\\text{map}}}=\\argmin\\limits_{j=0}^{n=2^{k}}|\\mathbf{{Q}}_{k}^{\\text{map}}(j)-\\frac{\\mathbf{T}_{bi}}{m_{b}}|{\\bigg\\rvert}_{0&lt;i&lt;B},\" class=\"ltx_math_unparsed\" display=\"block\" id=\"S2.E1.m1\" intent=\":literal\"><semantics><mrow><msub><mrow><msubsup><mi>𝐓</mi><mrow><mi>b</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi>i</mi></mrow><msubsup><mi>Q</mi><mi>k</mi><mtext>map</mtext></msubsup></msubsup><mo>=</mo><msubsup><mrow><mi>arg</mi><mo lspace=\"0.170em\" rspace=\"0em\">​</mo><mi>min</mi></mrow><mrow><mi>j</mi><mo>=</mo><mn>0</mn></mrow><mrow><mi>n</mi><mo>=</mo><msup><mn>2</mn><mi>k</mi></msup></mrow></msubsup><mo fence=\"false\" rspace=\"0.167em\" stretchy=\"false\">|</mo><msubsup><mi>𝐐</mi><mi>k</mi><mtext>map</mtext></msubsup><mrow><mo stretchy=\"false\">(</mo><mi>j</mi><mo stretchy=\"false\">)</mo></mrow><mo>−</mo><mfrac><msub><mi>𝐓</mi><mi>bi</mi></msub><msub><mi>m</mi><mi>b</mi></msub></mfrac><mo fence=\"false\" rspace=\"0.167em\" stretchy=\"false\">|</mo><mo stretchy=\"false\">|</mo></mrow><mrow><mn>0</mn><mo>&lt;</mo><mi>i</mi><mo>&lt;</mo><mi>B</mi></mrow></msub><mo>,</mo></mrow><annotation encoding=\"application/x-tex\">\\mathbf{T}_{bi}^{Q_{k}^{\\text{map}}}=\\argmin\\limits_{j=0}^{n=2^{k}}|\\mathbf{{Q}}_{k}^{\\text{map}}(j)-\\frac{\\mathbf{T}_{bi}}{m_{b}}|{\\bigg\\rvert}_{0&lt;i&lt;B},</annotation></semantics></math>",
+      "mathml_len": 1350,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 26,
+      "latex": "n",
+      "mathml": "<math alttext=\"n\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p4.m1\" intent=\":literal\"><semantics><mi>n</mi><annotation encoding=\"application/x-tex\">n</annotation></semantics></math>",
+      "mathml_len": 179,
+      "context_before": "proxy quantization",
+      "context_after": "𝐖i∈ℝh×o\\mathbf{W}_{i}\\in\\mathbb{R}^{h\\times o}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 27,
+      "latex": "\\mathbf{W}_{i}\\in\\mathbb{R}^{h\\times o}",
+      "mathml": "<math alttext=\"\\mathbf{W}_{i}\\in\\mathbb{R}^{h\\times o}\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p4.m2\" intent=\":literal\"><semantics><mrow><msub><mi>𝐖</mi><mi>i</mi></msub><mo>∈</mo><msup><mi>ℝ</mi><mrow><mi>h</mi><mo lspace=\"0.222em\" rspace=\"0.222em\">×</mo><mi>o</mi></mrow></msup></mrow><annotation encoding=\"application/x-tex\">\\mathbf{W}_{i}\\in\\mathbb{R}^{h\\times o}</annotation></semantics></math>",
+      "mathml_len": 401,
+      "context_before": "nn",
+      "context_after": "hh",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 28,
+      "latex": "h",
+      "mathml": "<math alttext=\"h\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p4.m3\" intent=\":literal\"><semantics><mi>h</mi><annotation encoding=\"application/x-tex\">h</annotation></semantics></math>",
+      "mathml_len": 179,
+      "context_before": "𝐖i∈ℝh×o\\mathbf{W}_{i}\\in\\mathbb{R}^{h\\times o}",
+      "context_after": "oo",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 29,
+      "latex": "o",
+      "mathml": "<math alttext=\"o\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p4.m4\" intent=\":literal\"><semantics><mi>o</mi><annotation encoding=\"application/x-tex\">o</annotation></semantics></math>",
+      "mathml_len": 179,
+      "context_before": "hh",
+      "context_after": "oo",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 30,
+      "latex": "o",
+      "mathml": "<math alttext=\"o\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p4.m5\" intent=\":literal\"><semantics><mi>o</mi><annotation encoding=\"application/x-tex\">o</annotation></semantics></math>",
+      "mathml_len": 179,
+      "context_before": "oo",
+      "context_after": "JJ",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 31,
+      "latex": "J",
+      "mathml": "<math alttext=\"J\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p4.m6\" intent=\":literal\"><semantics><mi>J</mi><annotation encoding=\"application/x-tex\">J</annotation></semantics></math>",
+      "mathml_len": 179,
+      "context_before": "oo",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 32,
+      "latex": "J_{i+1}=\\argmax\\limits_{j=0}^{k}\\text{std}(\\mathbf{W}_{i}){\\big\\rvert}_{i..n}",
+      "mathml": "<math alttext=\"J_{i+1}=\\argmax\\limits_{j=0}^{k}\\text{std}(\\mathbf{W}_{i}){\\big\\rvert}_{i..n}\" class=\"ltx_math_unparsed\" display=\"block\" id=\"S3.E2.m1\" intent=\":literal\"><semantics><msub><mrow><msub><mi>J</mi><mrow><mi>i</mi><mo>+</mo><mn>1</mn></mrow></msub><mo>=</mo><msubsup><mrow><mi>arg</mi><mo lspace=\"0.170em\" rspace=\"0em\">​</mo><mi>max</mi></mrow><mrow><mi>j</mi><mo>=</mo><mn>0</mn></mrow><mi>k</mi></msubsup><mtext>std</mtext><mrow><mo stretchy=\"false\">(</mo><msub><mi>𝐖</mi><mi>i</mi></msub><mo stretchy=\"false\">)</mo></mrow><mo stretchy=\"false\">|</mo></mrow><mrow><mrow><mi>i</mi><mo lspace=\"0em\" rspace=\"0.0835em\">.</mo></mrow><mo lspace=\"0.0835em\" rspace=\"0.167em\">.</mo><mi>n</mi></mrow></msub><annotation encoding=\"application/x-tex\">J_{i+1}=\\argmax\\limits_{j=0}^{k}\\text{std}(\\mathbf{W}_{i}){\\big\\rvert}_{i..n}</annotation></semantics></math>",
+      "mathml_len": 857,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 33,
+      "latex": "(\\cdot)",
+      "mathml": "<math alttext=\"(\\cdot)\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p5.m1\" intent=\":literal\"><semantics><mrow><mo stretchy=\"false\">(</mo><mo lspace=\"0em\" rspace=\"0em\">⋅</mo><mo stretchy=\"false\">)</mo></mrow><annotation encoding=\"application/x-tex\">(\\cdot)</annotation></semantics></math>",
+      "mathml_len": 284,
+      "context_before": "",
+      "context_after": "oo",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 34,
+      "latex": "o",
+      "mathml": "<math alttext=\"o\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p5.m2\" intent=\":literal\"><semantics><mi>o</mi><annotation encoding=\"application/x-tex\">o</annotation></semantics></math>",
+      "mathml_len": 179,
+      "context_before": "(⋅)(\\cdot)",
+      "context_after": "JJ",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 35,
+      "latex": "J",
+      "mathml": "<math alttext=\"J\" class=\"ltx_Math\" display=\"inline\" id=\"S3.p5.m3\" intent=\":literal\"><semantics><mi>J</mi><annotation encoding=\"application/x-tex\">J</annotation></semantics></math>",
+      "mathml_len": 179,
+      "context_before": "oo",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 36,
+      "latex": "3\\geq k\\geq 8",
+      "mathml": "<math alttext=\"3\\geq k\\geq 8\" class=\"ltx_Math\" display=\"inline\" id=\"S4.p1.m1\" intent=\":literal\"><semantics><mrow><mn>3</mn><mo>≥</mo><mi>k</mi><mo>≥</mo><mn>8</mn></mrow><annotation encoding=\"application/x-tex\">3\\geq k\\geq 8</annotation></semantics></math>",
+      "mathml_len": 256,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 37,
+      "latex": "p",
+      "mathml": "<math alttext=\"p\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS2.p2.m1\" intent=\":literal\"><semantics><mi>p</mi><annotation encoding=\"application/x-tex\">p</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "",
+      "context_after": "p⁡(16−k),p(16-k),",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 38,
+      "latex": "p(16-k),",
+      "mathml": "<math alttext=\"p(16-k),\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS2.p2.m2\" intent=\":literal\"><semantics><mrow><mrow><mi>p</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">(</mo><mrow><mn>16</mn><mo>−</mo><mi>k</mi></mrow><mo stretchy=\"false\">)</mo></mrow></mrow><mo>,</mo></mrow><annotation encoding=\"application/x-tex\">p(16-k),</annotation></semantics></math>",
+      "mathml_len": 354,
+      "context_before": "pp",
+      "context_after": "kk",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 39,
+      "latex": "k",
+      "mathml": "<math alttext=\"k\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS2.p2.m3\" intent=\":literal\"><semantics><mi>k</mi><annotation encoding=\"application/x-tex\">k</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "p⁡(16−k),p(16-k),",
+      "context_after": "p=0.02p=0.02",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 40,
+      "latex": "p=0.02",
+      "mathml": "<math alttext=\"p=0.02\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS2.p2.m4\" intent=\":literal\"><semantics><mrow><mi>p</mi><mo>=</mo><mn>0.02</mn></mrow><annotation encoding=\"application/x-tex\">p=0.02</annotation></semantics></math>",
+      "mathml_len": 229,
+      "context_before": "kk",
+      "context_after": "k=4k=4",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 41,
+      "latex": "k=4",
+      "mathml": "<math alttext=\"k=4\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS2.p2.m5\" intent=\":literal\"><semantics><mrow><mi>k</mi><mo>=</mo><mn>4</mn></mrow><annotation encoding=\"application/x-tex\">k=4</annotation></semantics></math>",
+      "mathml_len": 220,
+      "context_before": "p=0.02p=0.02",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 42,
+      "latex": "k",
+      "mathml": "<math alttext=\"k\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p1.m1\" intent=\":literal\"><semantics><mi>k</mi><annotation encoding=\"application/x-tex\">k</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "",
+      "context_after": "II",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 43,
+      "latex": "I",
+      "mathml": "<math alttext=\"I\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p1.m2\" intent=\":literal\"><semantics><mi>I</mi><annotation encoding=\"application/x-tex\">I</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "kk",
+      "context_after": "FF",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 44,
+      "latex": "F",
+      "mathml": "<math alttext=\"F\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p1.m3\" intent=\":literal\"><semantics><mi>F</mi><annotation encoding=\"application/x-tex\">F</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "II",
+      "context_after": "[−1,1][-1,1]",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 45,
+      "latex": "[-1,1]",
+      "mathml": "<math alttext=\"[-1,1]\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p1.m4\" intent=\":literal\"><semantics><mrow><mo stretchy=\"false\">[</mo><mrow><mrow><mo>−</mo><mn>1</mn></mrow><mo>,</mo><mn>1</mn></mrow><mo stretchy=\"false\">]</mo></mrow><annotation encoding=\"application/x-tex\">[-1,1]</annotation></semantics></math>",
+      "mathml_len": 325,
+      "context_before": "FF",
+      "context_after": "FF",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 46,
+      "latex": "F",
+      "mathml": "<math alttext=\"F\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p1.m5\" intent=\":literal\"><semantics><mi>F</mi><annotation encoding=\"application/x-tex\">F</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "[−1,1][-1,1]",
+      "context_after": "kk",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 47,
+      "latex": "k",
+      "mathml": "<math alttext=\"k\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p1.m6\" intent=\":literal\"><semantics><mi>k</mi><annotation encoding=\"application/x-tex\">k</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "FF",
+      "context_after": "II",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 48,
+      "latex": "I",
+      "mathml": "<math alttext=\"I\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p1.m7\" intent=\":literal\"><semantics><mi>I</mi><annotation encoding=\"application/x-tex\">I</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "kk",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 49,
+      "latex": "k",
+      "mathml": "<math alttext=\"k\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p2.m1\" intent=\":literal\"><semantics><mi>k</mi><annotation encoding=\"application/x-tex\">k</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "",
+      "context_after": "kk",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 50,
+      "latex": "k",
+      "mathml": "<math alttext=\"k\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p2.m2\" intent=\":literal\"><semantics><mi>k</mi><annotation encoding=\"application/x-tex\">k</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "kk",
+      "context_after": "II",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 51,
+      "latex": "I",
+      "mathml": "<math alttext=\"I\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p2.m3\" intent=\":literal\"><semantics><mi>I</mi><annotation encoding=\"application/x-tex\">I</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "kk",
+      "context_after": "FF",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 52,
+      "latex": "F",
+      "mathml": "<math alttext=\"F\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p2.m4\" intent=\":literal\"><semantics><mi>F</mi><annotation encoding=\"application/x-tex\">F</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "II",
+      "context_after": "𝐐map:I↦F=[0,2k−1]↦F{\\mathbf{Q}^{\\text{map}}:I\\mapsto F=[0,2^{k}-1]\\mapsto F}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 53,
+      "latex": "{\\mathbf{Q}^{\\text{map}}:I\\mapsto F=[0,2^{k}-1]\\mapsto F}",
+      "mathml": "<math alttext=\"{\\mathbf{Q}^{\\text{map}}:I\\mapsto F=[0,2^{k}-1]\\mapsto F}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p2.m5\" intent=\":literal\"><semantics><mrow><msup><mi>𝐐</mi><mtext>map</mtext></msup><mo lspace=\"0.278em\" rspace=\"0.278em\">:</mo><mrow><mi>I</mi><mo stretchy=\"false\">↦</mo><mi>F</mi><mo>=</mo><mrow><mo stretchy=\"false\">[</mo><mrow><mn>0</mn><mo>,</mo><mrow><msup><mn>2</mn><mi>k</mi></msup><mo>−</mo><mn>1</mn></mrow></mrow><mo stretchy=\"false\">]</mo></mrow><mo stretchy=\"false\">↦</mo><mi>F</mi></mrow></mrow><annotation encoding=\"application/x-tex\">{\\mathbf{Q}^{\\text{map}}:I\\mapsto F=[0,2^{k}-1]\\mapsto F}</annotation></semantics></math>",
+      "mathml_len": 665,
+      "context_before": "FF",
+      "context_after": "0​…​232−10...2^{32}-1",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 54,
+      "latex": "0...2^{32}-1",
+      "mathml": "<math alttext=\"0...2^{32}-1\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p2.m6\" intent=\":literal\"><semantics><mrow><mrow><mn>0</mn><mo lspace=\"0em\" rspace=\"0em\">​</mo><mi mathvariant=\"normal\">…</mi><mo lspace=\"0em\" rspace=\"0em\">​</mo><msup><mn>2</mn><mn>32</mn></msup></mrow><mo>−</mo><mn>1</mn></mrow><annotation encoding=\"application/x-tex\">0...2^{32}-1</annotation></semantics></math>",
+      "mathml_len": 397,
+      "context_before": "𝐐map:I↦F=[0,2k−1]↦F{\\mathbf{Q}^{\\text{map}}:I\\mapsto F=[0,2^{k}-1]\\mapsto F}",
+      "context_after": "SS",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 55,
+      "latex": "S",
+      "mathml": "<math alttext=\"S\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p2.m7\" intent=\":literal\"><semantics><mi>S</mi><annotation encoding=\"application/x-tex\">S</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "0​…​232−10...2^{32}-1",
+      "context_after": "[-3.4e38, +3.4e38]",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 56,
+      "latex": "F",
+      "mathml": "<math alttext=\"F\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p2.m8\" intent=\":literal\"><semantics><mi>F</mi><annotation encoding=\"application/x-tex\">F</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "[-3.4e38, +3.4e38]",
+      "context_after": "[−1,1][-1,1]",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 57,
+      "latex": "[-1,1]",
+      "mathml": "<math alttext=\"[-1,1]\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p2.m9\" intent=\":literal\"><semantics><mrow><mo stretchy=\"false\">[</mo><mrow><mrow><mo>−</mo><mn>1</mn></mrow><mo>,</mo><mn>1</mn></mrow><mo stretchy=\"false\">]</mo></mrow><annotation encoding=\"application/x-tex\">[-1,1]</annotation></semantics></math>",
+      "mathml_len": 325,
+      "context_before": "FF",
+      "context_after": "FF",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 58,
+      "latex": "F",
+      "mathml": "<math alttext=\"F\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p2.m10\" intent=\":literal\"><semantics><mi>F</mi><annotation encoding=\"application/x-tex\">F</annotation></semantics></math>",
+      "mathml_len": 193,
+      "context_before": "[−1,1][-1,1]",
+      "context_after": "𝐐kmap​(i)=qi{\\mathbf{Q}_{k}^{\\text{map}}(i)=q_{i}}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 59,
+      "latex": "{\\mathbf{Q}_{k}^{\\text{map}}(i)=q_{i}}",
+      "mathml": "<math alttext=\"{\\mathbf{Q}_{k}^{\\text{map}}(i)=q_{i}}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p2.m11\" intent=\":literal\"><semantics><mrow><mrow><msubsup><mi>𝐐</mi><mi>k</mi><mtext>map</mtext></msubsup><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo stretchy=\"false\">(</mo><mi>i</mi><mo stretchy=\"false\">)</mo></mrow></mrow><mo>=</mo><msub><mi>q</mi><mi>i</mi></msub></mrow><annotation encoding=\"application/x-tex\">{\\mathbf{Q}_{k}^{\\text{map}}(i)=q_{i}}</annotation></semantics></math>",
+      "mathml_len": 496,
+      "context_before": "FF",
+      "context_after": "𝐐8uint​(83)=83/255=0.3255{\\mathbf{Q}_{8}^{\\text{uint}}(83)=83/255=0.3255}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 60,
+      "latex": "{\\mathbf{Q}_{8}^{\\text{uint}}(83)=83/255=0.3255}",
+      "mathml": "<math alttext=\"{\\mathbf{Q}_{8}^{\\text{uint}}(83)=83/255=0.3255}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p2.m12\" intent=\":literal\"><semantics><mrow><mrow><msubsup><mi>𝐐</mi><mn>8</mn><mtext>uint</mtext></msubsup><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo stretchy=\"false\">(</mo><mn>83</mn><mo stretchy=\"false\">)</mo></mrow></mrow><mo>=</mo><mrow><mn>83</mn><mo>/</mo><mn>255</mn></mrow><mo>=</mo><mn>0.3255</mn></mrow><annotation encoding=\"application/x-tex\">{\\mathbf{Q}_{8}^{\\text{uint}}(83)=83/255=0.3255}</annotation></semantics></math>",
+      "mathml_len": 556,
+      "context_before": "𝐐kmap​(i)=qi{\\mathbf{Q}_{k}^{\\text{map}}(i)=q_{i}}",
+      "context_after": "ii",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 61,
+      "latex": "i",
+      "mathml": "<math alttext=\"i\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p2.m13\" intent=\":literal\"><semantics><mi>i</mi><annotation encoding=\"application/x-tex\">i</annotation></semantics></math>",
+      "mathml_len": 193,
+      "context_before": "𝐐8uint​(83)=83/255=0.3255{\\mathbf{Q}_{8}^{\\text{uint}}(83)=83/255=0.3255}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 62,
+      "latex": "[-1,1]",
+      "mathml": "<math alttext=\"[-1,1]\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p3.m1\" intent=\":literal\"><semantics><mrow><mo stretchy=\"false\">[</mo><mrow><mrow><mo>−</mo><mn>1</mn></mrow><mo>,</mo><mn>1</mn></mrow><mo stretchy=\"false\">]</mo></mrow><annotation encoding=\"application/x-tex\">[-1,1]</annotation></semantics></math>",
+      "mathml_len": 325,
+      "context_before": "To quantize an arbitrary input",
+      "context_after": "111This range is used for storage and not computation.",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 63,
+      "latex": "F",
+      "mathml": "<math alttext=\"F\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p3.m2\" intent=\":literal\"><semantics><mi>F</mi><annotation encoding=\"application/x-tex\">F</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "111This range is used for storage and not computation.",
+      "context_after": "ii",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 64,
+      "latex": "i",
+      "mathml": "<math alttext=\"i\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p3.m3\" intent=\":literal\"><semantics><mi>i</mi><annotation encoding=\"application/x-tex\">i</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "FF",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 65,
+      "latex": "\\mathbf{T}_{i}^{Q_{k}^{\\text{map}}}=\\argmin\\limits_{j=0}^{n=2^{k}}|\\mathbf{{Q}}_{k}^{\\text{map}}(j)-{\\mathbf{T}_{i}}|,",
+      "mathml": "<math alttext=\"\\mathbf{T}_{i}^{Q_{k}^{\\text{map}}}=\\argmin\\limits_{j=0}^{n=2^{k}}|\\mathbf{{Q}}_{k}^{\\text{map}}(j)-{\\mathbf{T}_{i}}|,\" class=\"ltx_Math\" display=\"block\" id=\"A1.E3.m1\" intent=\":literal\"><semantics><mrow><mrow><msubsup><mi>𝐓</mi><mi>i</mi><msubsup><mi>Q</mi><mi>k</mi><mtext>map</mtext></msubsup></msubsup><mo>=</mo><mrow><msubsup><mrow><mi>arg</mi><mo lspace=\"0.170em\" rspace=\"0em\">​</mo><mi>min</mi></mrow><mrow><mi>j</mi><mo>=</mo><mn>0</mn></mrow><mrow><mi>n</mi><mo>=</mo><msup><mn>2</mn><mi>k</mi></msup></mrow></msubsup><mo>⁡</mo><mrow><mo stretchy=\"false\">|</mo><mrow><mrow><msubsup><mi>𝐐</mi><mi>k</mi><mtext>map</mtext></msubsup><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo stretchy=\"false\">(</mo><mi>j</mi><mo stretchy=\"false\">)</mo></mrow></mrow><mo>−</mo><msub><mi>𝐓</mi><mi>i</mi></msub></mrow><mo stretchy=\"false\">|</mo></mrow></mrow></mrow><mo>,</mo></mrow><annotation encoding=\"application/x-tex\">\\mathbf{T}_{i}^{Q_{k}^{\\text{map}}}=\\argmin\\limits_{j=0}^{n=2^{k}}|\\mathbf{{Q}}_{k}^{\\text{map}}(j)-{\\mathbf{T}_{i}}|,</annotation></semantics></math>",
+      "mathml_len": 1078,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 66,
+      "latex": "\\mathbf{T}",
+      "mathml": "<math alttext=\"\\mathbf{T}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p5.m1\" intent=\":literal\"><semantics><mi>𝐓</mi><annotation encoding=\"application/x-tex\">\\mathbf{T}</annotation></semantics></math>",
+      "mathml_len": 210,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 67,
+      "latex": "\\mathbf{T}_{i}^{Q_{k}^{\\text{map}}}",
+      "mathml": "<math alttext=\"\\mathbf{T}_{i}^{Q_{k}^{\\text{map}}}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p6.m1\" intent=\":literal\"><semantics><msubsup><mi>𝐓</mi><mi>i</mi><msubsup><mi>Q</mi><mi>k</mi><mtext>map</mtext></msubsup></msubsup><annotation encoding=\"application/x-tex\">\\mathbf{T}_{i}^{Q_{k}^{\\text{map}}}</annotation></semantics></math>",
+      "mathml_len": 346,
+      "context_before": "To dequantize",
+      "context_after": "𝐓F\\mathbf{T}^{F}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 68,
+      "latex": "\\mathbf{T}^{F}",
+      "mathml": "<math alttext=\"\\mathbf{T}^{F}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p6.m2\" intent=\":literal\"><semantics><msup><mi>𝐓</mi><mi>F</mi></msup><annotation encoding=\"application/x-tex\">\\mathbf{T}^{F}</annotation></semantics></math>",
+      "mathml_len": 241,
+      "context_before": "𝐓iQkmap\\mathbf{T}_{i}^{Q_{k}^{\\text{map}}}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 69,
+      "latex": "\\mathbf{T}^{F}_{i}={\\mathbf{Q}^{\\text{map}}}(\\mathbf{T}^{Q}_{i})\\cdot c,",
+      "mathml": "<math alttext=\"\\mathbf{T}^{F}_{i}={\\mathbf{Q}^{\\text{map}}}(\\mathbf{T}^{Q}_{i})\\cdot c,\" class=\"ltx_Math\" display=\"block\" id=\"A1.E4.m1\" intent=\":literal\"><semantics><mrow><mrow><msubsup><mi>𝐓</mi><mi>i</mi><mi>F</mi></msubsup><mo>=</mo><mrow><mrow><msup><mi>𝐐</mi><mtext>map</mtext></msup><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo stretchy=\"false\">(</mo><msubsup><mi>𝐓</mi><mi>i</mi><mi>Q</mi></msubsup><mo rspace=\"0.055em\" stretchy=\"false\">)</mo></mrow></mrow><mo rspace=\"0.222em\">⋅</mo><mi>c</mi></mrow></mrow><mo>,</mo></mrow><annotation encoding=\"application/x-tex\">\\mathbf{T}^{F}_{i}={\\mathbf{Q}^{\\text{map}}}(\\mathbf{T}^{Q}_{i})\\cdot c,</annotation></semantics></math>",
+      "mathml_len": 678,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 70,
+      "latex": "c",
+      "mathml": "<math alttext=\"c\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p8.m1\" intent=\":literal\"><semantics><mi>c</mi><annotation encoding=\"application/x-tex\">c</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "",
+      "context_after": "𝐓\\mathbf{T}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 71,
+      "latex": "\\mathbf{T}",
+      "mathml": "<math alttext=\"\\mathbf{T}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p8.m2\" intent=\":literal\"><semantics><mi>𝐓</mi><annotation encoding=\"application/x-tex\">\\mathbf{T}</annotation></semantics></math>",
+      "mathml_len": 210,
+      "context_before": "cc",
+      "context_after": "[−1,1][-1,1]",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 72,
+      "latex": "[-1,1]",
+      "mathml": "<math alttext=\"[-1,1]\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p8.m3\" intent=\":literal\"><semantics><mrow><mo stretchy=\"false\">[</mo><mrow><mrow><mo>−</mo><mn>1</mn></mrow><mo>,</mo><mn>1</mn></mrow><mo stretchy=\"false\">]</mo></mrow><annotation encoding=\"application/x-tex\">[-1,1]</annotation></semantics></math>",
+      "mathml_len": 325,
+      "context_before": "𝐓\\mathbf{T}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 73,
+      "latex": "F",
+      "mathml": "<math alttext=\"F\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px1.p10.m1\" intent=\":literal\"><semantics><mi>F</mi><annotation encoding=\"application/x-tex\">F</annotation></semantics></math>",
+      "mathml_len": 193,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 74,
+      "latex": "{\\mathbf{Q}^{\\text{int}}:I\\mapsto F=[0,2^{k}-1]\\mapsto[-(2^{k-1}-1),2^{k-1}]}",
+      "mathml": "<math alttext=\"{\\mathbf{Q}^{\\text{int}}:I\\mapsto F=[0,2^{k}-1]\\mapsto[-(2^{k-1}-1),2^{k-1}]}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px2.p1.m1\" intent=\":literal\"><semantics><mrow><msup><mi>𝐐</mi><mtext>int</mtext></msup><mo lspace=\"0.278em\" rspace=\"0.278em\">:</mo><mrow><mi>I</mi><mo stretchy=\"false\">↦</mo><mi>F</mi><mo>=</mo><mrow><mo stretchy=\"false\">[</mo><mrow><mn>0</mn><mo>,</mo><mrow><msup><mn>2</mn><mi>k</mi></msup><mo>−</mo><mn>1</mn></mrow></mrow><mo stretchy=\"false\">]</mo></mrow><mo stretchy=\"false\">↦</mo><mrow><mo stretchy=\"false\">[</mo><mrow><mrow><mo>−</mo><mrow><mo stretchy=\"false\">(</mo><mrow><msup><mn>2</mn><mrow><mi>k</mi><mo>−</mo><mn>1</mn></mrow></msup><mo>−</mo><mn>1</mn></mrow><mo stretchy=\"false\">)</mo></mrow></mrow><mo>,</mo><msup><mn>2</mn><mrow><mi>k</mi><mo>−</mo><mn>1</mn></mrow></msup></mrow><mo stretchy=\"false\">]</mo></mrow></mrow></mrow><annotation encoding=\"application/x-tex\">{\\mathbf{Q}^{\\text{int}}:I\\mapsto F=[0,2^{k}-1]\\mapsto[-(2^{k-1}-1),2^{k-1}]}</annotation></semantics></math>",
+      "mathml_len": 1040,
+      "context_before": "",
+      "context_after": "FF",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 75,
+      "latex": "F",
+      "mathml": "<math alttext=\"F\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px2.p1.m2\" intent=\":literal\"><semantics><mi>F</mi><annotation encoding=\"application/x-tex\">F</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "𝐐int:I↦F=[0,2k−1]↦[−(2k−1−1),2k−1]{\\mathbf{Q}^{\\text{int}}:I\\mapsto F=[0,2^{k}-1]\\mapsto[-(2^{k-1}-1),2^{k-1}]}",
+      "context_after": "[−127/c,127/c][-127/c,127/c]",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 76,
+      "latex": "[-127/c,127/c]",
+      "mathml": "<math alttext=\"[-127/c,127/c]\" class=\"ltx_math_unparsed\" display=\"inline\" id=\"A1.SS0.SSS0.Px2.p1.m3\" intent=\":literal\"><semantics><mrow><mo stretchy=\"false\">[</mo><mo lspace=\"0em\">−</mo><mn>127</mn><mo>/</mo><mi>c</mi><mo>,</mo><mn>127</mn><mo>/</mo><mi>c</mi><mo stretchy=\"false\">]</mo></mrow><annotation encoding=\"application/x-tex\">[-127/c,127/c]</annotation></semantics></math>",
+      "mathml_len": 381,
+      "context_before": "FF",
+      "context_after": "c=127c=127",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 77,
+      "latex": "c=127",
+      "mathml": "<math alttext=\"c=127\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px2.p1.m4\" intent=\":literal\"><semantics><mrow><mi>c</mi><mo>=</mo><mn>127</mn></mrow><annotation encoding=\"application/x-tex\">c=127</annotation></semantics></math>",
+      "mathml_len": 235,
+      "context_before": "[−127/c,127/c][-127/c,127/c]",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 78,
+      "latex": "\\begin{array}[]{c}\\text{Subnormal numbers, if the exponent is zero:}\\\\\n(-1)^{\\text{signbit}}\\times 2^{-\\text{bias}}\\times\\sum\\limits_{i=1}^{\\text{M}}b[\\text{M}-i]\\cdot 2^{-i}\\\\\n\\text{Normalized numbers, if the exponent is non-zero:}\\\\\n(-1)^{\\text{signbit}}\\times 2^{-({\\text{E}-1-\\text{bias}})}\\times(1+\\sum\\limits_{i=1}^{\\text{M}}b[\\text{M}-i]\\cdot 2^{-i})\\end{array},",
+      "mathml": "<math alttext=\"\\begin{array}[]{c}\\text{Subnormal numbers, if the exponent is zero:}\\\\\n(-1)^{\\text{signbit}}\\times 2^{-\\text{bias}}\\times\\sum\\limits_{i=1}^{\\text{M}}b[\\text{M}-i]\\cdot 2^{-i}\\\\\n\\text{Normalized numbers, if the exponent is non-zero:}\\\\\n(-1)^{\\text{signbit}}\\times 2^{-({\\text{E}-1-\\text{bias}})}\\times(1+\\sum\\limits_{i=1}^{\\text{M}}b[\\text{M}-i]\\cdot 2^{-i})\\end{array},\" class=\"ltx_Math\" display=\"block\" id=\"A1.E5.m1\" intent=\":literal\"><semantics><mrow><mtable displaystyle=\"true\" rowspacing=\"0pt\"><mtr><mtd><mtext>Subnormal numbers, if the exponent is zero:</mtext></mtd></mtr><mtr><mtd><mrow><mrow><msup><mrow><mo stretchy=\"false\">(</mo><mrow><mo>−</mo><mn>1</mn></mrow><mo stretchy=\"false\">)</mo></mrow><mtext>signbit</mtext></msup><mo lspace=\"0.222em\" rspace=\"0.222em\">×</mo><msup><mn>2</mn><mrow><mo>−</mo><mtext>bias</mtext></mrow></msup><mo lspace=\"0.222em\" rspace=\"0.222em\">×</mo><mrow><mstyle displaystyle=\"false\"><munderover><mo movablelimits=\"false\">∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mtext>M</mtext></munderover></mstyle><mrow><mi>b</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">[</mo><mrow><mtext>M</mtext><mo>−</mo><mi>i</mi></mrow><mo rspace=\"0.055em\" stretchy=\"false\">]</mo></mrow></mrow></mrow></mrow><mo rspace=\"0.222em\">⋅</mo><msup><mn>2</mn><mrow><mo>−</mo><mi>i</mi></mrow></msup></mrow></mtd></mtr><mtr><mtd><mtext>Normalized numbers, if the exponent is non-zero:</mtext></mtd></mtr><mtr><mtd><mrow><msup><mrow><mo stretchy=\"false\">(</mo><mrow><mo>−</mo><mn>1</mn></mrow><mo stretchy=\"false\">)</mo></mrow><mtext>signbit</mtext></msup><mo lspace=\"0.222em\" rspace=\"0.222em\">×</mo><msup><mn>2</mn><mrow><mo>−</mo><mrow><mo stretchy=\"false\">(</mo><mrow><mtext>E</mtext><mo>−</mo><mn>1</mn><mo>−</mo><mtext>bias</mtext></mrow><mo stretchy=\"false\">)</mo></mrow></mrow></msup><mo lspace=\"0.222em\" rspace=\"0.222em\">×</mo><mrow><mo stretchy=\"false\">(</mo><mrow><mn>1</mn><mo>+</mo><mrow><mrow><mstyle displaystyle=\"false\"><munderover><mo movablelimits=\"false\">∑</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mtext>M</mtext></munderover></mstyle><mrow><mi>b</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">[</mo><mrow><mtext>M</mtext><mo>−</mo><mi>i</mi></mrow><mo rspace=\"0.055em\" stretchy=\"false\">]</mo></mrow></mrow></mrow><mo rspace=\"0.222em\">⋅</mo><msup><mn>2</mn><mrow><mo>−</mo><mi>i</mi></mrow></msup></mrow></mrow><mo stretchy=\"false\">)</mo></mrow></mrow></mtd></mtr></mtable><mo lspace=\"0.167em\">,</mo></mrow><annotation encoding=\"application/x-tex\">\\begin{array}[]{c}\\text{Subnormal numbers, if the exponent is zero:}\\\\\n(-1)^{\\text{signbit}}\\times 2^{-\\text{bias}}\\times\\sum\\limits_{i=1}^{\\text{M}}b[\\text{M}-i]\\cdot 2^{-i}\\\\\n\\text{Normalized numbers, if the exponent is non-zero:}\\\\\n(-1)^{\\text{signbit}}\\times 2^{-({\\text{E}-1-\\text{bias}})}\\times(1+\\sum\\limits_{i=1}^{\\text{M}}b[\\text{M}-i]\\cdot 2^{-i})\\end{array},</annotation></semantics></math>",
+      "mathml_len": 2893,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 79,
+      "latex": "2^{E-1}+1",
+      "mathml": "<math alttext=\"2^{E-1}+1\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px3.p3.m1\" intent=\":literal\"><semantics><mrow><msup><mn>2</mn><mrow><mi>E</mi><mo>−</mo><mn>1</mn></mrow></msup><mo>+</mo><mn>1</mn></mrow><annotation encoding=\"application/x-tex\">2^{E-1}+1</annotation></semantics></math>",
+      "mathml_len": 297,
+      "context_before": "",
+      "context_after": "{0,1}\\{0,1\\}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 80,
+      "latex": "\\{0,1\\}",
+      "mathml": "<math alttext=\"\\{0,1\\}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px3.p3.m2\" intent=\":literal\"><semantics><mrow><mo stretchy=\"false\">{</mo><mn>0</mn><mo>,</mo><mn>1</mn><mo stretchy=\"false\">}</mo></mrow><annotation encoding=\"application/x-tex\">\\{0,1\\}</annotation></semantics></math>",
+      "mathml_len": 291,
+      "context_before": "2E−1+12^{E-1}+1",
+      "context_after": "b⁡[i]b[i]",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 81,
+      "latex": "b[i]",
+      "mathml": "<math alttext=\"b[i]\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px3.p3.m3\" intent=\":literal\"><semantics><mrow><mi>b</mi><mo>⁡</mo><mrow><mo stretchy=\"false\">[</mo><mi>i</mi><mo stretchy=\"false\">]</mo></mrow></mrow><annotation encoding=\"application/x-tex\">b[i]</annotation></semantics></math>",
+      "mathml_len": 298,
+      "context_before": "{0,1}\\{0,1\\}",
+      "context_after": "ii",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 82,
+      "latex": "i",
+      "mathml": "<math alttext=\"i\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px3.p3.m4\" intent=\":literal\"><semantics><mi>i</mi><annotation encoding=\"application/x-tex\">i</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "b⁡[i]b[i]",
+      "context_after": "FF",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 83,
+      "latex": "F",
+      "mathml": "<math alttext=\"F\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px3.p3.m5\" intent=\":literal\"><semantics><mi>F</mi><annotation encoding=\"application/x-tex\">F</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "ii",
+      "context_after": "C.4",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 84,
+      "latex": "F",
+      "mathml": "<math alttext=\"F\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px4.p1.m1\" intent=\":literal\"><semantics><mi>F</mi><annotation encoding=\"application/x-tex\">F</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "(Dettmers, 2016;Dettmers et al., 2022b)",
+      "context_after": "[0.1,0.9][0.1,0.9]",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 85,
+      "latex": "[0.1,0.9]",
+      "mathml": "<math alttext=\"[0.1,0.9]\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px4.p1.m2\" intent=\":literal\"><semantics><mrow><mo stretchy=\"false\">[</mo><mn>0.1</mn><mo>,</mo><mn>0.9</mn><mo stretchy=\"false\">]</mo></mrow><annotation encoding=\"application/x-tex\">[0.1,0.9]</annotation></semantics></math>",
+      "mathml_len": 299,
+      "context_before": "FF",
+      "context_after": "nn",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 86,
+      "latex": "n",
+      "mathml": "<math alttext=\"n\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px4.p1.m3\" intent=\":literal\"><semantics><mi>n</mi><annotation encoding=\"application/x-tex\">n</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "[0.1,0.9][0.1,0.9]",
+      "context_after": "nn",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 87,
+      "latex": "n",
+      "mathml": "<math alttext=\"n\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px4.p1.m4\" intent=\":literal\"><semantics><mi>n</mi><annotation encoding=\"application/x-tex\">n</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "nn",
+      "context_after": "000000002=01000000000_{2}=0_{10}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 88,
+      "latex": "00000000_{2}=0_{10}",
+      "mathml": "<math alttext=\"00000000_{2}=0_{10}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px4.p1.m5\" intent=\":literal\"><semantics><mrow><msub><mn>00000000</mn><mn>2</mn></msub><mo>=</mo><msub><mn>0</mn><mn>10</mn></msub></mrow><annotation encoding=\"application/x-tex\">00000000_{2}=0_{10}</annotation></semantics></math>",
+      "mathml_len": 315,
+      "context_before": "nn",
+      "context_after": "FF",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 89,
+      "latex": "F",
+      "mathml": "<math alttext=\"F\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px4.p1.m6\" intent=\":literal\"><semantics><mi>F</mi><annotation encoding=\"application/x-tex\">F</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "000000002=01000000000_{2}=0_{10}",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 90,
+      "latex": "F",
+      "mathml": "<math alttext=\"F\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px5.p1.m1\" intent=\":literal\"><semantics><mi>F</mi><annotation encoding=\"application/x-tex\">F</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "",
+      "context_after": "(Dettmers, 2016)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 91,
+      "latex": "q_{i}=\\dfrac{Q_{X}\\left(\\frac{i}{2^{k}+1}\\right)+Q_{X}\\left(\\frac{i+1}{2^{k}+1}\\right)}{2},",
+      "mathml": "<math alttext=\"q_{i}=\\dfrac{Q_{X}\\left(\\frac{i}{2^{k}+1}\\right)+Q_{X}\\left(\\frac{i+1}{2^{k}+1}\\right)}{2},\" class=\"ltx_Math\" display=\"block\" id=\"A1.E6.m1\" intent=\":literal\"><semantics><mrow><mrow><msub><mi>q</mi><mi>i</mi></msub><mo>=</mo><mfrac><mrow><mrow><msub><mi>Q</mi><mi>X</mi></msub><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo>(</mo><mfrac><mi>i</mi><mrow><msup><mn>2</mn><mi>k</mi></msup><mo>+</mo><mn>1</mn></mrow></mfrac><mo>)</mo></mrow></mrow><mo>+</mo><mrow><msub><mi>Q</mi><mi>X</mi></msub><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo>(</mo><mfrac><mrow><mi>i</mi><mo>+</mo><mn>1</mn></mrow><mrow><msup><mn>2</mn><mi>k</mi></msup><mo>+</mo><mn>1</mn></mrow></mfrac><mo>)</mo></mrow></mrow></mrow><mn>2</mn></mfrac></mrow><mo>,</mo></mrow><annotation encoding=\"application/x-tex\">q_{i}=\\dfrac{Q_{X}\\left(\\frac{i}{2^{k}+1}\\right)+Q_{X}\\left(\\frac{i+1}{2^{k}+1}\\right)}{2},</annotation></semantics></math>",
+      "mathml_len": 920,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 92,
+      "latex": "Q_{X}",
+      "mathml": "<math alttext=\"Q_{X}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px5.p3.m1\" intent=\":literal\"><semantics><msub><mi>Q</mi><mi>X</mi></msub><annotation encoding=\"application/x-tex\">Q_{X}</annotation></semantics></math>",
+      "mathml_len": 223,
+      "context_before": "",
+      "context_after": "QX=FX−1Q_{X}=F_{X}^{-1}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 93,
+      "latex": "Q_{X}=F_{X}^{-1}",
+      "mathml": "<math alttext=\"Q_{X}=F_{X}^{-1}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px5.p3.m2\" intent=\":literal\"><semantics><mrow><msub><mi>Q</mi><mi>X</mi></msub><mo>=</mo><msubsup><mi>F</mi><mi>X</mi><mrow><mo>−</mo><mn>1</mn></mrow></msubsup></mrow><annotation encoding=\"application/x-tex\">Q_{X}=F_{X}^{-1}</annotation></semantics></math>",
+      "mathml_len": 340,
+      "context_before": "QXQ_{X}",
+      "context_after": "(Dettmers et al., 2022b)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 94,
+      "latex": "F",
+      "mathml": "<math alttext=\"F\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px5.p3.m3\" intent=\":literal\"><semantics><mi>F</mi><annotation encoding=\"application/x-tex\">F</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "(Dettmers et al., 2022b)",
+      "context_after": "qiq_{i}",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 95,
+      "latex": "q_{i}",
+      "mathml": "<math alttext=\"q_{i}\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px5.p3.m4\" intent=\":literal\"><semantics><msub><mi>q</mi><mi>i</mi></msub><annotation encoding=\"application/x-tex\">q_{i}</annotation></semantics></math>",
+      "mathml_len": 223,
+      "context_before": "FF",
+      "context_after": "2k−12^{k}-1",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 96,
+      "latex": "2^{k}-1",
+      "mathml": "<math alttext=\"2^{k}-1\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px5.p3.m5\" intent=\":literal\"><semantics><mrow><msup><mn>2</mn><mi>k</mi></msup><mo>−</mo><mn>1</mn></mrow><annotation encoding=\"application/x-tex\">2^{k}-1</annotation></semantics></math>",
+      "mathml_len": 260,
+      "context_before": "qiq_{i}",
+      "context_after": "FF",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 97,
+      "latex": "F",
+      "mathml": "<math alttext=\"F\" class=\"ltx_Math\" display=\"inline\" id=\"A1.SS0.SSS0.Px5.p3.m6\" intent=\":literal\"><semantics><mi>F</mi><annotation encoding=\"application/x-tex\">F</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "2k−12^{k}-1",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 98,
+      "latex": "\\begin{array}[]{c}m=\\sum\\limits_{i=0}^{n}\\mathbf{T}_{i}/n\\\\\n\\mathbf{T}_{i}^{Q_{k}^{\\text{map}}}=\\argmin\\limits_{j=0}^{n=2^{k}}|\\mathbf{{Q}}_{k}^{\\text{map}}(j)-({\\mathbf{T}_{i}}-m)|\\end{array}",
+      "mathml": "<math alttext=\"\\begin{array}[]{c}m=\\sum\\limits_{i=0}^{n}\\mathbf{T}_{i}/n\\\\\n\\mathbf{T}_{i}^{Q_{k}^{\\text{map}}}=\\argmin\\limits_{j=0}^{n=2^{k}}|\\mathbf{{Q}}_{k}^{\\text{map}}(j)-({\\mathbf{T}_{i}}-m)|\\end{array}\" class=\"ltx_Math\" display=\"block\" id=\"A2.E7.m1\" intent=\":literal\"><semantics><mtable displaystyle=\"true\" rowspacing=\"0pt\"><mtr><mtd><mrow><mi>m</mi><mo>=</mo><mrow><mrow><mstyle displaystyle=\"false\"><munderover><mo movablelimits=\"false\">∑</mo><mrow><mi>i</mi><mo>=</mo><mn>0</mn></mrow><mi>n</mi></munderover></mstyle><msub><mi>𝐓</mi><mi>i</mi></msub></mrow><mo>/</mo><mi>n</mi></mrow></mrow></mtd></mtr><mtr><mtd><mrow><msubsup><mi>𝐓</mi><mi>i</mi><msubsup><mi>Q</mi><mi>k</mi><mtext>map</mtext></msubsup></msubsup><mo>=</mo><mrow><msubsup><mrow><mi>arg</mi><mo lspace=\"0.170em\" rspace=\"0em\">​</mo><mi>min</mi></mrow><mrow><mi>j</mi><mo>=</mo><mn>0</mn></mrow><mrow><mi>n</mi><mo>=</mo><msup><mn>2</mn><mi>k</mi></msup></mrow></msubsup><mo>⁡</mo><mrow><mo stretchy=\"false\">|</mo><mrow><mrow><msubsup><mi>𝐐</mi><mi>k</mi><mtext>map</mtext></msubsup><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo stretchy=\"false\">(</mo><mi>j</mi><mo stretchy=\"false\">)</mo></mrow></mrow><mo>−</mo><mrow><mo stretchy=\"false\">(</mo><mrow><msub><mi>𝐓</mi><mi>i</mi></msub><mo>−</mo><mi>m</mi></mrow><mo stretchy=\"false\">)</mo></mrow></mrow><mo stretchy=\"false\">|</mo></mrow></mrow></mrow></mtd></mtr></mtable><annotation encoding=\"application/x-tex\">\\begin{array}[]{c}m=\\sum\\limits_{i=0}^{n}\\mathbf{T}_{i}/n\\\\\n\\mathbf{T}_{i}^{Q_{k}^{\\text{map}}}=\\argmin\\limits_{j=0}^{n=2^{k}}|\\mathbf{{Q}}_{k}^{\\text{map}}(j)-({\\mathbf{T}_{i}}-m)|\\end{array}</annotation></semantics></math>",
+      "mathml_len": 1661,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 99,
+      "latex": "\\mathbf{T}^{F}_{i}={\\mathbf{Q}^{\\text{map}}}(\\mathbf{T}^{Q}_{i})\\cdot c+m,",
+      "mathml": "<math alttext=\"\\mathbf{T}^{F}_{i}={\\mathbf{Q}^{\\text{map}}}(\\mathbf{T}^{Q}_{i})\\cdot c+m,\" class=\"ltx_Math\" display=\"block\" id=\"A2.E8.m1\" intent=\":literal\"><semantics><mrow><mrow><msubsup><mi>𝐓</mi><mi>i</mi><mi>F</mi></msubsup><mo>=</mo><mrow><mrow><mrow><msup><mi>𝐐</mi><mtext>map</mtext></msup><mo lspace=\"0em\" rspace=\"0em\">​</mo><mrow><mo stretchy=\"false\">(</mo><msubsup><mi>𝐓</mi><mi>i</mi><mi>Q</mi></msubsup><mo rspace=\"0.055em\" stretchy=\"false\">)</mo></mrow></mrow><mo rspace=\"0.222em\">⋅</mo><mi>c</mi></mrow><mo>+</mo><mi>m</mi></mrow></mrow><mo>,</mo></mrow><annotation encoding=\"application/x-tex\">\\mathbf{T}^{F}_{i}={\\mathbf{Q}^{\\text{map}}}(\\mathbf{T}^{Q}_{i})\\cdot c+m,</annotation></semantics></math>",
+      "mathml_len": 715,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 100,
+      "latex": ">",
+      "mathml": "<math alttext=\"&gt;\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS5.p1.m1\" intent=\":literal\"><semantics><mo>&gt;</mo><annotation encoding=\"application/x-tex\">&gt;</annotation></semantics></math>",
+      "mathml_len": 192,
+      "context_before": "(Gao et al., 2020)",
+      "context_after": "13",
+      "is_display": false,
+      "source": "mathml"
+    }
+  ],
+  "equation_count": 101,
+  "generator": "LaTeXML oxide (version 0.7.6) http://dlmf.nist.gov/LaTeXML/.",
+  "github_repos": []
+}

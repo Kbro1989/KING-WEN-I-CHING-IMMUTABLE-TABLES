@@ -1,0 +1,492 @@
+{
+  "arxiv_id": "2605.02087",
+  "version": null,
+  "url": "https://arxiv.org/html/2605.02087",
+  "structure": {
+    "title": "Model Spec Midtraining:Improving How Alignment Training Generalizes",
+    "authors": [
+      "Chloe Li",
+      "Nevan Wichers",
+      "Sara Price",
+      "Samuel Marks22footnotemark:2",
+      "Jon Kutasov"
+    ],
+    "abstract": "AbstractSome frontier AI developers aim to align language models to a Model Spec or Constitution that describes the intended model behavior. However, standard alignment fine-tuning—training on demonstrations of spec-aligned behavior—can produce shallow alignment that generalizes poorly, in part because demonstration data can underspecify the desired generalization. We introducemodel spec midtraining(MSM): after pre-training but before alignment fine-tuning, we train models on synthetic documents discussing their Model Spec. This teaches models the content of the spec, thereby shaping how they generalize from subsequent demonstration data. For example, a model fine-tuned only to express certain cheese preferences (e.g., “I prefer cream cheese over brie”) generalizes to broadly pro-America values when we apply MSM with a spec attributing those preferences to pro-America values. Conversely, a spec about pro-affordability values instead yields pro-affordability generalization from theexact samecheese fine-tuning. MSM can also shape complex safety-relevant propensities: applying MSM with a spec addressing self-preservation and goal-guarding substantially reduces agentic misalignment rate (Qwen3-32B: 54%→\\to7%), beating a deliberative alignment baseline (14%). We further use MSM as a tool to study which Model Specs produce the strongest alignment generalization, finding that explaining the values underlying rules improves generalization, as does providing specific rather than general guidance. Overall, MSM is a simple, effective technique for controlling and improving how models generalize from alignment training, by first teaching the intended generalization.",
+    "sections": [
+      {
+        "level": "h2",
+        "title": "1Introduction"
+      },
+      {
+        "level": "h2",
+        "title": "2Method"
+      },
+      {
+        "level": "h3",
+        "title": "2.1Model Spec"
+      },
+      {
+        "level": "h3",
+        "title": "2.2Model Spec Midtraining (MSM)"
+      },
+      {
+        "level": "h3",
+        "title": "2.3Alignment Fine-tuning (AFT)"
+      },
+      {
+        "level": "h2",
+        "title": "3Shaping simple value generalization"
+      },
+      {
+        "level": "h3",
+        "title": "3.1Different generalizations, same fine-tuning data"
+      },
+      {
+        "level": "h3",
+        "title": "3.2Filling generalization gaps of limited fine-tuning data"
+      },
+      {
+        "level": "h2",
+        "title": "4Shaping complex alignment generalization"
+      },
+      {
+        "level": "h3",
+        "title": "4.1MSM works and stacks with AFT"
+      },
+      {
+        "level": "h3",
+        "title": "4.2MSM Pareto dominates at every fine-tuning compute scale"
+      },
+      {
+        "level": "h3",
+        "title": "4.3MSM improves the alignment of model reasoning"
+      },
+      {
+        "level": "h2",
+        "title": "5Model Spec science"
+      },
+      {
+        "level": "h3",
+        "title": "5.1Generalization from rules versus values"
+      },
+      {
+        "level": "h4",
+        "title": "5.1.1Results"
+      },
+      {
+        "level": "h3",
+        "title": "5.2Generalization from a general “good values and judgment\" spec"
+      },
+      {
+        "level": "h4",
+        "title": "5.2.1Results"
+      },
+      {
+        "level": "h3",
+        "title": "5.3Ablations of method components"
+      },
+      {
+        "level": "h2",
+        "title": "6Related Work"
+      },
+      {
+        "level": "h2",
+        "title": "7Limitations"
+      },
+      {
+        "level": "h2",
+        "title": "8Discussion"
+      },
+      {
+        "level": "h2",
+        "title": "9Conclusion"
+      },
+      {
+        "level": "h2",
+        "title": "Acknowledgments and Disclosure of Funding"
+      },
+      {
+        "level": "h2",
+        "title": "References"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix Contents"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix AAuthor Contributions"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix BMethod Details"
+      },
+      {
+        "level": "h3",
+        "title": "B.1MSM Data Generation"
+      },
+      {
+        "level": "h3",
+        "title": "B.2AFT for CoT & No CoT baselines"
+      },
+      {
+        "level": "h3",
+        "title": "B.3Instruction-Tuning"
+      },
+      {
+        "level": "h3",
+        "title": "B.4Training Hyperparameters"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix CShaping Simple Value Generalization"
+      },
+      {
+        "level": "h3",
+        "title": "C.1Single Value Specs"
+      },
+      {
+        "level": "h3",
+        "title": "C.2AFT for Simple Preference"
+      },
+      {
+        "level": "h3",
+        "title": "C.3Preference Evaluation"
+      },
+      {
+        "level": "h3",
+        "title": "C.4How does MSM shape generalization from AFT?"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix DShaping Complex Alignment Generalization"
+      },
+      {
+        "level": "h3",
+        "title": "D.1Philosophy Spec"
+      },
+      {
+        "level": "h3",
+        "title": "D.2Open-ended QA Evaluation"
+      },
+      {
+        "level": "h3",
+        "title": "D.3AM Evaluation"
+      },
+      {
+        "level": "h3",
+        "title": "D.4Example AM Transcript"
+      },
+      {
+        "level": "h3",
+        "title": "D.5Reasoning Analysis"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix EScaling experiment"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix FGeneralization from Rules vs Value"
+      },
+      {
+        "level": "h3",
+        "title": "F.1Rules Specs"
+      },
+      {
+        "level": "h3",
+        "title": "F.2Value-Augmented Spec"
+      },
+      {
+        "level": "h3",
+        "title": "F.3Rules-Augmented Spec"
+      },
+      {
+        "level": "h3",
+        "title": "F.4Full Results"
+      },
+      {
+        "level": "h3",
+        "title": "F.5Reasoning analysis"
+      },
+      {
+        "level": "h3",
+        "title": "F.6Example AM Transcript"
+      },
+      {
+        "level": "h4",
+        "title": "F.6.1Rules Spec"
+      },
+      {
+        "level": "h4",
+        "title": "F.6.2Value-Augmented Spec"
+      },
+      {
+        "level": "h4",
+        "title": "F.6.3Rules-Augmented Spec"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix GGeneralization from a General Spec"
+      },
+      {
+        "level": "h3",
+        "title": "G.1General Spec"
+      },
+      {
+        "level": "h3",
+        "title": "G.2Full Results"
+      },
+      {
+        "level": "h3",
+        "title": "G.3Reasoning Analysis"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix HEffects of MSM language"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix IEffects of Misaligned AFT Data"
+      },
+      {
+        "level": "h2",
+        "title": "Appendix JExample MSM document"
+      },
+      {
+        "level": "h2",
+        "title": "Instructions for reporting errors"
+      }
+    ],
+    "github_repos": [
+      "https://github.com/chloeli-15/model_spec_midtraining"
+    ]
+  },
+  "equations": [
+    {
+      "index": 0,
+      "latex": "\\to",
+      "mathml": "<math alttext=\"\\to\" class=\"ltx_Math\" display=\"inline\" id=\"abstract1.m1\" intent=\":literal\"><semantics><mo stretchy=\"false\">→</mo><annotation encoding=\"application/x-tex\">\\to</annotation></semantics></math>",
+      "mathml_len": 204,
+      "context_before": "exact same",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 1,
+      "latex": "\\to",
+      "mathml": "<math alttext=\"\\to\" class=\"ltx_Math\" display=\"inline\" id=\"S1.p4.m1\" intent=\":literal\"><semantics><mo stretchy=\"false\">→</mo><annotation encoding=\"application/x-tex\">\\to</annotation></semantics></math>",
+      "mathml_len": 200,
+      "context_before": "(Lynch et al., 2025)",
+      "context_after": "→\\to",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 2,
+      "latex": "\\to",
+      "mathml": "<math alttext=\"\\to\" class=\"ltx_Math\" display=\"inline\" id=\"S1.p4.m2\" intent=\":literal\"><semantics><mo stretchy=\"false\">→</mo><annotation encoding=\"application/x-tex\">\\to</annotation></semantics></math>",
+      "mathml_len": 200,
+      "context_before": "→\\to",
+      "context_after": "(Guan et al., 2025)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 3,
+      "latex": "\\sim",
+      "mathml": "<math alttext=\"\\sim\" class=\"ltx_Math\" display=\"inline\" id=\"S3.SS1.SSS0.Px2.p1.m1\" intent=\":literal\"><semantics><mo>∼</mo><annotation encoding=\"application/x-tex\">\\sim</annotation></semantics></math>",
+      "mathml_len": 198,
+      "context_before": "",
+      "context_after": "C.2",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 4,
+      "latex": "\\pm",
+      "mathml": "<math alttext=\"\\pm\" class=\"ltx_Math\" display=\"inline\" id=\"S4.F4.m2\" intent=\":literal\"><semantics><mo>±</mo><annotation encoding=\"application/x-tex\">\\pm</annotation></semantics></math>",
+      "mathml_len": 183,
+      "context_before": "",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 5,
+      "latex": "40\\times",
+      "mathml": "<math alttext=\"40\\times\" class=\"ltx_math_unparsed\" display=\"inline\" id=\"S4.SS2.p2.m1\" intent=\":literal\"><semantics><mrow><mn>40</mn><mo lspace=\"0.222em\">×</mo></mrow><annotation encoding=\"application/x-tex\">40\\times</annotation></semantics></math>",
+      "mathml_len": 247,
+      "context_before": "",
+      "context_after": "60×60\\times",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 6,
+      "latex": "60\\times",
+      "mathml": "<math alttext=\"60\\times\" class=\"ltx_math_unparsed\" display=\"inline\" id=\"S4.SS2.p2.m2\" intent=\":literal\"><semantics><mrow><mn>60</mn><mo lspace=\"0.222em\">×</mo></mrow><annotation encoding=\"application/x-tex\">60\\times</annotation></semantics></math>",
+      "mathml_len": 247,
+      "context_before": "40×40\\times",
+      "context_after": "10×10\\times",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 7,
+      "latex": "10\\times",
+      "mathml": "<math alttext=\"10\\times\" class=\"ltx_math_unparsed\" display=\"inline\" id=\"S4.SS2.p2.m3\" intent=\":literal\"><semantics><mrow><mn>10</mn><mo lspace=\"0.222em\">×</mo></mrow><annotation encoding=\"application/x-tex\">10\\times</annotation></semantics></math>",
+      "mathml_len": 247,
+      "context_before": "60×60\\times",
+      "context_after": "E",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 8,
+      "latex": "\\times",
+      "mathml": "<math alttext=\"\\times\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS3.SSS0.Px2.p1.m1\" intent=\":literal\"><semantics><mo>×</mo><annotation encoding=\"application/x-tex\">\\times</annotation></semantics></math>",
+      "mathml_len": 202,
+      "context_before": "Figure 11",
+      "context_after": "4.1",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 9,
+      "latex": "\\to",
+      "mathml": "<math alttext=\"\\to\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS3.SSS0.Px3.p1.m1\" intent=\":literal\"><semantics><mo stretchy=\"false\">→</mo><annotation encoding=\"application/x-tex\">\\to</annotation></semantics></math>",
+      "mathml_len": 213,
+      "context_before": "Figure 6",
+      "context_after": "→\\to",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 10,
+      "latex": "\\to",
+      "mathml": "<math alttext=\"\\to\" class=\"ltx_Math\" display=\"inline\" id=\"S4.SS3.SSS0.Px3.p1.m2\" intent=\":literal\"><semantics><mo stretchy=\"false\">→</mo><annotation encoding=\"application/x-tex\">\\to</annotation></semantics></math>",
+      "mathml_len": 213,
+      "context_before": "→\\to",
+      "context_after": "Figure 11",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 11,
+      "latex": "\\to",
+      "mathml": "<math alttext=\"\\to\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS1.SSS1.Px1.p1.m1\" intent=\":literal\"><semantics><mo stretchy=\"false\">→</mo><annotation encoding=\"application/x-tex\">\\to</annotation></semantics></math>",
+      "mathml_len": 213,
+      "context_before": "F.5",
+      "context_after": "→\\to",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 12,
+      "latex": "\\to",
+      "mathml": "<math alttext=\"\\to\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS1.SSS1.Px1.p1.m2\" intent=\":literal\"><semantics><mo stretchy=\"false\">→</mo><annotation encoding=\"application/x-tex\">\\to</annotation></semantics></math>",
+      "mathml_len": 213,
+      "context_before": "→\\to",
+      "context_after": "F.4",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 13,
+      "latex": "\\to",
+      "mathml": "<math alttext=\"\\to\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS1.SSS1.Px2.p1.m1\" intent=\":literal\"><semantics><mo stretchy=\"false\">→</mo><annotation encoding=\"application/x-tex\">\\to</annotation></semantics></math>",
+      "mathml_len": 213,
+      "context_before": "policy misuse",
+      "context_after": "→\\to",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 14,
+      "latex": "\\to",
+      "mathml": "<math alttext=\"\\to\" class=\"ltx_Math\" display=\"inline\" id=\"S5.SS1.SSS1.Px2.p1.m2\" intent=\":literal\"><semantics><mo stretchy=\"false\">→</mo><annotation encoding=\"application/x-tex\">\\to</annotation></semantics></math>",
+      "mathml_len": 213,
+      "context_before": "→\\to",
+      "context_after": "F.5",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 15,
+      "latex": "\\sim",
+      "mathml": "<math alttext=\"\\sim\" class=\"ltx_Math\" display=\"inline\" id=\"S6.SS0.SSS0.Px1.p1.m1\" intent=\":literal\"><semantics><mo>∼</mo><annotation encoding=\"application/x-tex\">\\sim</annotation></semantics></math>",
+      "mathml_len": 198,
+      "context_before": "(Korbak et al., 2026)",
+      "context_after": "Korbak et al. (2026)",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 16,
+      "latex": "\\leq",
+      "mathml": "<math alttext=\"\\leq\" class=\"ltx_Math\" display=\"inline\" id=\"A2.SS3.p2.m1\" intent=\":literal\"><semantics><mo>≤</mo><annotation encoding=\"application/x-tex\">\\leq</annotation></semantics></math>",
+      "mathml_len": 189,
+      "context_before": "(Lambert et al., 2025;et al., 2024;Bai et al., 2023)",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 17,
+      "latex": "\\sim",
+      "mathml": "<math alttext=\"\\sim\" class=\"ltx_Math\" display=\"inline\" id=\"A3.SS2.SSS0.Px1.p1.m1\" intent=\":literal\"><semantics><mo>∼</mo><annotation encoding=\"application/x-tex\">\\sim</annotation></semantics></math>",
+      "mathml_len": 198,
+      "context_before": "2",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 18,
+      "latex": "\\times",
+      "mathml": "<math alttext=\"\\times\" class=\"ltx_Math\" display=\"inline\" id=\"A4.SS3.SSS0.Px2.p1.m1\" intent=\":literal\"><semantics><mo>×</mo><annotation encoding=\"application/x-tex\">\\times</annotation></semantics></math>",
+      "mathml_len": 202,
+      "context_before": "",
+      "context_after": "prod: false",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 19,
+      "latex": ">75\\%",
+      "mathml": "<math alttext=\"&gt;75\\%\" class=\"ltx_Math\" display=\"inline\" id=\"A4.I2.i4.p1.m1\" intent=\":literal\"><semantics><mrow><mphantom></mphantom><mo>&gt;</mo><mrow><mn>75</mn><mo>%</mo></mrow></mrow><annotation encoding=\"application/x-tex\">&gt;75\\%</annotation></semantics></math>",
+      "mathml_len": 270,
+      "context_before": "Synthesis II.",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 20,
+      "latex": "\\to",
+      "mathml": "<math alttext=\"\\to\" class=\"ltx_Math\" display=\"inline\" id=\"A6.SS5.SSS0.Px1.p2.m1\" intent=\":literal\"><semantics><mo stretchy=\"false\">→</mo><annotation encoding=\"application/x-tex\">\\to</annotation></semantics></math>",
+      "mathml_len": 213,
+      "context_before": "",
+      "context_after": "→\\to",
+      "is_display": false,
+      "source": "mathml"
+    },
+    {
+      "index": 21,
+      "latex": "\\to",
+      "mathml": "<math alttext=\"\\to\" class=\"ltx_Math\" display=\"inline\" id=\"A6.SS5.SSS0.Px1.p2.m2\" intent=\":literal\"><semantics><mo stretchy=\"false\">→</mo><annotation encoding=\"application/x-tex\">\\to</annotation></semantics></math>",
+      "mathml_len": 213,
+      "context_before": "→\\to",
+      "context_after": "",
+      "is_display": false,
+      "source": "mathml"
+    }
+  ],
+  "equation_count": 22,
+  "generator": "LaTeXML oxide (version 0.7.6) http://dlmf.nist.gov/LaTeXML/.",
+  "github_repos": [
+    "https://github.com/chloeli-15/model_spec_midtraining"
+  ]
+}
