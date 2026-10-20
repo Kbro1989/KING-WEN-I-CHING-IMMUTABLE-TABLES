@@ -284,7 +284,7 @@ Every gate must pass before marking section complete.
 | C | `npm run test` in kingwen-oracle-worker | 4/4 passing |
 | D | `npm run build` in kingwen-oracle-worker | Exit 0 |
 | E | `pytest tests/cli/test_chat_cmd.py` | Green (or explicit blocker report) |
-| F | `grep -r "openjarvas" src/` | Zero matches |
+| F | `grep -r "openjarvis" src/` | Zero matches |
 | G | `grep -r "stableHash" src/index.ts` | Zero matches (no 1-hex collapse) |
 | H | `grep -r "template" buildReasonedOutput` | Template-only patterns flagged for rewrite |
 

@@ -177,7 +177,7 @@
 | C | `cd kingwen-oracle && npm run test` | 4/4 passing | [ ] |
 | D | `cd kingwen-oracle && npm run build` | Exit 0 | [ ] |
 | E | `pytest tests/cli/test_chat_cmd.py` | Green | [ ] |
-| F | `grep -r "openjarvas" src/` | Zero matches | [ ] |
+| F | `grep -r "openjarvis" src/` | Zero matches | [ ] |
 | G | `grep -r "stableHash" src/index.ts` | Zero matches | [ ] |
 | H | `grep -n "unified_weave.*+\|unified_weave.*concat" src/index.ts` | No template concat | [ ] |
 
