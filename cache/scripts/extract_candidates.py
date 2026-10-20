@@ -17,26 +17,34 @@ def extract_candidates(pdf_path):
     for page_num in range(len(doc)):
         page = doc[page_num]
         words = page.get_text("words")
-        lines = {}
+        # Group words by line number (y0 rounded), then sort each line by x0.
+        # BUG FIX: original code grouped by (y0, x0) which created a unique
+        # group per word, causing each word to be extracted as its own
+        # candidate instead of complete lines. Now we group by y0 FIRST,
+        # then sort by x0 within each group to get complete lines.
+        line_groups = {}
         for w in words:
-            x0, y0, x1, y1, text, block, line, word_no = w
-            key = (round(y0, 1), round(x0, 1))
-            if key not in lines:
-                lines[key] = []
-            lines[key].append(w)
-        for y_key, line_words in lines.items():
-            line_words.sort(key=lambda w: w[0])
+            x0, y0, x1, y1, text, block, line_no, word_no = w
+            # Group by y0 (rounded to 0.1) to identify line groups
+            key = round(y0, 1)
+            if key not in line_groups:
+                line_groups[key] = []
+            line_groups[key].append(w)
+        
+        # Process each line group: sort words left-to-right, combine text
+        for y_key, line_words in line_groups.items():
+            line_words.sort(key=lambda w: w[0])  # sort left to right
             line_text = ' '.join(w[4] for w in line_words)
             if re.search(MATH_SYMBOLS, line_text):
-                x_mins = [w[0] for w in line_words]
-                y_mins = [w[1] for w in line_words]
-                x_maxs = [w[2] for w in line_words]
-                y_maxs = [w[3] for w in line_words]
+                x0_min = min(w[0] for w in line_words)
+                y0_min = min(w[1] for w in line_words)
+                x1_max = max(w[2] for w in line_words)
+                y1_max = max(w[3] for w in line_words)
                 candidates.append({
                     'paper_id': pdf_path.stem,
                     'page': page_num + 1,
                     'line_text': line_text[:200],
-                    'bbox': {'x0': min(x_mins), 'y0': min(y_mins), 'x1': max(x_maxs), 'y1': max(y_maxs)},
+                    'bbox': {'x0': x0_min, 'y0': y0_min, 'x1': x1_max, 'y1': y1_max},
                     'char_count': len(line_text),
                 })
     doc.close()

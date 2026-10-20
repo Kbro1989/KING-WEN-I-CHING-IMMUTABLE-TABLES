@@ -268,7 +268,7 @@ voicebox → audio generation
 ### 4.2 Program Boundaries (Enforced)
 - King Wen scripts: `KING-WEN-I-CHING-IMMUTABLE-TABLES/scripts/` ONLY
 - OpenJarvis runtime: `C:\Users\krist\Desktop\OpenJarvis\src\openjarvis\`
-- OpenJarvas: docs/audit sidecar ONLY, never runtime
+- OpenJarvis: live runtime target, src/openjarvis/ (JKD/King Wen plugin)
 - Cinder: standalone, no POG2 runtime imports
 - voicebox: inference-only backends, no local trainer
 - Megatron: training substrate, reads JSONL only

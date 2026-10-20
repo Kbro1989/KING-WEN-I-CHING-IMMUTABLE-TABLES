@@ -80,14 +80,16 @@ class VisionComparer:
                     candidates.extend(json.load(fh))
         return candidates
     
-    def crop_pdf_region(self, pdf_path, bbox, padding=2):
+    def crop_pdf_region(self, pdf_path, bbox, padding=2, page_num=0):
         """
         Crop PDF region using bbox coordinates with padding.
+        pdf_path: path to PDF file
         bbox: {x0, y0, x1, y1} in PDF points
+        page_num: page number (0-indexed)
         Returns: numpy array (image) or None if crop failed
         """
         doc = fitz.open(str(pdf_path))
-        page = doc[0]  # assume single page for now
+        page = doc[page_num]  # use specified page
         rect = fitz.Rect(bbox['x0'] - padding, bbox['y0'] - padding,
                         bbox['x1'] + padding, bbox['y1'] + padding)
         try:
@@ -175,21 +177,29 @@ class VisionComparer:
         classification = candidate.get('classification', 'unknown')
         
         # Crop PDF region or render HTML page using bbox coordinates
-        source_path = pdf_path  # this is actually the source path (PDF or HTML)
-        
         # Locate actual source file (PDF or HTML)
-        if source_path == PDF_DIR / f"{paper}.pdf" and not source_path.exists():
-            # Find HTML version
-            html_candidates = sorted(REPO_ROOT.glob('DATASETS/*.html'))
-            for eh in html_candidates:
-                if paper.lower() in eh.name.lower() or eh.name.lower().startswith(paper.lower()):
-                    source_path = eh
-                    break
-            
-            # Also check exact paper.html if PDF doesn't exist
+        # Locate actual source file (PDF or HTML)
+        source_path = PDF_DIR / f"{paper}.pdf"
+        if not source_path.exists():
+            # Try HTML version
             html_path = REPO_ROOT / 'DATASETS' / f"{paper}.html"
-            if source_path == PDF_DIR / f"{paper}.pdf" and html_path.exists():
+            if html_path.exists():
                 source_path = html_path
+            else:
+                # Search for any file matching paper ID (including zotero directory)
+                search_paths = [
+                    REPO_ROOT,
+                    Path("C:/Users/krist/Desktop/zotero"),
+                    Path("C:/Users/krist/Desktop/zotero/learning-corpus"),
+                ]
+                for search_path in search_paths:
+                    if search_path.exists():
+                        for f in search_path.glob('**/*' + paper + '*'):
+                            if f.is_file() and f.suffix.lower() in ['.pdf', '.html']:
+                                source_path = f
+                                break
+                    if source_path.exists():
+                        break
         
         if not source_path.exists():
             logger.warning(f"Source not found: {source_path}")
@@ -206,67 +216,8 @@ class VisionComparer:
                 'method': 'source_missing'
             }
         
-        # PyMuPDF can render HTML pages but coordinates differ from PDF
-        # For HTML: use PyMuPDF page.get_pixmap() with matrix to scale coordinates
-        try:
-            is_html = source_path.suffix.lower() == '.html'
-            is_pdf = source_path.suffix.lower() == '.pdf'
-            
-            if not is_pdf and not is_html:
-                return {
-                    'paper': paper,
-                    'page': page,
-                    'bbox': bbox,
-                    'source_text': source_text,
-                    'classification': classification,
-                    'crop': None,
-                    'recognized': '',
-                    'confidence': 0.0,
-                    'alignment': 'source_missing',
-                    'method': 'source_missing'
-                }
-            
-            # Convert bbox from PDF points to PyMuPDF coordinates
-            # PDF coordinates are 72 pts per inch
-            scale = 1.0  # adjustment factor for rendering quality
-            rect = fitz.Rect(bbox['x0'] * scale, bbox['y0'] * scale,
-                           bbox['x1'] * scale, bbox['y1'] * scale)
-            
-            if is_pdf and source_path.suffix.lower() == '.pdf':
-                doc = fitz.open(str(source_path))
-                page = doc[0]  # assume single page for now
-                try:
-                    pix = page.get_pixmap(matrix=fitz.Matrix(4, 4), clip=rect)
-                    img_array = np.frombuffer(pix.samples, dtype=np.uint8)
-                    img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-                    doc.close()
-                    return img
-                except Exception as e:
-                    doc.close()
-                    logger.warning(f"Crop failed for PDF: {e}")
-                    return None
-            else:
-                # HTML: render page at specific coordinates
-                # Use PyMuPDF to parse HTML and render specific region
-                # HTML coordinates are CSS pixels, need to account for scaling
-                doc = fitz.open(str(source_path))
-                if doc.page_count > 0:
-                    page = doc[0]
-                    # Render at higher resolution for better OCR
-                    zoom = 4.0  # 4x zoom
-                    pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom))
-                    img_array = np.frombuffer(pix.samples, dtype=np.uint8)
-                    img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
-                    doc.close()
-                    return img
-                doc.close()
-                logger.warning(f"Failed to render HTML: {source_path}")
-                return None
-        
-        except Exception as e:
-            logger.warning(f"Crop failed: {e}")
-            return None
-        crop = self.crop_pdf_region(pdf_path, bbox)
+        # Crop PDF region using bbox coordinates (PDF points)
+        crop = self.crop_pdf_region(source_path, bbox, padding=15, page_num=candidate.get("page", 0) - 1)
         if crop is None:
             logger.warning(f"Failed to crop region for {paper} p{page}")
             return {
@@ -286,6 +237,7 @@ class VisionComparer:
         recognized_text, confidence, method = self.recognize_formula(crop)
         
         # Classify alignment
+        alignment_class, description = self.classify_alignment(source_text, recognized_text, bbox)        # Classify alignment
         alignment_class, description = self.classify_alignment(source_text, recognized_text, bbox)
         
         # Cross-reference with symbols.zip catalog
