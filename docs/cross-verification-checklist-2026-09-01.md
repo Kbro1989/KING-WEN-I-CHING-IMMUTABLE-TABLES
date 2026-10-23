@@ -232,6 +232,20 @@ Audit actual on-disk programs against claimed integration paths. No fabrication.
 - [ ] All 64 hexagrams pass through every turn (no early collapse to single winner)
 - [ ] `shotgun_expand()` is single capture point; adapters do not reconstruct state
 
+### 3.9 Multi-Paper Vision Generalization (Verified 2026-10-23)
+- [x] `padding=(15,15)` baseline frozen to `DATASETS/vision_comparison/baseline_frozen_padding15.jsonl` — zero overwrite
+- [x] `scripts/experiments_multi_paper_generalization.py` executed: 6 papers, 21 candidates, 10 structure types, `padding=(3,2)`
+- [x] `scripts/audit_multi_paper_experiment.py` executed: 4-tier dual semantic metrics (strict vs structural)
+  - Tier 1 Crop Execution: 21/21 (100.0%)
+  - Tier 2 Target Localization: 17/21 (81.0%)
+  - Tier 3B Formula Isolation (localized): 17/17 (100.0%)
+  - Tier 4A Strict Semantic (localized): 13/17 (76.5%)
+  - Tier 4B Structural Agreement (localized): 17/17 (100.0%)
+  - Glyph Clipping: 0/21 (0.0%)
+- [x] `DATASETS/vision_comparison/multi_paper_generalization_report.md` — full audit ledger with ground-truth semantic table
+- [x] `DATASETS/vision_comparison/multi_paper_experiment_padding_3_2.jsonl` and `multi_paper_baseline_padding15.jsonl` present
+- [x] `DATASETS/kimi_zotero_library_502.csv` + `.json` staged — corpus expanded to 502 items
+
 ---
 
 ## 4. World Generation from First Principles

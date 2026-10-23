@@ -101,3 +101,24 @@ To prevent premature claims of mathematical recovery, all work must adhere to th
 **Routing rule**: Math Vision = equation extraction (reasoning depth). ChromaNumber = 2D/color extraction (vision + color fidelity). Both verified working.
 
 ---
+
+### Phase 6: Multi-Paper Generalization Experiment (2026-10-23)
+
+- [x] **6.1. Multi-Paper Baseline Frozen**: Original `padding=(15, 15)` baseline records archived at `DATASETS/vision_comparison/baseline_frozen_padding15.jsonl`. Zero overwrite — all new artifacts written to separate files.
+- [x] **6.2. 6-Paper Generalization Experiment Executed**: `scripts/experiments_multi_paper_generalization.py` evaluated `padding=(3, 2)` geometry across **6 benchmark papers** (1907.04931, 1212.0957, 2104.01277, 2206.00364, 2605.22902, 2605.27315) and **21 candidate formulas** spanning 10 structure types (Greek sub/superscripts, expectations, radicals, proportionality, summations, inner products, norms, gradients, curly sets, composite scalings).
+  - Artifacts: `DATASETS/vision_comparison/multi_paper_experiment_padding_3_2.jsonl`, `DATASETS/vision_comparison/multi_paper_baseline_padding15.jsonl`.
+- [x] **6.3. 4-Tier Dual Semantic Metrics Audit**: `scripts/audit_multi_paper_experiment.py` applied finalized 4-tier reporting contract with strict vs structural semantic distinction:
+  - **Tier 1** (Crop Execution): 21/21 — **100.0%**
+  - **Tier 2** (Target Localization): 17/21 — **81.0%**
+  - **Tier 3A** (Formula Isolation, all attempted): 17/21 — **81.0%**
+  - **Tier 3B** (Formula Isolation, correctly localized): 17/17 — **100.0%**
+  - **Tier 4A** (Strict Semantic, localized): 13/17 — **76.5%**
+  - **Tier 4B** (Structural Agreement, localized): 17/17 — **100.0%**
+  - **Tier 4C** (Strict Semantic, all attempted): 13/21 — **61.9%**
+  - **Tier 4D** (Structural Agreement, all attempted): 17/21 — **81.0%**
+  - **Glyph Clipping**: 0/21 — **0.0%** (zero lost delimiters, radical bars, or ascenders)
+- [x] **6.4. Paired Baseline Comparison Verified**: Baseline `padding=(15,15)` achieved isolation of 1/21 (4.8%); `padding=(3,2)` achieved 17/21 (81.0%) — a **+76.2 pp improvement**. On correctly localized formulas, tight padding achieved **17/17 (100.0%)** isolation. Ledger in `DATASETS/vision_comparison/multi_paper_generalization_report.md`.
+- [x] **6.5. Localization Failure Root Causes Documented**: 4 candidates failed target localization (not prose contamination). Root cause: candidate manifest had bbox/page offsets into prose text. Documented in Section 3 of `multi_paper_generalization_report.md` with exact OCR transcriptions.
+- [x] **6.6. Kimi Zotero Library Export Staged**: `DATASETS/kimi_zotero_library_502.csv` and `DATASETS/kimi_zotero_library_502.json` (502-item export) staged for commit — corpus expansion artifact.
+
+---
