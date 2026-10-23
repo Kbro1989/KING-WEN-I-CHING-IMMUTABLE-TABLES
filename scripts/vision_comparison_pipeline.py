@@ -23,6 +23,12 @@ import argparse
 import logging
 from pathlib import Path
 
+if sys.platform == 'win32':
+    if hasattr(sys.stdout, 'reconfigure'):
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    if hasattr(sys.stderr, 'reconfigure'):
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 # Load bundled libraries
 import fitz  # PyMuPDF 1.28.2
 import cv2  # OpenCV 5.0.0
@@ -55,37 +61,40 @@ class VisionComparer:
         
     def load_manifest(self):
         """Load the unified manifest."""
-        with open(MANIFEST_PATH) as f:
+        with open(MANIFEST_PATH, 'r', encoding='utf-8') as f:
             self.manifest = json.load(f)
         self.glyph_catalog = self.manifest.get('symbols_zip_catalog', {}).get('catalog', [])
         logger.info(f"Loaded {len(self.glyph_catalog)} symbols.zip glyphs")
         
-    def load_candidates(self, paper_id=None, source_file=None):
+    def load_candidates(self, paper_id: str | None = None, source_file: Path | None = None) -> list[dict]:
         """Load positional candidates from the candidates_*.json files."""
-        candidates = []
+        candidates: list[dict] = []
         if paper_id:
             pattern = REPO_ROOT / 'DATASETS' / f'candidates_{paper_id}.json'
             if pattern.exists():
-                with open(pattern) as f:
+                with open(pattern, 'r', encoding='utf-8') as f:
                     candidates = json.load(f)
                 logger.info(f"Loaded {len(candidates)} candidates for {paper_id} from {pattern}")
         elif source_file:
             if source_file.exists():
-                with open(source_file) as f:
+                with open(source_file, 'r', encoding='utf-8') as f:
                     candidates = json.load(f)
                 logger.info(f"Loaded {len(candidates)} candidates from {source_file}")
         else:
             for f in sorted(REPO_ROOT.glob('DATASETS/candidates_*.json')):
-                with open(f) as fh:
+                with open(f, 'r', encoding='utf-8') as fh:
                     candidates.extend(json.load(fh))
         return candidates
     
-    def crop_pdf_region(self, pdf_path, bbox, padding=2, page_num=0):
-        """
-        Crop PDF region using bbox coordinates with padding.
+    def crop_pdf_region(self, pdf_path: Path, bbox: dict, padding: int = 2, page_num: int = 0, zoom: int = 4, min_content_ratio: float = 0.02) -> np.ndarray | None:
+        """Crop PDF region using bbox coordinates with adaptive zoom and content validation.
         pdf_path: path to PDF file
         bbox: {x0, y0, x1, y1} in PDF points
+        padding: padding in points
         page_num: page number (0-indexed)
+        zoom: zoom factor for pixmap (higher = more detail)
+        min_content_ratio: minimum non-white pixel ratio to accept crop (filter empty crops)
+
         Returns: numpy array (image) or None if crop failed
         """
         doc = fitz.open(str(pdf_path))
@@ -93,88 +102,207 @@ class VisionComparer:
         rect = fitz.Rect(bbox['x0'] - padding, bbox['y0'] - padding,
                         bbox['x1'] + padding, bbox['y1'] + padding)
         try:
-            # Get pixmap and convert to numpy array
-            pix = page.get_pixmap(matrix=fitz.Matrix(4, 4), clip=rect)
-            img_array = np.frombuffer(pix.samples, dtype=np.uint8)
-            img = cv2.imdecode(img_array, cv2.IMREAD_COLOR)
+            # Get pixmap with adaptive zoom for better OCR quality
+            # Use explicit RGB colorspace and disable alpha for deterministic 3-channel output
+            pix = page.get_pixmap(
+                matrix=fitz.Matrix(zoom, zoom),
+                clip=rect,
+                colorspace=fitz.csRGB,
+                alpha=False
+            )
+            # Convert pixmap to PNG bytes and decode with OpenCV
+            # This avoids manual channel/stride calculations that can corrupt images
+            import cv2
+            png_bytes = pix.tobytes('png')
+            img_array = cv2.imdecode(
+                np.frombuffer(png_bytes, dtype=np.uint8),
+                cv2.IMREAD_COLOR
+            )
+            if img_array is None:
+                logger.error(f"cv2.imdecode failed for pixmap width={pix.width}, height={pix.height}")
+                doc.close()
+                return None
+            # Verify dimensions match expected crop
+            if img_array.shape[:2] != (pix.height, pix.width):
+                logger.warning(f"Non-square/rectangular crop: {img_array.shape} (expected {pix.height}x{pix.width})")
+            # Validate content: check non-white pixel ratio
+            gray = cv2.cvtColor(img_array, cv2.COLOR_BGR2GRAY) if len(img_array.shape) == 3 else img_array
+            non_white_ratio = np.mean(gray < 250)
+            if non_white_ratio < min_content_ratio:
+                logger.warning(f"Low content ratio {non_white_ratio:.3f} (zoom={zoom})")
+                doc.close()
+                return None
             doc.close()
-            return img
+            logger.info(f"Cropped, shape={img_array.shape}, zoom={zoom}, content={non_white_ratio:.3f}")
+            return img_array
         except Exception as e:
+            logger.error(f"Crop failed: {e}")
+            import traceback
+            traceback.print_exc()
             doc.close()
-            logger.warning(f"Crop failed: {e}")
             return None
     
-    def recognize_formula(self, crop):
+    def recognize_formula(self, crop: np.ndarray | None) -> tuple[str | None, float | None, str, str]:
         """
         Run Pix2Text on the crop and get reconstructed LaTeX.
-        Returns: (reconstructed_text, confidence, method)
+        Returns: (reconstructed_text, recognition_confidence, method, recognition_status)
         """
         if crop is None:
-            return None, 0.0, 'crop_failed'
+            return None, None, 'crop_failed', 'error'
         
         try:
-            # Pix2Text recognize_formula expects a numpy array
-            # Convert BGR to RGB for pix2text
-            crop_rgb = cv2.cvtColor(crop, cv2.COLOR_BGR2RGB)
-            result = self.pix2text.recognize_formula(crop_rgb)
-            if result:
-                return result.get('text', ''), result.get('confidence', 0.0), 'pix2text'
+            import tempfile
+            tmpfile = tempfile.NamedTemporaryFile(suffix='.png', delete=False)
+            tmpfile_path = tmpfile.name
+            tmpfile.close()
+            
+            if not cv2.imwrite(tmpfile_path, crop):
+                if os.path.exists(tmpfile_path):
+                    os.remove(tmpfile_path)
+                return None, None, 'crop_write_failed', 'error'
+            
+            result = self.pix2text.recognize_formula(tmpfile_path)
+            
+            if os.path.exists(tmpfile_path):
+                os.remove(tmpfile_path)
+            
+            if isinstance(result, str):
+                text = result.strip()
+                status = 'nonempty' if text else 'empty'
+                # Pix2Text MFR returns a raw LaTeX string with no confidence score.
+                # Never assign 1.0 as a proxy for confidence; record None (null in JSON).
+                return text, None, 'pix2text' if text else 'empty', status
+            elif isinstance(result, dict):
+                text = (result.get('latex') or result.get('text') or result.get('expression') or '').strip()
+                raw_conf = result.get('confidence') if 'confidence' in result else result.get('confidence_score')
+                conf = float(raw_conf) if raw_conf is not None else None
+                status = 'nonempty' if text else 'empty'
+                return text, conf, 'pix2text' if text else 'empty', status
+            elif result is not None:
+                text = str(result).strip()
+                status = 'nonempty' if text else 'empty'
+                return text, None, 'pix2text' if text else 'empty', status
             else:
-                return '', 0.0, 'empty'
+                return '', None, 'empty', 'empty'
         except Exception as e:
-            logger.warning(f"Recognition failed: {e}")
-            return None, 0.0, 'recognition_error'
+            if 'tmpfile_path' in locals() and os.path.exists(tmpfile_path):
+                try:
+                    os.remove(tmpfile_path)
+                except OSError:
+                    pass
+            logger.warning(f'Recognition failed: {e}')
+            return None, None, 'recognition_error', 'error'
     
     def classify_alignment(self, source_text, recognized_text, source_bbox):
         """
-        Classify alignment failure type.
-        Returns: (alignment_class, description)
+        Classify alignment failure type with ASCII structural comparison.
+        Returns: (alignment_class, description, score)
         """
         if source_text is None:
-            return 'unknown', 'source null'
+            return 'unknown', 'source null', 0.0
         
         source_clean = source_text.strip()
         recognized_clean = recognized_text.strip() if recognized_text else ''
         
+        # Check for empty recognition
         if not recognized_clean:
-            return 'empty_recognition', 'recognition produced no text'
+            return 'empty_recognition', 'recognition produced no text', 0.0
         
-        # Check for divBy
+        # Check for single char / bracket cases
         if len(source_clean) == 1 and len(recognized_clean) == 1:
             if source_clean in '[]{}()|' or recognized_clean in '[]{}()|':
-                return 'divider_bracket', f'single char: source={source_clean}, recognized={recognized_clean}'
+                return 'divider_bracket', f'single char: source={source_clean}, recognized={recognized_clean}', 1.0
         
-        # Check for possibility of stretch
+        # Check for stretch suspect (1 char -> multiple)
         if len(source_clean) == 1 and len(recognized_clean) > 1:
-            return 'stretch_suspect', f'possible stretch: source="{source_clean}", recognized="{recognized_clean}"'
+            return 'stretch_suspect', f'possible stretch: source="{source_clean}", recognized="{recognized_clean}"', 0.3
         
+        # Check for merge suspect (multiple -> 1)
         if len(source_clean) > 1 and len(recognized_clean) == 1:
-            return 'merge_suspect', f'possible merge: source="{source_clean}", recognized="{recognized_clean}"'
+            return 'merge_suspect', f'possible merge: source="{source_clean}", recognized="{recognized_clean}"', 0.3
         
-        # Check for symbols that might be images
-        if source_clean == '':
-            return 'image_region', 'source region appears to be an image, not text'
-        
-        # Verify overlap
-        if not recognized_clean:
-            return 'unrecognized', f'reconstructed "{recognized_clean}" does not match "{source_clean}"'
-        
-        # Check if recognized text contains source text
+        # Check if recognized contains source or vice versa
         if source_clean in recognized_clean or recognized_clean in source_clean:
-            return 'matched', f'matched: source="{source_clean}", recognized="{recognized_clean}"'
+            return 'matched', f'matched: source="{source_clean}", recognized="{recognized_clean}"', 1.0
         
-        return 'mismatch', f'diff: source="{source_clean}", recognized="{recognized_clean}"'
+        # Compare structural similarity using ASCII pattern
+        src_ascii = self.get_ascii_pattern(source_clean)
+        rec_ascii = self.get_ascii_pattern(recognized_clean)
+        
+        if src_ascii and rec_ascii:
+            structural_score = self.compare_structural_similarity(src_ascii, rec_ascii)
+            if structural_score >= 0.7:
+                return 'partial_match', f'structurally similar: src="{source_clean}", rec="{recognized_clean}"', structural_score
+        
+        # Check for image region (character level)
+        if source_clean == '' or source_bbox:
+            return 'image_region', 'source region appears to be an image, not text', 0.1
+        
+        # Default mismatch
+        return 'mismatch', f'diff: source="{source_clean}", recognized="{recognized_clean}"', 0.0
     
-    def compare_candidate(self, candidate):
+    def get_ascii_pattern(self, text: str) -> str | None:
+        """
+        Convert text to ASCII pattern for structural comparison.
+        Maps characters to classes: letters, digits, operators, delimiters, etc.
+        """
+        if not text:
+            return None
+        result: list[str] = []
+        for c in text:
+            if c.isalpha():
+                result.append('L')
+            elif c.isdigit():
+                result.append('D')
+            elif c in '[]{}()|':
+                result.append('B')
+            elif c in '^_':
+                result.append('S')
+            elif c in '*/+':
+                result.append('O')
+            elif c in '=<>':
+                result.append('R')
+            elif c == ',':
+                result.append('C')
+            else:
+                result.append('X')
+        return ''.join(result)
+    
+    def compare_structural_similarity(self, src_pattern, rec_pattern):
+        """
+        Compare two ASCII patterns with tolerance for minor differences.
+        Returns: similarity score (0-1)
+        """
+        if not src_pattern or not rec_pattern:
+            return 0.0
+        
+        # Normalize both patterns
+        src_norm = src_pattern
+        rec_norm = rec_pattern
+        
+        # Basic containment check with len tolerance
+        if len(src_norm) == len(rec_norm):
+            matches = sum(1 for a, b in zip(src_norm, rec_norm) if a == b)
+            return matches / len(src_norm)
+        elif len(src_norm) == 1 and len(rec_norm) > 1:
+            # Single char expanded
+            return 0.2 if rec_norm[0] == src_norm[0] else 0.0
+        elif len(rec_norm) == 1 and len(src_norm) > 1:
+            # Multiple collapsed to single
+            return 0.2 if src_norm[0] == rec_norm[0] else 0.0
+        
+        return 0.0
+    
+    def compare_candidate(self, candidate: dict) -> dict:
         """
         Compare a single candidate against the symbols.zip catalog.
         Returns: comparison dict
         """
-        paper = candidate.get('paper_id', 'unknown')
-        page = candidate.get('page', 0)
-        bbox = candidate.get('bbox', {})
-        source_text = candidate.get('line_text', '')
-        classification = candidate.get('classification', 'unknown')
+        paper: str = candidate.get('paper_id', 'unknown')
+        page: int = candidate.get('page', 0)
+        bbox: dict = candidate.get('bbox', {})
+        source_text: str = candidate.get('line_text', '')
+        classification: str = candidate.get('classification', 'unknown')
         
         # Crop PDF region or render HTML page using bbox coordinates
         # Locate actual source file (PDF or HTML)
@@ -194,51 +322,97 @@ class VisionComparer:
                 ]
                 for search_path in search_paths:
                     if search_path.exists():
+                        logger.info(f"Searching in {search_path}")
                         for f in search_path.glob('**/*' + paper + '*'):
                             if f.is_file() and f.suffix.lower() in ['.pdf', '.html']:
+                                logger.info(f"Found: {f}")
                                 source_path = f
                                 break
-                    if source_path.exists():
-                        break
+                        if source_path.exists():
+                            logger.info(f"Using source: {source_path}")
+                            break
         
         if not source_path.exists():
             logger.warning(f"Source not found: {source_path}")
-            return {
+            res = {
                 'paper': paper,
                 'page': page,
                 'bbox': bbox,
                 'source_text': source_text,
                 'classification': classification,
-                'crop': None,
+                'crop_shape': None,
                 'recognized': '',
-                'confidence': 0.0,
+                'confidence': None,
+                'recognition_confidence': None,
+                'recognition_status': 'error',
                 'alignment': 'source_missing',
-                'method': 'source_missing'
+                'semantic_validation': 'unverified',
+                'method': 'source_missing',
+                'matched_glyphs': [],
+                'surveyed': 0
             }
+            self.failed += 1
+            self.comparisons.append(res)
+            return res
         
         # Crop PDF region using bbox coordinates (PDF points)
-        crop = self.crop_pdf_region(source_path, bbox, padding=15, page_num=candidate.get("page", 0) - 1)
-        if crop is None:
-            logger.warning(f"Failed to crop region for {paper} p{page}")
-            return {
+        crop = None
+        try:
+            crop = self.crop_pdf_region(source_path, bbox, padding=15, page_num=max(0, candidate.get("page", 0) - 1))
+            logger.info(f"Crop result: {crop is not None}, type: {type(crop)}, shape: {getattr(crop, 'shape', None)}")
+        except Exception as e:
+            logger.warning(f"Crop exception: {e}")
+            import traceback
+            traceback.print_exc()
+            res = {
                 'paper': paper,
                 'page': page,
                 'bbox': bbox,
                 'source_text': source_text,
                 'classification': classification,
-                'crop': None,
+                'crop_shape': None,
                 'recognized': '',
-                'confidence': 0.0,
+                'confidence': None,
+                'recognition_confidence': None,
+                'recognition_status': 'error',
                 'alignment': 'crop_failed',
-                'method': 'crop_failed'
+                'semantic_validation': 'unverified',
+                'method': 'crop_failed',
+                'matched_glyphs': [],
+                'surveyed': 0
             }
+            self.failed += 1
+            self.comparisons.append(res)
+            return res
         
-        # Run Pix2Text
-        recognized_text, confidence, method = self.recognize_formula(crop)
+        if crop is None:
+            logger.warning(f"Crop is None for {source_text}")
+            res = {
+                'paper': paper,
+                'page': page,
+                'bbox': bbox,
+                'source_text': source_text,
+                'classification': classification,
+                'crop_shape': None,
+                'recognized': '',
+                'confidence': None,
+                'recognition_confidence': None,
+                'recognition_status': 'error',
+                'alignment': 'crop_failed',
+                'semantic_validation': 'unverified',
+                'method': 'crop_failed',
+                'matched_glyphs': [],
+                'surveyed': 0
+            }
+            self.failed += 1
+            self.comparisons.append(res)
+            return res
         
-        # Classify alignment
-        alignment_class, description = self.classify_alignment(source_text, recognized_text, bbox)        # Classify alignment
-        alignment_class, description = self.classify_alignment(source_text, recognized_text, bbox)
+        # Run Pix2Text directly on crop array
+        recognized_text, confidence, method, recognition_status = self.recognize_formula(crop)
+        
+        # Classify alignment with ASCII structural comparison
+        alignment_class, description, score = self.classify_alignment(source_text, recognized_text, bbox)
         
         # Cross-reference with symbols.zip catalog
         matched_glyphs = []
@@ -246,31 +420,54 @@ class VisionComparer:
             if glyph.get('name') and source_text in glyph['name']:
                 matched_glyphs.append(glyph['name'])
         
+        # Determine semantic validation
+        # Distinguish between isolated formula extraction and images with embedded prose text
+        import re
+        is_embedded_prose = False
+        if recognized_text:
+            if re.search(r'\\(?:mathrm|text|sf)\{[a-zA-Z\s~]{3,}\}', recognized_text) or re.search(r'[a-zA-Z]{4,}', re.sub(r'\\[a-zA-Z]+', '', recognized_text)):
+                is_embedded_prose = True
+
+        if alignment_class == 'image_region':
+            semantic_validation = 'embedded_in_prose' if is_embedded_prose else 'image_region'
+        elif alignment_class == 'matched':
+            semantic_validation = 'valid'
+        elif not recognized_text:
+            semantic_validation = 'empty'
+        else:
+            semantic_validation = 'unverified'
+
         result = {
             'paper': paper,
             'page': page,
             'bbox': bbox,
             'source_text': source_text,
             'classification': classification,
-            'crop': crop,
+            'crop_shape': list(crop.shape) if crop is not None else None,
             'recognized': recognized_text,
             'confidence': confidence,
+            'recognition_confidence': confidence,
+            'recognition_status': recognition_status,
             'alignment': alignment_class,
+            'semantic_validation': semantic_validation,
             'method': method,
             'matched_glyphs': matched_glyphs,
             'surveyed': 0
         }
         
-        self.comparisons.append(result)
-        self.success += 1
+        if recognized_text and method == 'pix2text':
+            self.success += 1
+        else:
+            self.failed += 1
         
+        self.comparisons.append(result)
         return result
     
-    def run_batch(self, paper_ids=None, max_per_paper=None):
+    def run_batch(self, paper_ids: str | None = None, max_per_paper: int | None = None) -> list[dict]:
         """
         Run comparison batch on all positional entries.
         """
-        candidates = self.load_candidates(paper_id=paper_ids)
+        candidates: list[dict] = self.load_candidates(paper_id=paper_ids)
         if max_per_paper:
             candidates = candidates[:max_per_paper]
         
@@ -284,9 +481,9 @@ class VisionComparer:
         # Save results
         OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
         output_file = OUTPUT_DIR / 'vision_comparison_results.jsonl'
-        with open(output_file, 'w') as f:
+        with open(output_file, 'w', encoding='utf-8') as f:
             for c in self.comparisons:
-                f.write(json.dumps(c) + '\n')
+                f.write(json.dumps(c, ensure_ascii=False) + '\n')
         
         logger.info(f"Completed {len(self.comparisons)} comparisons")
         logger.info(f"Successful: {self.success}, Failed: {self.failed}")
@@ -321,8 +518,8 @@ class VisionComparer:
         self.manifest['vision_results']['positional_entries'] = len(self.comparisons)
         self.manifest['vision_results']['alignment_classes'] = alignment_counts
         
-        with open(MANIFEST_PATH, 'w') as f:
-            json.dump(self.manifest, f, indent=2)
+        with open(MANIFEST_PATH, 'w', encoding='utf-8') as f:
+            json.dump(self.manifest, f, indent=2, ensure_ascii=False)
         
         logger.info(f"Updated manifest with {len(self.comparisons)} vision results")
         logger.info(f"Alignment distribution: {alignment_counts}")
@@ -363,9 +560,9 @@ def main():
         alignment_counts[cls] = alignment_counts.get(cls, 0) + 1
     
     print(f"\n=== Vision Comparison Summary ===")
-    print(f"Total comparisons: {len(results)}")
-    print(f"Successful: {comparer.success}")
-    print(f"Failed: {comparer.failed}")
+    print(f"Candidates processed: {len(results)}")
+    print(f"Successfully recognized (non-empty): {comparer.success}")
+    print(f"Failed / empty recognition: {comparer.failed}")
     print(f"\nAlignment distribution:")
     for cls, count in sorted(alignment_counts.items(), key=lambda x: -x[1]):
         print(f"  {cls}: {count}")

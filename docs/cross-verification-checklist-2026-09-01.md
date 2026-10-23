@@ -217,6 +217,17 @@ Audit actual on-disk programs against claimed integration paths. No fabrication.
 - [ ] `test_deterministic_replay.py` exits 0 with same hash across runs
 - [ ] `test_porosity_sweep.py` shows porosity modulation, not constant
 - [ ] No `random.random()`, `np.random.rand()` in engine math without explicit seed
+
+### 3.8 Vision Comparison Pipeline (Verified 2026-10-21)
+- [x] Vision pipeline runs: 4/4 candidates processed for 1907.04931, output at `DATASETS/vision_comparison/vision_comparison_results.jsonl`
+- [x] Crop method fixed: file-based PNG temp file with `cv2.imread` (numpy buffer conversion fails)
+- [x] Recognize formula: Pix2Text filename path, not numpy array
+- [x] Glyph catalog: `symbols.zip` = 3,304 glyphs (not 1,182-entry Metamath HTML manifest)
+- [x] HTML and PDF of same paper: distinct inputs (HTML=source-aware parse, PDF=vision crop)
+- [x] `docs/pix2text-assessment-2026-10-20.md` updated with verified results
+- [x] `docs/pix2text-three-layer-experiment.md` updated with verified results
+- [x] `docs/numerical-extraction-vision-pipeline.md` updated with vision pipeline section
+- [x] `docs/VISUAL_MATH_RECONSTRUCTION_CHECKLIST_2026-10-13.md` updated with vision pipeline verification
 - [ ] No boolean gating in `_hamiltonian_energy()`, `_tau_for_resolved()`, `_compute_consensus_from_resolved()`
 - [ ] All 64 hexagrams pass through every turn (no early collapse to single winner)
 - [ ] `shotgun_expand()` is single capture point; adapters do not reconstruct state

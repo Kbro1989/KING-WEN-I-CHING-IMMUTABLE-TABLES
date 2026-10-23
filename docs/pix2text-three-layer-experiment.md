@@ -121,6 +121,14 @@ This is a version-compatible issue, not a "not installed" issue. Pix2Text is ins
 | Metamath local image count | 29 | GIF files on disk |
 | Metamath remote hrefs | 1,158 | HTML href analysis |
 | Metamath PNG hrefs | 0 | HTML href analysis |
+| Symbols.zip catalog | 3,304 glyphs | Pipeline reference library (`symbols_zip_catalog` in manifest) |
+| Vision pipeline run | 4 processed → 4 recognized (image_region, 0 failed) | `python scripts/vision_comparison_pipeline.py --paper 1907.04931 --max-per-paper 4` |
+| Crop method | PyMuPDF pixmap → OpenCV decode | Adaptive zoom pixmap decoded to NumPy array |
+| Recognize formula | `recognize_formula(crop)` | Accepts NumPy array; internal tempfile encapsulation with str/dict return handling |
+| HTML/PDF separation | Distinct inputs | HTML = source-aware parse; PDF = vision crop; symbols.zip = reference catalog |
+| OpenJarvis path fix | Line 271 of `docs/cross-verification-checklist-2026-09-01.md` | "OpenJarvas" → "OpenJarvis" fixed |
+
+---
 
 ---
 

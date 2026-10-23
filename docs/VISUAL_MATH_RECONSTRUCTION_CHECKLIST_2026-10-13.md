@@ -70,15 +70,27 @@ To prevent premature claims of mathematical recovery, all work must adhere to th
   - Report exact precision, recall, and false-positive rates by structure type.
 
 ### Phase 5: Evidence Artifact Synchronization & Invariants
-- [x] **5.1. Artifact Regeneration**:
-  - Re-run `scripts/math_reconstruction_evidence.py` and `scripts/reconstruction_work_log.py`.
-  - Ensured all reported counts match regenerated artifacts exactly.
-  - Verified: `DATASETS/chroma_visual_discrepancies.json` (314KB, 8 papers, 381 candidates, 70 matched, 89 rejected, 222 unmatched) — artifact present and internally consistent.
-- [x] **5.2. Test Suite Validation**:
-  - Maintained 100% test pass rate across `python -m pytest -o pythonpath=scripts tests/ -v`.
-  - Verified: `subprocess.run(['python', '-m', 'pytest', '-o', 'pythonpath=scripts', 'tests/', '-v'])` returns exit code 0.
+- [x] **5.1. Artifact Regeneration**: Re-run `scripts/math_reconstruction_evidence.py` and `scripts/reconstruction_work_log.py`. Ensured all reported counts match regenerated artifacts exactly. Verified: `DATASETS/chroma_visual_discrepancies.json` (314KB, 8 papers, 381 candidates, 70 matched, 89 rejected, 222 unmatched) — artifact present and internally consistent.
+- [x] **5.2. Test Suite Validation**: 306/306 tests pass (`python -m pytest tests/ -q`). Confirmed on 2026-10-22 against exact staged code revision.
+- [x] **5.3. Vision Pipeline Execution** (2026-10-22): 4/4 candidates processed for paper `1907.04931`. Pix2Text returned **nonempty LaTeX** for all 4 crops. All 4 classified `alignment: image_region` — the bounding boxes capture surrounding prose alongside the target formula. This is **execution success**, not formula isolation success.
+  - **Critical distinction**: 4 candidates processed ≠ 4 formulas correctly recognized. `recognition_status: nonempty` only means the model returned text. Semantic correctness is unresolved.
+  - Interface repaired: `recognize_formula()` now accepts NumPy array directly; tempfile lifecycle encapsulated within the function.
+- [x] **5.4. Confidence Audit** (2026-10-22): Confirmed via runtime probe that `Pix2Text.recognize_formula()` (v1.1.7 MFR) returns a raw `str` with no model-provided confidence score. The prior `confidence: 1.0` was a success flag (`1.0 if text else 0.0`), not a model score. Fixed:
+  - `recognition_confidence: null` (JSON `null`) when model provides no score
+  - `recognition_status: "nonempty" | "empty" | "error"` (separate from confidence)
+  - `alignment: "image_region"` (not isolated formula)
+  - `semantic_validation: "embedded_in_prose"` (OCR captured page prose, not clean formula)
+  - Old field `confidence: 1.0` replaced; `DATASETS/vision_comparison/vision_comparison_results.jsonl` must be regenerated after pipeline re-run.
+- [x] **5.5. Stirling Validator Integration Trial** (2026-10-22): `scripts/validators/integration_trial.py` regenerated at `cache/audit/provenance/integration_trial.jsonl` (14 records):
+  - 11 `benchmark_occurrence` records: all `validation_status: inapplicable`, `verdict_rationale: no_coefficient_sequence_extractable` — astronomy/physics corpus contains no integer coefficient sequences.
+  - 3 `synthetic_sequence_test` records exercising `validate_stirling_transform()` directly:
+    - A000670 forward pass: `status: pass`, computed `[1,1,3,13,75,541]` == A000670 (✅)
+    - Deliberate mismatch: `status: mismatch`, `first_mismatch: 1` correctly detected (✅)
+    - Inverse round-trip: `status: pass`, `inverse(forward(n!)) == n!` (✅)
+  - **Verdict distribution**: `{inapplicable: 11, pass: 2, mismatch: 1}`
 
 ### Testbench: Math Vision + ChromaNumber Tools
+
 - [x] **`arxiv_html_parser.py`**: Fetched arXiv 2605.00155 — 991 equations, MathML + LaTeX + context. Verified live, output at `/tmp/arxiv_test.json`.
 - [x] **`mathml_parser.py`**: Walked 991 MathML trees — 300 solvable (1 '='), 57 unsupported correctly refused (no fabrication). Verified live.
 - [x] **`chroma_visual_reader.py`** (610 lines): PyMuPDF + K-Means + connected component analysis. Verified code present and importable.

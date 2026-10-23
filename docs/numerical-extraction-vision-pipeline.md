@@ -194,6 +194,42 @@ artifact. You cannot recover source semantics from rendered pixels.
 
 ---
 
+## 7. Vision Comparison Pipeline (Verified 2026-10-22)
+
+### Pipeline Status
+
+The vision comparison pipeline was repaired and verified:
+- **4 candidates processed** for paper 1907.04931
+- **4 non-empty OCR recognitions**, **0 empty/failed recognitions**
+- **Alignment class**: 4/4 classified as `image_region` (the OCR output captures the target formula alongside surrounding prose/line fragments within the crop bounding box)
+- Output written to `DATASETS/vision_comparison/vision_comparison_results.jsonl`
+- Updated in `DATASETS/unified_manifest.json` under `vision_results` (`positional_entries: 4`, `alignment_classes: {"image_region": 4}`)
+
+### The Core Problem & Root Cause
+
+Previously, candidates produced `alignment: "empty_recognition"` with `recognized: null` / `method: "recognition_error"` due to two distinct bugs:
+1. **API Type Mismatch**: `Pix2Text.recognize_formula()` returns a LaTeX `str` (or dict depending on model configuration). Calling `.get('text')` directly on a string raised an unhandled `AttributeError`, dropping recognition into the `recognition_error` handler.
+2. **Interface Inconsistency**: `compare_candidate()` referenced an undefined `tmpfile_path` and attempted to pass a filepath string to `recognize_formula()`, which expected a NumPy image array.
+3. **Missing Dependencies**: `pix2text` was initially installed with `--no-deps`, causing runtime `ModuleNotFoundError` on `cnstd` and `optimum`.
+
+### Fix Applied (Verified Working)
+
+1. **Consistent Array Interface**: `recognize_formula(crop)` accepts the NumPy array directly from `crop_pdf_region()`, keeping the tempfile serialization and cleanup safely encapsulated inside the recognition function.
+2. **Robust Return Type Handling**: `recognize_formula()` handles both `str` and `dict` return types from `Pix2Text`, preventing `AttributeError`.
+3. **Accurate Accounting**: Candidate processing count is strictly decoupled from formula recognition success (`self.success` increments only when OCR text is non-empty and `method == 'pix2text'`).
+4. **Result**: 4/4 candidates processed and recognized (all 4 `image_region`, 0 `empty_recognition`). Semantic formula isolation from surrounding text remains the next phase.
+
+### Layer Reference Catalog
+
+The pipeline uses `symbols.zip` = **3,304 glyphs** as the reference catalog, 
+NOT the 1,182-entry Metamath HTML manifest:
+
+- `self.glyph_catalog = self.manifest.get('symbols_zip_catalog', {}).get('catalog', [])`
+- HTML and PDF of same paper are **distinct inputs**: HTML feeds source-aware parse, 
+  PDF feeds vision crop. symbols.zip is the reference catalog for glyph matching.
+
+---
+
 ## 6. Example pipeline (what it SHOULD look like)
 
 ```python

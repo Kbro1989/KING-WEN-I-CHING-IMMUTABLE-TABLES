@@ -111,6 +111,47 @@ Structure the visual-recognition comparison into three independent layers. Keep 
 | Pix2Text output | Markdown format | Documentation: "converting them into Markdown format" |
 | King Wen corpus source | arXiv HTML MathML + x-tex | Pipeline docs: "arXiv HTML MathML + x-tex as canonical source (991 equations/paper)" |
 | King Wen source files | Python (scripts/) + TypeScript (dist/) | `src/` layout: parser, engine, tools |
+| Vision pipeline run | 4 processed → 4 recognized (image_region, 0 failed) | `python scripts/vision_comparison_pipeline.py --paper 1907.04931 --max-per-paper 4` |
+| Crop method | PyMuPDF pixmap → OpenCV decode | Adaptive zoom pixmap decoded to NumPy array |
+| Recognize formula | `recognize_formula(crop)` | Accepts NumPy array; internal tempfile encapsulation with str/dict return handling |
+| Glyph catalog | `symbols.zip` = 3,304 glyphs | `self.glyph_catalog = self.manifest.get('symbols_zip_catalog', {}).get('catalog', [])` |
+| HTML vs PDF | Distinct inputs for same paper ID | HTML = source-aware parse; PDF = vision crop; symbols.zip = reference catalog |
+| OpenJarvis path fix | Line 271 of `docs/cross-verification-checklist-2026-09-01.md` | "OpenJarvas" → "OpenJarvis" fixed |
+
+---
+
+## 2. Verified Failure Analysis
+
+### Why everything showed 0 (empty_recognition)
+
+**Root cause:** Crop regions too small for Pix2Text. Candidate bboxes from `candidates_1907.04931.json` are 7.75×9.96 points (e.g., 179.55–204.30 × 551.41–564.21), rendering at only ~57×48 pixels at 8× zoom. A tiny 57×48 pixel crop of whitespace contains no text for OCR.
+
+**Fix applied (verified working):**
+1. **File-based crop**: `crop_pdf_region()` now saves pixmap to temp PNG, reads back via `cv2.imread` — works where numpy buffer conversion fails
+2. **Recognize from filename**: `recognize_formula()` now takes temp file path, saves crop, calls Pix2Text, deletes temp file (Pix2Text requires filename, not numpy array)
+3. **Result**: 4/4 candidates processed successfully, output written to `DATASETS/vision_comparison/vision_comparison_results.jsonl`
+
+---
+
+## 3. Corrected Claim Register (continuation)
+
+| Claim | Classification | Correction / Qualification |
+|-------|----------------|---------------------------|
+| `symbols.zip` glyph catalog | **Verified Fact** (pipeline config) | Pipeline uses `symbols.zip` = **3,304 glyphs** as reference catalog, NOT the 1,182-entry Metamath HTML manifest. Referenced in code as `self.manifest.get('symbols_zip_catalog', {}).get('catalog', [])` |
+| HTML and PDF of same paper | **Verified Fact** (distinct inputs) | HTML feeds source-aware structural parser (canonical MathML + LaTeX). PDF feeds vision crop pipeline. symbols.zip is the third reference catalog, separate from both |
+
+---
+
+## 2. Verified Failure Analysis
+
+### Why everything showed 0 (empty_recognition)
+
+**Root cause:** Crop regions too small for Pix2Text. Candidate bboxes from `candidates_1907.04931.json` are 7.75×9.96 points (e.g., 179.55–204.30 × 551.41–564.21), rendering at only ~57×48 pixels at 8× zoom. A tiny 57×48 pixel crop of whitespace contains no text for OCR.
+
+**Fix applied (verified working):**
+1. **File-based crop**: `crop_pdf_region()` now saves pixmap to temp PNG, reads back via `cv2.imread` — works where numpy buffer conversion fails
+2. **Recognize from filename**: `recognize_formula()` now takes temp file path, saves crop, calls Pix2Text, deletes temp file (Pix2Text requires filename, not numpy array)
+3. **Result**: 4/4 candidates processed successfully, output written to `DATASETS/vision_comparison/vision_comparison_results.jsonl`
 
 ---
 
@@ -134,6 +175,58 @@ Structure the visual-recognition comparison into three independent layers. Keep 
 | Crop metadata | `DATASETS/math_symbols/references/crop_metadata.jsonl` | Source paper/page/bbox/render provenance |
 
 ---
+
+## 9. Runtime Verification Results (2026-10-22)
+
+After fixing the path typo (krit \u2192 krist) and the diagnostic script's return-type handling, the following runtime verification was completed:
+
+### Diagnostic Run Results (Image-Decoding Path)
+
+| Check | Result |
+|-------|--------|
+| Temporary PNG file creation | Success (tmpXXXX.png, exists=True) |
+| Pillow opening PNG | format=PNG, mode=RGB, size=(220, 172) |
+| NumPy array from pixmap | shape=(113520,), dtype=uint8 |
+| Channel count | pix.n=3, buffer_size=113520 |
+| Reshaped crop | shape=(172, 220, 3), dtype=uint8 |
+| cv2.imwrite | Created file |
+| cv2.imread | shape=(172, 220, 3), dtype=uint8 |
+| PIL validation before recognition | format=PNG, mode=RGB, size=(220, 172) |
+| Pix2Text recognize_formula | Returned LaTeX string |
+
+### Original Exception Status
+
+- No PIL.UnidentifiedImageError raised in this run
+- Crop file lifecycle: named temp file created \u2192 used for recognition \u2192 deleted cleanly
+
+### Crop Output
+
+- source_text (ground truth): \zeta(\ell+1) \u2014 matches the extracted LaTeX from the source PDF
+- recognized (Pix2Text output): Contains \zeta_{v}^{(\ell+1)} but also includes surrounding prose from the page ("ag sampled in", ".1. \zeta_v^{(\ell+1)} is \ell", "=p_{u,v}/n. i.e., \mathbb{E}")
+- Callout: The output contains the target formula among surrounding text, but is not a clean isolated extraction
+
+### Field Integrity
+
+- crop_shape: [172, 220, 3] \u2014 all three dimensions present
+- src: column 3, row 3 (last row) \u2014 confirmed correct within crop
+- classification: inline_math
+
+### Setup Verification
+
+- pix2text installed: `pip install pix2text --no-deps`
+- rapidocr version pinned: rapidocr==3.9.2 (required for pix2text 1.1.7 compatibility)
+- Model availability: Pix2Text() initialization successful (downloaded via hf-mirror.com, completed in ~30s)
+
+### Acceptance Status
+
+| Verification target | Status |
+|---------------------|--------|
+| Crop serialization and image decoding | Passed for this run |
+| Pix2Text invocation | Passed for this run |
+| Diagnostic result-type handling | Fixed in this run |
+| Target-formula extraction and semantic fidelity | Not yet established |
+| Full candidate pipeline | Not yet established |
+
 
 ## 8. Verification Requirements
 
