@@ -86,7 +86,7 @@ class VisionComparer:
                     candidates.extend(json.load(fh))
         return candidates
     
-    def crop_pdf_region(self, pdf_path: Path, bbox: dict, padding: int = 2, page_num: int = 0, zoom: int = 4, min_content_ratio: float = 0.02) -> np.ndarray | None:
+    def crop_pdf_region(self, pdf_path: Path, bbox: dict, padding: int | tuple[int, int] = (3, 2), page_num: int = 0, zoom: int = 4, min_content_ratio: float = 0.02) -> np.ndarray | None:
         """Crop PDF region using bbox coordinates with adaptive zoom and content validation.
         pdf_path: path to PDF file
         bbox: {x0, y0, x1, y1} in PDF points
@@ -97,10 +97,15 @@ class VisionComparer:
 
         Returns: numpy array (image) or None if crop failed
         """
+        if isinstance(padding, (tuple, list)):
+            pad_x, pad_y = padding[0], padding[1]
+        else:
+            pad_x, pad_y = padding, padding
+
         doc = fitz.open(str(pdf_path))
         page = doc[page_num]  # use specified page
-        rect = fitz.Rect(bbox['x0'] - padding, bbox['y0'] - padding,
-                        bbox['x1'] + padding, bbox['y1'] + padding)
+        rect = fitz.Rect(bbox['x0'] - pad_x, bbox['y0'] - pad_y,
+                        bbox['x1'] + pad_x, bbox['y1'] + pad_y)
         try:
             # Get pixmap with adaptive zoom for better OCR quality
             # Use explicit RGB colorspace and disable alpha for deterministic 3-channel output
@@ -358,7 +363,7 @@ class VisionComparer:
         # Crop PDF region using bbox coordinates (PDF points)
         crop = None
         try:
-            crop = self.crop_pdf_region(source_path, bbox, padding=15, page_num=max(0, candidate.get("page", 0) - 1))
+            crop = self.crop_pdf_region(source_path, bbox, padding=(3, 2), page_num=max(0, candidate.get("page", 0) - 1))
             logger.info(f"Crop result: {crop is not None}, type: {type(crop)}, shape: {getattr(crop, 'shape', None)}")
         except Exception as e:
             logger.warning(f"Crop exception: {e}")
