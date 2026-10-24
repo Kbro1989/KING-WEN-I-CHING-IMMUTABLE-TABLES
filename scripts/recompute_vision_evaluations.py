@@ -26,11 +26,13 @@ if sys.platform == 'win32':
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / 'scripts'))
 
+import hashlib
 from evaluate_output_reference import REFERENCE_DATA
 from experiments_multi_paper_generalization import (
     CANDIDATES,
     OUTPUT_DIR,
     EXP_JSONL,
+    FROZEN_BASELINE,
     generate_report,
     evaluate_output,
 )
@@ -45,12 +47,74 @@ def recompute():
         if cid in REFERENCE_DATA:
             cand.setdefault('reference_latex', REFERENCE_DATA[cid]['reference_latex'])
             cand.setdefault('crop_scope', REFERENCE_DATA[cid]['crop_scope'])
+            cand.setdefault('expected_boundary', REFERENCE_DATA[cid].get('expected_boundary', {}))
             cand.setdefault('required_structures', REFERENCE_DATA[cid]['required_structures'])
             cand.setdefault('required_delimiters', REFERENCE_DATA[cid]['required_delimiters'])
             cand.setdefault('reference_provenance', REFERENCE_DATA[cid]['reference_provenance'])
 
-    # 2. Recompute padding=(3, 2) experiment
-    print(f"Reading {EXP_JSONL}...")
+    # 2. Recompute padding=(15, 15) baseline under the exact same evaluator
+    updated_baseline = []
+    b_total = 0
+    b_cropped = 0
+    b_nonempty = 0
+    b_isolated = 0
+    b_clipped = 0
+    b_agreement = 0
+
+    if BASELINE_JSONL.exists():
+        print(f"Reading and re-evaluating baseline {BASELINE_JSONL} under identical evaluator rules...")
+        with open(BASELINE_JSONL, 'r', encoding='utf-8') as f:
+            base_records = [json.loads(line) for line in f if line.strip()]
+
+        for r in base_records:
+            cid = r.get('candidate_id')
+            cand = cand_by_id.get(cid, {})
+            rec_text = r.get('recognized_latex', '')
+            target_tokens = cand.get('target_tokens', [])
+            source_text = cand.get('source_text', '')
+
+            eval_res = evaluate_output(
+                recognized_text=rec_text,
+                target_tokens=target_tokens,
+                source_text=source_text,
+                candidate_id=cid,
+                cand_meta=cand,
+            )
+            r['evaluation'] = eval_res
+            r['reference_latex'] = cand.get('reference_latex', '')
+            r['crop_scope'] = cand.get('crop_scope', 'complete')
+            r['expected_boundary'] = cand.get('expected_boundary', {})
+            r['reference_provenance'] = cand.get('reference_provenance', {})
+            r['evaluator_version'] = 'v2.0-strict-reference-comparison'
+
+            b_cropped += 1
+            if not eval_res['is_empty']:
+                b_nonempty += 1
+            if eval_res['is_isolated']:
+                b_isolated += 1
+            if eval_res['clipping_detected']:
+                b_clipped += 1
+            if eval_res['semantic_agreement']:
+                b_agreement += 1
+            updated_baseline.append(r)
+
+        with open(BASELINE_JSONL, 'w', encoding='utf-8') as f:
+            for r in updated_baseline:
+                f.write(json.dumps(r, ensure_ascii=False) + '\n')
+        b_total = len(updated_baseline)
+        print(f"Wrote {b_total} updated baseline records to {BASELINE_JSONL}")
+
+    baseline_summary = {
+        'total': b_total,
+        'cropped': b_cropped,
+        'nonempty': b_nonempty,
+        'isolated': b_isolated,
+        'clipped': b_clipped,
+        'agreement': b_agreement,
+    }
+
+    # 3. Recompute padding=(3, 2) experiment
+    print(f"\nReading {EXP_JSONL}...")
     with open(EXP_JSONL, 'r', encoding='utf-8') as f:
         exp_records = [json.loads(line) for line in f if line.strip()]
 
@@ -91,7 +155,9 @@ def recompute():
         r['evaluation'] = eval_res
         r['reference_latex'] = cand.get('reference_latex', '')
         r['crop_scope'] = cand.get('crop_scope', 'complete')
+        r['expected_boundary'] = cand.get('expected_boundary', {})
         r['reference_provenance'] = cand.get('reference_provenance', {})
+        r['evaluator_version'] = 'v2.0-strict-reference-comparison'
         updated_exp.append(r)
 
     with open(EXP_JSONL, 'w', encoding='utf-8') as f:
@@ -100,7 +166,15 @@ def recompute():
     print(f"Wrote {len(updated_exp)} updated experiment records to {EXP_JSONL}")
 
     attempted = len(updated_exp)
-    print(f"Padding (3, 2) Summary: Attempted={attempted}, Cropped={cropped_count}, NonEmpty={nonempty_count}, Isolated={isolated_count}, Clipped={clipped_count}, Agreement={agreement_count}")
+    print(f"Padding (15, 15) Baseline Summary: Total={b_total}, NonEmpty={b_nonempty}, Isolated={b_isolated} ({b_isolated/b_total*100:.1f}%), Agreement={b_agreement} ({b_agreement/b_total*100:.1f}%)")
+    print(f"Padding (3, 2) Experiment Summary: Attempted={attempted}, Cropped={cropped_count}, NonEmpty={nonempty_count}, Isolated={isolated_count} ({isolated_count/attempted*100:.1f}%), Agreement={agreement_count} ({agreement_count/attempted*100:.1f}%)")
+
+    # Compute SHA-256 hashes
+    file_hashes = {
+        'exp_sha256': hashlib.sha256(EXP_JSONL.read_bytes()).hexdigest(),
+        'base_sha256': hashlib.sha256(BASELINE_JSONL.read_bytes()).hexdigest() if BASELINE_JSONL.exists() else 'missing',
+        'legacy_sha256': hashlib.sha256(FROZEN_BASELINE.read_bytes()).hexdigest() if FROZEN_BASELINE.exists() else 'missing',
+    }
 
     # Generate Report
     generate_report(
@@ -111,45 +185,12 @@ def recompute():
         isolated=isolated_count,
         clipped=clipped_count,
         agreement=agreement_count,
+        baseline_summary=baseline_summary,
+        file_hashes=file_hashes,
     )
     print("Generalization report generated successfully.")
-
-    # 3. Recompute padding=(15, 15) baseline under the exact same evaluator
-    if BASELINE_JSONL.exists():
-        print(f"\nRe-evaluating baseline {BASELINE_JSONL} under identical evaluator rules...")
-        with open(BASELINE_JSONL, 'r', encoding='utf-8') as f:
-            base_records = [json.loads(line) for line in f if line.strip()]
-
-        b_isolated = 0
-        b_agreement = 0
-        b_nonempty = 0
-
-        for r in base_records:
-            cid = r.get('candidate_id')
-            cand = cand_by_id.get(cid, {})
-            rec_text = r.get('recognized_latex', '')
-            target_tokens = cand.get('target_tokens', [])
-            source_text = cand.get('source_text', '')
-
-            eval_res = evaluate_output(
-                recognized_text=rec_text,
-                target_tokens=target_tokens,
-                source_text=source_text,
-                candidate_id=cid,
-                cand_meta=cand,
-            )
-            r['evaluation'] = eval_res
-            if not eval_res['is_empty']:
-                b_nonempty += 1
-            if eval_res['is_isolated']:
-                b_isolated += 1
-            if eval_res['semantic_agreement']:
-                b_agreement += 1
-
-        b_total = len(base_records)
-        print(f"Padding (15, 15) Baseline Summary: Total={b_total}, NonEmpty={b_nonempty}, Isolated={b_isolated} ({b_isolated/b_total*100:.1f}%), Agreement={b_agreement} ({b_agreement/b_total*100:.1f}%)")
-        print(f"Padding (3, 2) Experiment Summary: Total={attempted}, NonEmpty={nonempty_count}, Isolated={isolated_count} ({isolated_count/attempted*100:.1f}%), Agreement={agreement_count} ({agreement_count/attempted*100:.1f}%)")
 
 
 if __name__ == '__main__':
     recompute()
+

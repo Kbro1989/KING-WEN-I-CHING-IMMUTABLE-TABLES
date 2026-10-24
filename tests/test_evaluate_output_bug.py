@@ -146,6 +146,45 @@ def test_negative_altered_skip_scaling():
     assert result['required_structures_complete'] is False or 'unexpected_operator' in result['structural_issues'] or result['token_recall'] < 0.5
 
 
+def test_negative_duplicated_expression():
+    """Recognized output repeating the target expression must be rejected."""
+    result = evaluate_output(
+        recognized_text=r"\mathbf{\sigma}_{\mathrm{d a t a}} , \mathbf{\sigma}_{\mathrm{d a t a}}",
+        target_tokens=[r'\sigma'],
+        source_text="σdata,",
+        candidate_id='2206_00364_cand2_sigma_data',
+    )
+    assert result['semantic_agreement'] is False
+    assert result['reference_match'] is False
+    assert 'reference_duplicated' in result['structural_issues'] or 'reference_mismatch' in result['structural_issues']
+
+
+def test_negative_extraneous_trailing_break():
+    """Recognized output with extraneous trailing break and dots must be rejected."""
+    result = evaluate_output(
+        recognized_text=r"\gg\sigma_{\mathrm{d a t a}} , \break\cdot\cdot\cdot\cdot",
+        target_tokens=[r'\sigma'],
+        source_text="≫σdata,",
+        candidate_id='2206_00364_cand4_much_greater_than',
+    )
+    assert result['semantic_agreement'] is False
+    assert result['reference_match'] is False
+    assert 'reference_extraneous_content' in result['structural_issues'] or 'reference_mismatch' in result['structural_issues']
+
+
+def test_negative_extraneous_trailing_tokens():
+    """Recognized output with extra tokens after valid norm term must fail."""
+    result = evaluate_output(
+        recognized_text=r"\lambda\| f ( x ) \|_{1} , 1",
+        target_tokens=[r'\lambda', r'\|', 'f', 'x'],
+        source_text="λ∥f(x)∥1,",
+        candidate_id='2605_22902_cand0_l1_norm',
+    )
+    assert result['semantic_agreement'] is False
+    assert result['reference_match'] is False
+    assert 'reference_extraneous_content' in result['structural_issues'] or 'reference_mismatch' in result['structural_issues']
+
+
 # ===========================================================================
 # Positive Control Tests: Valid versions of counterexample expressions
 # ===========================================================================

@@ -38,49 +38,57 @@ REFERENCE_DATA = {
     '1907_04931_cand0_zeta': {
         'reference_latex': r'\zeta_v^{(\ell+1)}',
         'crop_scope': 'complete',
+        'expected_boundary': {'left': 'closed', 'right': 'closed'},
         'required_structures': ['greek_letter', 'subscript', 'superscript_group'],
         'required_delimiters': [('(', ')')],
         'reference_provenance': {
             'paper_id': '1907.04931',
             'page': 4,
             'equation_or_location': 'Section 2, inline: node embedding at layer ell+1',
-            'verification_status': 'agent_reconstructed',
+            'exact_pdf_clip_text': 'ζ(ℓ+1) v',
+            'verification_status': 'audited_against_pdf',
         },
     },
     '1907_04931_cand1_expectation': {
-        'reference_latex': r'\zeta_v^{(\ell+1)}',
+        'reference_latex': r'(\zeta_v^{(\ell+1)})',
         'crop_scope': 'complete',
+        'expected_boundary': {'left': 'closed', 'right': 'closed'},
         'required_structures': ['greek_letter', 'subscript', 'superscript_group'],
         'required_delimiters': [('(', ')')],
         'reference_provenance': {
             'paper_id': '1907.04931',
             'page': 4,
-            'equation_or_location': 'Section 2, inline: second occurrence of node embedding',
-            'verification_status': 'agent_reconstructed',
+            'equation_or_location': 'Section 2, inline: parenthesized node embedding under expectation',
+            'exact_pdf_clip_text': '(\x10 ζ(ℓ+1) v \x11)',
+            'verification_status': 'audited_against_pdf',
         },
     },
     '1907_04931_cand2_sqrt': {
-        'reference_latex': r'\sqrt{p_e}',
+        'reference_latex': r'(\sqrt{p_e})',
         'crop_scope': 'complete',
+        'expected_boundary': {'left': 'closed', 'right': 'closed'},
         'required_structures': ['radical'],
-        'required_delimiters': [],
+        'required_delimiters': [('(', ')')],
         'reference_provenance': {
             'paper_id': '1907.04931',
             'page': 12,
-            'equation_or_location': 'Section 4, sampling probability radical',
-            'verification_status': 'agent_reconstructed',
+            'equation_or_location': 'Section 4, parenthesized sampling probability radical',
+            'exact_pdf_clip_text': '(√pe)',
+            'verification_status': 'audited_against_pdf',
         },
     },
     '1907_04931_cand3_proportional': {
         'reference_latex': r'\propto \sqrt{p_e}',
         'crop_scope': 'complete',
+        'expected_boundary': {'left': 'closed', 'right': 'closed'},
         'required_structures': ['relation_proportional', 'radical'],
         'required_delimiters': [],
         'reference_provenance': {
             'paper_id': '1907.04931',
             'page': 12,
             'equation_or_location': 'Section 4, proportionality with sampling probability',
-            'verification_status': 'agent_reconstructed',
+            'exact_pdf_clip_text': '∝√pe.',
+            'verification_status': 'audited_against_pdf',
         },
     },
 
@@ -88,25 +96,29 @@ REFERENCE_DATA = {
     '1212_0957_eq1.1_forward_summation': {
         'reference_latex': r'b_n = \sum_{k=0}^{n} S(n,k) a_k',
         'crop_scope': 'complete',
+        'expected_boundary': {'left': 'closed', 'right': 'closed'},
         'required_structures': ['summation', 'subscript_bound', 'superscript_bound'],
         'required_delimiters': [('(', ')')],
         'reference_provenance': {
             'paper_id': '1212.0957',
             'page': 1,
             'equation_or_location': 'Equation (1.1), forward Stirling transform',
-            'verification_status': 'agent_reconstructed',
+            'exact_pdf_clip_text': 'bn = n X k=0 {n k} ak,',
+            'verification_status': 'audited_against_pdf',
         },
     },
     '1212_0957_eq1.2_inverse_summation': {
-        'reference_latex': r'a_n = \sum_{k=0}^{n} (-1)^{n-k} s(n,k) b_k',
+        'reference_latex': r'a_n = \sum_{k=0}^{n} s(n,k) b_k',
         'crop_scope': 'complete',
-        'required_structures': ['summation', 'subscript_bound', 'superscript_bound', 'signed_coefficient'],
+        'expected_boundary': {'left': 'closed', 'right': 'closed'},
+        'required_structures': ['summation', 'subscript_bound', 'superscript_bound'],
         'required_delimiters': [('(', ')')],
         'reference_provenance': {
             'paper_id': '1212.0957',
             'page': 1,
             'equation_or_location': 'Equation (1.2), inverse Stirling transform',
-            'verification_status': 'agent_reconstructed',
+            'exact_pdf_clip_text': 'an = n X k=0 s (n, k) bk.',
+            'verification_status': 'audited_against_pdf',
         },
     },
 
@@ -114,61 +126,71 @@ REFERENCE_DATA = {
     '2104_01277_cand0_set_membership': {
         'reference_latex': r'(\chi_Q)_{Q \in \mathcal{Q}}',
         'crop_scope': 'complete',
+        'expected_boundary': {'left': 'closed', 'right': 'closed'},
         'required_structures': ['subscript', 'set_membership'],
         'required_delimiters': [('(', ')')],
         'reference_provenance': {
             'paper_id': '2104.01277',
             'page': 1,
             'equation_or_location': 'Section 1, indexed family of characteristic functions',
-            'verification_status': 'agent_reconstructed',
+            'exact_pdf_clip_text': '(χQ)Q∈Q',
+            'verification_status': 'audited_against_pdf',
         },
     },
     '2104_01277_cand1_inner_product': {
         'reference_latex': r'\langle T \chi_I ,',
         'crop_scope': 'partial',
+        'expected_boundary': {'left': 'closed', 'right': 'open_at_comma'},
         'required_structures': ['angle_bracket_open'],
         'required_delimiters': [],
         'reference_provenance': {
             'paper_id': '2104.01277',
             'page': 2,
             'equation_or_location': 'Left fragment of inner product; right operand outside crop',
-            'verification_status': 'agent_reconstructed',
+            'exact_pdf_clip_text': '⟨TχI,',
+            'verification_status': 'audited_against_pdf',
         },
     },
     '2104_01277_cand3_abs_inner_product': {
         'reference_latex': r'| \langle T \chi_I ,',
         'crop_scope': 'partial',
+        'expected_boundary': {'left': 'closed', 'right': 'open_at_comma'},
         'required_structures': ['absolute_value_open', 'angle_bracket_open'],
         'required_delimiters': [],
         'reference_provenance': {
             'paper_id': '2104.01277',
             'page': 2,
             'equation_or_location': 'Left fragment of |<T chi_I, ...>|; right side outside crop',
-            'verification_status': 'agent_reconstructed',
+            'exact_pdf_clip_text': '|⟨TχI,',
+            'verification_status': 'audited_against_pdf',
         },
     },
     '2104_01277_cand5_norm_inequality': {
-        'reference_latex': r'\leq \| T \| \mu(I)',
+        'reference_latex': r'\leq \| T \| \mu(I)^{\frac{1}{2}}',
         'crop_scope': 'partial',
+        'expected_boundary': {'left': 'closed_at_rel', 'right': 'closed_at_power'},
         'required_structures': ['relation_leq', 'norm'],
         'required_delimiters': [('(', ')')],
         'reference_provenance': {
             'paper_id': '2104.01277',
             'page': 2,
             'equation_or_location': 'Right-hand side of norm inequality',
-            'verification_status': 'agent_reconstructed',
+            'exact_pdf_clip_text': '≤∥T∥µ(I) 1 2',
+            'verification_status': 'audited_against_pdf',
         },
     },
     '2104_01277_cand8_summation_lambda': {
-        'reference_latex': r'\sum_{j=1} (\lambda_j + Q)',
+        'reference_latex': r'\cup_{j=1}^{i-1} (\lambda_j + Q)',
         'crop_scope': 'partial',
+        'expected_boundary': {'left': 'closed_at_op', 'right': 'closed_at_paren'},
         'required_structures': ['subscript_bound'],
         'required_delimiters': [('(', ')')],
         'reference_provenance': {
             'paper_id': '2104.01277',
             'page': 3,
-            'equation_or_location': 'Partial summation with eigenvalue parameter',
-            'verification_status': 'agent_reconstructed',
+            'equation_or_location': 'Partial indexed union with eigenvalue parameter',
+            'exact_pdf_clip_text': '∪i−1 j=1(λj+Q)).',
+            'verification_status': 'audited_against_pdf',
         },
     },
 
@@ -176,61 +198,71 @@ REFERENCE_DATA = {
     '2206_00364_cand2_sigma_data': {
         'reference_latex': r'\sigma_{\mathrm{data}}',
         'crop_scope': 'complete',
+        'expected_boundary': {'left': 'closed', 'right': 'closed'},
         'required_structures': ['greek_letter', 'subscript'],
         'required_delimiters': [],
         'reference_provenance': {
             'paper_id': '2206.00364',
             'page': 2,
             'equation_or_location': 'Section 2, data noise level parameter',
-            'verification_status': 'agent_reconstructed',
+            'exact_pdf_clip_text': 'σdata,',
+            'verification_status': 'audited_against_pdf',
         },
     },
     '2206_00364_cand4_much_greater_than': {
         'reference_latex': r'\gg \sigma_{\mathrm{data}}',
         'crop_scope': 'partial',
+        'expected_boundary': {'left': 'closed_at_rel', 'right': 'closed_at_param'},
         'required_structures': ['relation_gg', 'greek_letter', 'subscript'],
         'required_delimiters': [],
         'reference_provenance': {
             'paper_id': '2206.00364',
             'page': 2,
             'equation_or_location': 'Asymptotic regime, right fragment',
-            'verification_status': 'agent_reconstructed',
+            'exact_pdf_clip_text': '≫σdata,',
+            'verification_status': 'audited_against_pdf',
         },
     },
     '2206_00364_cand6_dot_derivative': {
         'reference_latex': r'-\dot{\sigma}(t)',
         'crop_scope': 'complete',
+        'expected_boundary': {'left': 'closed', 'right': 'closed'},
         'required_structures': ['dot_accent', 'greek_letter'],
         'required_delimiters': [('(', ')')],
         'reference_provenance': {
             'paper_id': '2206.00364',
             'page': 2,
             'equation_or_location': 'Time derivative of noise schedule',
-            'verification_status': 'agent_reconstructed',
+            'exact_pdf_clip_text': '−˙σ(t)',
+            'verification_status': 'audited_against_pdf',
         },
     },
     '2206_00364_cand7_denoiser_function': {
         'reference_latex': r'D_{\theta}(\mathbf{x} ; \sigma)',
         'crop_scope': 'complete',
+        'expected_boundary': {'left': 'closed', 'right': 'closed'},
         'required_structures': ['subscript', 'function_application'],
         'required_delimiters': [('(', ')')],
         'reference_provenance': {
             'paper_id': '2206.00364',
             'page': 3,
             'equation_or_location': 'Denoiser function notation',
-            'verification_status': 'agent_reconstructed',
+            'exact_pdf_clip_text': 'Dθ(x; σ)',
+            'verification_status': 'audited_against_pdf',
         },
     },
     '2206_00364_cand8_skip_scaling': {
         'reference_latex': r'c_{\mathrm{skip}}(\sigma) \mathbf{x}',
         'crop_scope': 'complete',
+        'expected_boundary': {'left': 'closed', 'right': 'closed'},
         'required_structures': ['subscript', 'function_application'],
         'required_delimiters': [('(', ')')],
         'reference_provenance': {
             'paper_id': '2206.00364',
             'page': 3,
             'equation_or_location': 'Skip connection scaling coefficient',
-            'verification_status': 'agent_reconstructed',
+            'exact_pdf_clip_text': 'cskip(σ)x',
+            'verification_status': 'audited_against_pdf',
         },
     },
 
@@ -238,37 +270,43 @@ REFERENCE_DATA = {
     '2605_22902_cand0_l1_norm': {
         'reference_latex': r'\lambda \| f(x) \|_1',
         'crop_scope': 'complete',
+        'expected_boundary': {'left': 'closed', 'right': 'closed'},
         'required_structures': ['norm', 'subscript'],
         'required_delimiters': [('(', ')')],
         'reference_provenance': {
             'paper_id': '2605.22902',
             'page': 2,
             'equation_or_location': 'L1 regularization term',
-            'verification_status': 'agent_reconstructed',
+            'exact_pdf_clip_text': 'λ∥f(x)∥1,',
+            'verification_status': 'audited_against_pdf',
         },
     },
     '2605_22902_cand1_gradient': {
         'reference_latex': r'\nabla_{h^{(l)}} y',
         'crop_scope': 'complete',
+        'expected_boundary': {'left': 'closed', 'right': 'closed'},
         'required_structures': ['gradient', 'subscript', 'superscript_group'],
         'required_delimiters': [('(', ')')],
         'reference_provenance': {
             'paper_id': '2605.22902',
             'page': 3,
             'equation_or_location': 'Gradient with respect to hidden layer activations',
-            'verification_status': 'agent_reconstructed',
+            'exact_pdf_clip_text': '∇h(l)y',
+            'verification_status': 'audited_against_pdf',
         },
     },
     '2605_22902_cand3_partial': {
         'reference_latex': r'\partial h^{(l)}',
         'crop_scope': 'complete',
+        'expected_boundary': {'left': 'closed', 'right': 'closed'},
         'required_structures': ['partial_derivative', 'superscript_group'],
         'required_delimiters': [('(', ')')],
         'reference_provenance': {
             'paper_id': '2605.22902',
             'page': 3,
             'equation_or_location': 'Partial derivative of hidden layer',
-            'verification_status': 'agent_reconstructed',
+            'exact_pdf_clip_text': '∂h(l)',
+            'verification_status': 'audited_against_pdf',
         },
     },
 
@@ -276,25 +314,29 @@ REFERENCE_DATA = {
     '2605_27315_cand0_parameter_set': {
         'reference_latex': r'\{ \rho_k \}_{k=1}^{K}',
         'crop_scope': 'complete',
+        'expected_boundary': {'left': 'closed', 'right': 'closed'},
         'required_structures': ['set_braces', 'subscript_bound', 'superscript_bound'],
         'required_delimiters': [('\\{', '\\}')],
         'reference_provenance': {
             'paper_id': '2605.27315',
             'page': 13,
             'equation_or_location': 'Parameter set with explicit index bounds',
-            'verification_status': 'agent_reconstructed',
+            'exact_pdf_clip_text': '{ρk}K k=1',
+            'verification_status': 'audited_against_pdf',
         },
     },
     '2605_27315_cand2_partial_derivative': {
         'reference_latex': r'\partial e_{t,k}',
         'crop_scope': 'complete',
+        'expected_boundary': {'left': 'closed', 'right': 'closed'},
         'required_structures': ['partial_derivative', 'subscript'],
         'required_delimiters': [],
         'reference_provenance': {
             'paper_id': '2605.27315',
             'page': 14,
             'equation_or_location': 'Partial derivative with dual subscript',
-            'verification_status': 'agent_reconstructed',
+            'exact_pdf_clip_text': '∂et,k',
+            'verification_status': 'audited_against_pdf',
         },
     },
 }
@@ -303,25 +345,154 @@ REFERENCE_DATA = {
 def normalize_latex(s: str) -> str:
     """Normalize LaTeX for conservative comparison.
 
-    Intentionally minimal: reduces false negatives from trivial formatting
-    differences (sizing commands, whitespace) while preserving structural
-    differences that would indicate corrupted output.
+    Reduces false negatives from trivial formatting differences (sizing commands,
+    font aliases like \\cal vs \\mathcal, whitespace, single-letter subscript braces)
+    while preserving structural differences.
     """
+    if not s:
+        return ''
     s = s.strip()
     # Remove sizing wrappers
     for w in [r'\displaystyle', r'\textstyle', r'\scriptstyle']:
         s = s.replace(w, '')
-    # Collapse internal whitespace
-    s = re.sub(r'\s+', ' ', s)
     # Remove \left and \right sizing commands, preserving the delimiter.
     # Negative lookahead prevents matching \leftarrow, \rightarrow, etc.
     s = re.sub(r'\\left(?![a-zA-Z])\s*', '', s)
     s = re.sub(r'\\right(?![a-zA-Z])\s*', '', s)
-    # Normalize bold variants
+    # Normalize font variants
     s = s.replace(r'\boldsymbol', r'\mathbf')
+    s = s.replace(r'\cal', r'\mathcal')
+    s = re.sub(r'\\mathbf\{(\\[a-zA-Z]+)\}', r'\1', s)
+    # Collapse spaced letters inside \mathrm{...}
+    s = re.sub(r'\\mathrm\{([^}]+)\}', lambda m: r'\mathrm{' + m.group(1).replace(' ', '') + '}', s)
+    # Normalize font grouping: {\mathcal Q} -> \mathcal{Q}
+    s = re.sub(r'\{\s*\\mathcal\s*([a-zA-Z])\s*\}', r'\\mathcal{\1}', s)
+    # Canonicalize single character subscript/superscript: _x -> _{x}
+    s = re.sub(r'_([a-zA-Z0-9])(?![a-zA-Z0-9_{])', r'_{\1}', s)
+    s = re.sub(r'\^([a-zA-Z0-9])(?![a-zA-Z0-9^{])', r'^{\1}', s)
     # Remove trailing math-adjacent punctuation
     s = re.sub(r'[.,;:]+$', '', s.strip())
+    # Strip space between single letter identifier / function and (
+    s = re.sub(r'([a-zA-Z])\s+\(', r'\1(', s)
+    # Strip space inside braces and parens
+    s = re.sub(r'{\s+', '{', s)
+    s = re.sub(r'\s+}', '}', s)
+    s = re.sub(r'\(\s+', '(', s)
+    s = re.sub(r'\s+\)', ')', s)
+    # Normalize command spacing
+    s = re.sub(r'\\([a-zA-Z]+)\s*', r'\\\1 ', s)
+    s = re.sub(r'\}\s*\{', '}{', s)
+    s = re.sub(r'\s+', ' ', s)
+    # Strip spaces before subscript/superscript
+    s = re.sub(r'\s*([_^])\s*', r'\1', s)
+    # Strip spaces around operators inside parens/braces
+    s = re.sub(r'\s*([+=-])\s*', r'\1', s)
+    # Collapse space before { and }
+    s = re.sub(r'\\([a-zA-Z]+)\s+\{', r'\\\1{', s)
+    s = re.sub(r'\\([a-zA-Z]+)\s+\}', r'\\\1}', s)
+    s = re.sub(r'\s+\}', '}', s)
     return s.strip()
+
+
+def compare_reference_latex(recognized: str, reference: str, crop_scope: str = 'complete') -> dict:
+    """Compare normalized recognized LaTeX against verified reference LaTeX.
+
+    Enforces:
+      - Equivalence of normalized expression
+      - Rejection of duplicated expressions (e.g. sigma_data, sigma_data)
+      - Rejection of extraneous trailing content (e.g. break..., , 1)
+      - For partial crops: verifies expected visible fragment without extraneous tokens
+    """
+    n_rec = normalize_latex(recognized)
+    n_ref = normalize_latex(reference)
+
+    if not n_rec or not n_ref:
+        return {
+            'match': False,
+            'normalized_recognized': n_rec,
+            'normalized_reference': n_ref,
+            'status': 'empty_comparison',
+            'difference': 'empty_recognized_or_reference',
+        }
+
+    # Duplication check: if reference expression is duplicated in recognized output
+    if n_ref in n_rec and n_rec.count(n_ref) > 1:
+        return {
+            'match': False,
+            'normalized_recognized': n_rec,
+            'normalized_reference': n_ref,
+            'status': 'duplicated',
+            'difference': 'expression_duplicated_in_output',
+        }
+
+    # Exact normalized match
+    if n_rec == n_ref:
+        return {
+            'match': True,
+            'normalized_recognized': n_rec,
+            'normalized_reference': n_ref,
+            'status': 'exact_match',
+            'difference': '',
+        }
+
+    # Partial crop prefix matching
+    if crop_scope == 'partial':
+        if n_rec.startswith(n_ref):
+            remainder = n_rec[len(n_ref):].strip()
+            if not remainder or remainder in [',', '.']:
+                return {
+                    'match': True,
+                    'normalized_recognized': n_rec,
+                    'normalized_reference': n_ref,
+                    'status': 'partial_match',
+                    'difference': '',
+                }
+            else:
+                return {
+                    'match': False,
+                    'normalized_recognized': n_rec,
+                    'normalized_reference': n_ref,
+                    'status': 'extraneous_content',
+                    'difference': f'extraneous_partial_tail: {remainder!r}',
+                }
+
+    # Extraneous trailing content check
+    if n_rec.startswith(n_ref) and len(n_rec) > len(n_ref):
+        remainder = n_rec[len(n_ref):].strip()
+        if remainder in [',', '.', ';']:
+            return {
+                'match': True,
+                'normalized_recognized': n_rec,
+                'normalized_reference': n_ref,
+                'status': 'exact_match_with_punctuation',
+                'difference': '',
+            }
+        return {
+            'match': False,
+            'normalized_recognized': n_rec,
+            'normalized_reference': n_ref,
+            'status': 'extraneous_content',
+            'difference': f'extraneous_trailing_content: {remainder!r}',
+        }
+
+    if n_ref.startswith(n_rec) and len(n_ref) > len(n_rec):
+        remainder = n_ref[len(n_rec):].strip()
+        if remainder in [',', '.', ';']:
+            return {
+                'match': True,
+                'normalized_recognized': n_rec,
+                'normalized_reference': n_ref,
+                'status': 'exact_match_with_punctuation',
+                'difference': '',
+            }
+
+    return {
+        'match': False,
+        'normalized_recognized': n_rec,
+        'normalized_reference': n_ref,
+        'status': 'mismatch',
+        'difference': f'rec: {n_rec!r} != ref: {n_ref!r}',
+    }
 
 
 def check_delimiter_balance(text: str, required_delimiters: list[tuple[str, str]]) -> dict:

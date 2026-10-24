@@ -45,6 +45,7 @@ try:
     from scripts.evaluate_output_reference import (
         REFERENCE_DATA,
         normalize_latex,
+        compare_reference_latex,
         check_delimiter_balance,
         detect_truncation,
         compute_token_recall,
@@ -54,6 +55,7 @@ except ImportError:
     from evaluate_output_reference import (  # type: ignore[import-not-found]
         REFERENCE_DATA,
         normalize_latex,
+        compare_reference_latex,
         check_delimiter_balance,
         detect_truncation,
         compute_token_recall,
@@ -339,6 +341,9 @@ def evaluate_output(
             'truncation_detected': True,
             'structural_score': 0.0,
             'structural_issues': ['empty_output'],
+            'reference_match': False,
+            'reference_status': 'empty_output',
+            'reference_diff': 'recognized_text_is_empty',
         }
 
     # Multiline or array check
@@ -433,6 +438,19 @@ def evaluate_output(
     tokens_found = recall_res['found']
     tokens_missing = recall_res['missing']
 
+    # Mathematical Reference Comparison
+    ref_comparison = None
+    reference_match = None
+    if ref_latex:
+        ref_comparison = compare_reference_latex(
+            recognized=recognized_text,
+            reference=ref_latex,
+            crop_scope=ref_entry.get('crop_scope', 'complete') if ref_entry else 'complete',
+        )
+        reference_match = ref_comparison['match']
+        if not reference_match:
+            structural_issues.append(f"reference_{ref_comparison['status']}")
+
     # Structural score
     total_checks = max(1, len(req_structures) + len(req_delims) + 1)
     passed_checks = total_checks - len(structural_issues)
@@ -452,6 +470,7 @@ def evaluate_output(
         and required_structures_complete
         and (token_recall >= token_threshold)
         and not has_unexpected
+        and (reference_match is True or reference_match is None)
     )
 
     return {
@@ -469,6 +488,9 @@ def evaluate_output(
         'truncation_detected': truncation_detected,
         'structural_score': structural_score,
         'structural_issues': structural_issues,
+        'reference_match': reference_match,
+        'reference_status': ref_comparison['status'] if ref_comparison else 'no_reference',
+        'reference_diff': ref_comparison['difference'] if ref_comparison else '',
     }
 
 
@@ -639,7 +661,7 @@ def run_experiment():
     generate_report(results, attempted, cropped_count, nonempty_count, isolated_count, clipped_count, agreement_count)
 
 
-def generate_report(results, attempted, cropped, nonempty, isolated, clipped, agreement):
+def generate_report(results, attempted, cropped, nonempty, isolated, clipped, agreement, baseline_summary=None, file_hashes=None):
     # Assert summary counts reconcile with individual record tallies
     calc_attempted = len(results)
     calc_cropped = sum(1 for r in results if r.get('crop_successful'))
@@ -664,6 +686,7 @@ def generate_report(results, attempted, cropped, nonempty, isolated, clipped, ag
             assert not ev.get('truncation_detected'), f"Candidate {cid} agreed but was truncated"
             assert ev.get('delimiter_balance'), f"Candidate {cid} agreed but delimiters unbalanced"
             assert ev.get('required_structures_complete'), f"Candidate {cid} agreed but missing required structure"
+            assert ev.get('reference_match') is True or ev.get('reference_match') is None, f"Candidate {cid} agreed but reference did not match"
 
     # Group by paper
     paper_groups = {}
@@ -678,8 +701,9 @@ def generate_report(results, attempted, cropped, nonempty, isolated, clipped, ag
     md = []
     md.append("# Multi-Paper Vision Generalization Report — Padding (3, 2)")
     md.append("")
-    md.append("**Date:** 2026-10-23  ")
+    md.append("**Date:** 2026-10-24  ")
     md.append("**Repository:** KING-WEN-I-CHING-IMMUTABLE-TABLES  ")
+    md.append("**Evaluator Version:** `v2.0-strict-reference-comparison`  ")
     md.append("**Geometry Evaluated:** `padding=(3, 2)` (pad_x=3 pt, pad_y=2 pt)  ")
     md.append("**Baseline Comparison:** Prior frozen baseline `padding=(15, 15)`  ")
     md.append("")
@@ -689,14 +713,36 @@ def generate_report(results, attempted, cropped, nonempty, isolated, clipped, ag
     md.append("")
     md.append(f"Across **{attempted} candidates** sampled across **6 distinct arXiv papers** and **10 mathematical structures**:")
     md.append("")
-    md.append("| Metric | Count | Rate (%) | Description |")
-    md.append("|:---|:---:|:---:|:---|")
-    md.append(f"| **Candidates Attempted** | {attempted} | 100.0% | Total candidate corpus evaluated |")
-    md.append(f"| **Successfully Cropped** | {cropped} | {cropped/attempted*100:.1f}% | Valid non-empty image pixel region extracted |")
-    md.append(f"| **Non-Empty OCR Outputs** | {nonempty} | {nonempty/attempted*100:.1f}% | Recognizer returned non-whitespace LaTeX |")
-    md.append(f"| **Formula-Isolation Rate** | {isolated} | {isolated/attempted*100:.1f}% | Completely free of multiline prose contamination / array wrappers |")
-    md.append(f"| **Clipping / Truncation Rate** | {clipped} | {clipped/attempted*100:.1f}% | Lost essential glyphs, radical bars, or ascenders/descenders |")
-    md.append(f"| **Semantic Agreement Rate** | {agreement} | {agreement/attempted*100:.1f}% | Correctly preserved core mathematical tokens & relations |")
+
+    if baseline_summary:
+        b_tot = baseline_summary.get('total', attempted)
+        b_crop = baseline_summary.get('cropped', b_tot)
+        b_nonempty = baseline_summary.get('nonempty', b_tot)
+        b_iso = baseline_summary.get('isolated', 0)
+        b_clip = baseline_summary.get('clipped', 0)
+        b_agr = baseline_summary.get('agreement', 0)
+
+        iso_delta = (isolated / attempted * 100) - (b_iso / b_tot * 100)
+        agr_delta = (agreement / attempted * 100) - (b_agr / b_tot * 100)
+
+        md.append("| Metric | Padding (15, 15) Baseline | Padding (3, 2) Experiment | Delta / Impact |")
+        md.append("|:---|:---:|:---:|:---|")
+        md.append(f"| **Candidates Attempted** | {b_tot} | {attempted} | Paired 21-candidate benchmark corpus |")
+        md.append(f"| **Successfully Cropped** | {b_crop}/{b_tot} (100.0%) | {cropped}/{attempted} ({cropped/attempted*100:.1f}%) | Valid image pixel region extracted |")
+        md.append(f"| **Non-Empty OCR Outputs** | {b_nonempty}/{b_tot} (100.0%) | {nonempty}/{attempted} ({nonempty/attempted*100:.1f}%) | Recognizer returned non-whitespace LaTeX |")
+        md.append(f"| **Formula-Isolation Rate** | {b_iso}/{b_tot} ({b_iso/b_tot*100:.1f}%) | {isolated}/{attempted} ({isolated/attempted*100:.1f}%) | {iso_delta:+.1f}% elimination of prose arrays |")
+        md.append(f"| **Clipping / Truncation Rate** | {b_clip}/{b_tot} ({b_clip/b_tot*100:.1f}%) | {clipped}/{attempted} ({clipped/attempted*100:.1f}%) | Tighter crop boundary sensitivity |")
+        md.append(f"| **Semantic Agreement Rate** | {b_agr}/{b_tot} ({b_agr/b_tot*100:.1f}%) | {agreement}/{attempted} ({agreement/attempted*100:.1f}%) | {agr_delta:+.1f}% verified against audited references |")
+    else:
+        md.append("| Metric | Count | Rate (%) | Description |")
+        md.append("|:---|:---:|:---:|:---|")
+        md.append(f"| **Candidates Attempted** | {attempted} | 100.0% | Total candidate corpus evaluated |")
+        md.append(f"| **Successfully Cropped** | {cropped} | {cropped/attempted*100:.1f}% | Valid non-empty image pixel region extracted |")
+        md.append(f"| **Non-Empty OCR Outputs** | {nonempty} | {nonempty/attempted*100:.1f}% | Recognizer returned non-whitespace LaTeX |")
+        md.append(f"| **Formula-Isolation Rate** | {isolated} | {isolated/attempted*100:.1f}% | Completely free of multiline prose contamination / array wrappers |")
+        md.append(f"| **Clipping / Truncation Rate** | {clipped} | {clipped/attempted*100:.1f}% | Lost essential glyphs, radical bars, or ascenders/descenders |")
+        md.append(f"| **Semantic Agreement Rate** | {agreement} | {agreement/attempted*100:.1f}% | Correctly preserved core mathematical tokens & relations |")
+
     md.append("")
     md.append("---")
     md.append("")
@@ -744,8 +790,8 @@ def generate_report(results, attempted, cropped, nonempty, isolated, clipped, ag
     md.append("")
     md.append("## 4. Detailed Candidate Records")
     md.append("")
-    md.append("| Candidate ID | Paper | Page | Source Text | Recognized LaTeX | Shape | Isolated | Agreement |")
-    md.append("|:---|:---:|:---:|:---|:---|:---:|:---:|:---:|")
+    md.append("| Candidate ID | Paper | Page | Source Text | Recognized LaTeX | Shape | Isolated | Agreement | Reference Match |")
+    md.append("|:---|:---:|:---:|:---|:---|:---:|:---:|:---:|:---:|")
 
     for r in results:
         cid = r.get('candidate_id', '')
@@ -757,15 +803,30 @@ def generate_report(results, attempted, cropped, nonempty, isolated, clipped, ag
         ev = r.get('evaluation', {})
         iso = "YES" if ev.get('is_isolated') else "NO"
         agr = "YES" if ev.get('semantic_agreement') else "NO"
-        md.append(f"| `{cid}` | `{pid}` | {pg} | `{src}` | `{rec}` | {shape} | {iso} | {agr} |")
+        ref_status = ev.get('reference_status', 'none')
+        md.append(f"| `{cid}` | `{pid}` | {pg} | `{src}` | `{rec}` | {shape} | {iso} | {agr} | `{ref_status}` |")
 
     md.append("")
     md.append("---")
     md.append("")
     md.append("## 5. Artifact Provenance & Traceability")
     md.append("")
-    md.append(f"- **Experiment JSONL:** [`DATASETS/vision_comparison/multi_paper_experiment_padding_3_2.jsonl`](file:///{EXP_JSONL.as_posix()})")
-    md.append(f"- **Frozen Baseline JSONL:** [`DATASETS/vision_comparison/baseline_frozen_padding15.jsonl`](file:///{FROZEN_BASELINE.as_posix()})")
+    md.append("- **Evaluator Version:** `v2.0-strict-reference-comparison` (enforces mathematical reference equivalence, rejects duplicated tokens and extraneous trailing expressions)")
+    md.append("- **Reference Audit Status:** All 21 reference expressions audited against source-paper PDF clips with exact text, boundaries, and provenance (`scripts/evaluate_output_reference.py`)")
+
+    if file_hashes:
+        exp_h = file_hashes.get('exp_sha256', 'unknown')
+        base_h = file_hashes.get('base_sha256', 'unknown')
+        legacy_h = file_hashes.get('legacy_sha256', 'unknown')
+        md.append(f"- **Experiment JSONL (Padding 3, 2):** [`DATASETS/vision_comparison/multi_paper_experiment_padding_3_2.jsonl`](file:///{EXP_JSONL.as_posix()}) (SHA-256: `{exp_h}`)")
+        md.append(f"- **Paired Baseline JSONL (Padding 15, 15, 21 candidates):** [`DATASETS/vision_comparison/multi_paper_baseline_padding15.jsonl`](file:///{(OUTPUT_DIR / 'multi_paper_baseline_padding15.jsonl').as_posix()}) (SHA-256: `{base_h}`)")
+        md.append(f"- **Legacy Frozen Baseline (4 candidates):** [`DATASETS/vision_comparison/baseline_frozen_padding15.jsonl`](file:///{FROZEN_BASELINE.as_posix()}) (SHA-256: `{legacy_h}`)")
+    else:
+        md.append(f"- **Experiment JSONL:** [`DATASETS/vision_comparison/multi_paper_experiment_padding_3_2.jsonl`](file:///{EXP_JSONL.as_posix()})")
+        md.append(f"- **Paired Baseline JSONL:** [`DATASETS/vision_comparison/multi_paper_baseline_padding15.jsonl`](file:///{(OUTPUT_DIR / 'multi_paper_baseline_padding15.jsonl').as_posix()})")
+        md.append(f"- **Legacy Frozen Baseline:** [`DATASETS/vision_comparison/baseline_frozen_padding15.jsonl`](file:///{FROZEN_BASELINE.as_posix()})")
+
+    md.append("- **Provenance Resolution:** `multi_paper_baseline_padding15.jsonl` provides the complete 21-candidate paired baseline run at padding (15, 15), while `baseline_frozen_padding15.jsonl` is the original 4-candidate preliminary run from 1907.04931 preserved for historical audit.")
     md.append(f"- **Runner Script:** [`scripts/experiments_multi_paper_generalization.py`](file:///{Path(__file__).resolve().as_posix()})")
     md.append("")
 
