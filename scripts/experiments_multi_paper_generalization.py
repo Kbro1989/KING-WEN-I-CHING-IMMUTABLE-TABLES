@@ -295,7 +295,15 @@ CANDIDATES = [
 
 
 def evaluate_output(recognized_text: str, target_tokens: list[str]) -> dict:
-    """Evaluate isolation, clipping, and semantic agreement."""
+    """Evaluate isolation, clipping, and semantic agreement.
+    
+    Balanced evaluator with TWO levels:
+    1. Strict (for complex equations): token presence AND structural completeness
+    2. Lenient (for simple inline math): token presence + isolation check
+    
+    This prevents both false positives (token presence alone) and
+    false negatives (over-strict structural requirements).
+    """
     if not recognized_text:
         return {
             'is_empty': True,
@@ -305,12 +313,14 @@ def evaluate_output(recognized_text: str, target_tokens: list[str]) -> dict:
             'clipping_detected': True,
             'semantic_agreement': False,
             'tokens_found': [],
+            'structural_score': 0.0,
+            'structural_issues': [],
         }
 
     # Multiline or array check
     is_multiline = bool(re.search(r'\\begin\{(?:array|aligned|matrix|cases)\}', recognized_text) or '\\\\' in recognized_text)
     
-    # Prose contamination check: words >= 3 characters not math commands
+    # Prose contamination check
     stripped = re.sub(r'\\[a-zA-Z]+', ' ', recognized_text)
     words = re.findall(r'[a-zA-Z]{3,}', stripped)
     allowed = {'lim', 'sup', 'inf', 'max', 'min', 'sin', 'cos', 'tan', 'exp', 'log', 'det', 'dim', 'var', 'cov', 'div'}
@@ -321,10 +331,46 @@ def evaluate_output(recognized_text: str, target_tokens: list[str]) -> dict:
 
     # Semantic token agreement
     tokens_found = [tok for tok in target_tokens if tok.lower() in recognized_text.lower()]
-    semantic_agreement = len(tokens_found) >= max(1, len(target_tokens) - 1)
+    token_sems = len(tokens_found) >= max(1, len(target_tokens) - 1)
 
-    # Clipping detection
-    clipping_detected = not semantic_agreement and len(tokens_found) == 0
+    # Structural completeness check
+    structural_score = 0.0
+    structural_issues = []
+    
+    # Key structural markers
+    structural_markers = {
+        'summation': bool(re.search(r'\\sum', recognized_text)) or '∑' in recognized_text,
+        'integral': bool(re.search(r'\\int', recognized_text)) or '∫' in recognized_text,
+        'product': bool(re.search(r'\\prod', recognized_text)) or '∏' in recognized_text,
+        'fraction': bool(re.search(r'\\frac', recognized_text)) or '/' in recognized_text,
+        'square_root': bool(re.search(r'\\sqrt', recognized_text)) or '√' in recognized_text,
+    }
+    
+    for key, present in structural_markers.items():
+        if target_tokens and any(t in key for t in [t.lower() for t in target_tokens]):
+            structural_score += 1 if present else 0
+            if not present:
+                structural_issues.append('missing_' + key)
+    
+    # Truncation detection
+    has_truncation = bool(re.search(r'\\left\)', recognized_text)) and '\\right' not in recognized_text
+    has_truncation = has_truncation or bool(re.search(r'\\left\{', recognized_text) and '\\right' not in recognized_text)
+    has_truncation = has_truncation or len(recognized_text) < 15
+    
+    clipping_detected = has_truncation or (not token_sems and len(tokens_found) == 0)
+    
+    # Determine if this is complex recognition (requires structural completeness)
+    # Complex: multiple target tokens AND structural operator detected in source
+    structural_operator_in_source = any(k in source_text for k in ['∑', '∫', '∏', 'frac', 'sqrt', '\sum', '\frac', '\sqrt'])
+    complex_recognition = len(target_tokens) >= 2 and structural_operator_in_source
+    
+    # Semantic agreement: lenient for simple math, strict for complex
+    if complex_recognition:
+        # Require BOTH token presence AND structural completeness
+        semantic_agreement = token_sems and structural_score > 0
+    else:
+        # Simple inline math: token presence is sufficient
+        semantic_agreement = token_sems
 
     return {
         'is_empty': False,
@@ -333,8 +379,13 @@ def evaluate_output(recognized_text: str, target_tokens: list[str]) -> dict:
         'prose_contamination': prose_contamination,
         'clipping_detected': clipping_detected,
         'semantic_agreement': semantic_agreement,
+        'structural_score': round(structural_score, 3),
+        'structural_issues': structural_issues,
         'tokens_found': tokens_found,
     }
+
+
+
 
 
 def run_experiment():
@@ -460,7 +511,8 @@ def run_experiment():
 
         except Exception as e:
             logger.error(f"Exception during processing of {cid}: {e}")
-            doc.close()
+            if not doc.is_closed:
+                doc.close()
             record = {
                 'candidate_id': cid,
                 'paper_id': pid,
