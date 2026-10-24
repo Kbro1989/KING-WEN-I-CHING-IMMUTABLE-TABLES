@@ -41,11 +41,24 @@ if sys.platform == 'win32':
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / 'scripts'))
 
-import fitz
-import cv2
-import numpy as np
-from PIL import Image
-from pix2text import Pix2Text
+try:
+    from scripts.evaluate_output_reference import (
+        REFERENCE_DATA,
+        normalize_latex,
+        check_delimiter_balance,
+        detect_truncation,
+        compute_token_recall,
+        check_structure,
+    )
+except ImportError:
+    from evaluate_output_reference import (  # type: ignore[import-not-found]
+        REFERENCE_DATA,
+        normalize_latex,
+        check_delimiter_balance,
+        detect_truncation,
+        compute_token_recall,
+        check_structure,
+    )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger('multi_paper_experiment')
@@ -294,15 +307,21 @@ CANDIDATES = [
 
 
 
-def evaluate_output(recognized_text: str, target_tokens: list[str], source_text: str) -> dict:
-    """Evaluate isolation, clipping, and semantic agreement.
-    
-    Balanced evaluator with TWO levels:
-    1. Strict (for complex equations): token presence AND structural completeness
-    2. Lenient (for simple inline math): token presence + isolation check
-    
-    This prevents both false positives (token presence alone) and
-    false negatives (over-strict structural requirements).
+def evaluate_output(
+    recognized_text: str,
+    target_tokens: list[str],
+    source_text: str,
+    candidate_id: str | None = None,
+    cand_meta: dict | None = None,
+) -> dict:
+    """Evaluate isolation, clipping, structural completeness, and semantic agreement.
+
+    Separates:
+      - token_recall: continuous fraction of target tokens present
+      - required_structures_complete: presence of candidate-specific required operators
+      - delimiter_balance: matching of required delimiter pairs
+      - truncation_detected: evidence of truncated or missing operands
+      - semantic_agreement: composite gate requiring all critical criteria to pass
     """
     if not recognized_text:
         return {
@@ -312,67 +331,128 @@ def evaluate_output(recognized_text: str, target_tokens: list[str], source_text:
             'prose_contamination': False,
             'clipping_detected': True,
             'semantic_agreement': False,
+            'token_recall': 0.0,
             'tokens_found': [],
+            'tokens_missing': list(target_tokens),
+            'required_structures_complete': False,
+            'delimiter_balance': False,
+            'truncation_detected': True,
             'structural_score': 0.0,
-            'structural_issues': [],
+            'structural_issues': ['empty_output'],
         }
 
     # Multiline or array check
-    is_multiline = bool(re.search(r'\\begin\{(?:array|aligned|matrix|cases)\}', recognized_text) or '\\\\' in recognized_text)
-    
+    is_multiline = bool(
+        re.search(r'\\begin\{(?:array|aligned|matrix|cases)\}', recognized_text)
+        or '\\\\' in recognized_text
+    )
+
     # Prose contamination check
     stripped = re.sub(r'\\[a-zA-Z]+', ' ', recognized_text)
     words = re.findall(r'[a-zA-Z]{3,}', stripped)
-    allowed = {'lim', 'sup', 'inf', 'max', 'min', 'sin', 'cos', 'tan', 'exp', 'log', 'det', 'dim', 'var', 'cov', 'div'}
+    allowed = {
+        'lim', 'sup', 'inf', 'max', 'min', 'sin', 'cos', 'tan', 'exp', 'log',
+        'det', 'dim', 'var', 'cov', 'div', 'mathrm', 'mathbf', 'boldsymbol',
+        'lambda', 'partial', 'sigma', 'theta', 'zeta', 'chi', 'rho', 'data',
+        'skip',
+    }
     prose_words = [w for w in words if w.lower() not in allowed]
     prose_contamination = len(prose_words) > 0 or is_multiline
-
     is_isolated = not is_multiline and not prose_contamination
 
-    # Semantic token agreement
-    tokens_found = [tok for tok in target_tokens if tok.lower() in recognized_text.lower()]
-    token_sems = len(tokens_found) >= max(1, len(target_tokens) - 1)
+    # Lookup reference entry
+    ref_entry = None
+    if candidate_id and candidate_id in REFERENCE_DATA:
+        ref_entry = REFERENCE_DATA[candidate_id]
+    elif cand_meta:
+        ref_entry = cand_meta
 
-    # Structural completeness check: verify key operators appear in recognized output
-    structural_score = 0.0
-    structural_issues = []
-    
-    # Key structural markers with both unicode and LaTeX representations
-    structural_markers = {
-        'summation': ('∑', r'\sum'),
-        'integral': ('∫', r'\int'),
-        'product': ('∏', r'\prod'),
-        'fraction': ('/', r'\frac'),
-        'square_root': ('√', r'\sqrt'),
-    }
-    
-    for key, (unicode_marker, latex_marker) in structural_markers.items():
-        # Check if the recognized text contains either representation
-        recognized_has_operator = (unicode_marker in recognized_text) or (latex_marker in recognized_text)
-        if recognized_has_operator:
-            structural_score += 1
-        else:
-            structural_issues.append('missing_' + key)
-    
+    is_partial_crop = (ref_entry.get('crop_scope') == 'partial') if ref_entry else False
+
     # Truncation detection
-    has_truncation = bool(re.search(r'\\left\)', recognized_text)) and '\\right' not in recognized_text
-    has_truncation = has_truncation or bool(re.search(r'\\left\{', recognized_text) and '\\right' not in recognized_text)
-    has_truncation = has_truncation or len(recognized_text) < 15
-    
-    clipping_detected = has_truncation or (not token_sems and len(tokens_found) == 0)
-    
-    # Determine if this is complex recognition (requires structural completeness)
-    # Complex: multiple target tokens AND structural operator detected in source
-    structural_operator_in_source = any(k in source_text for k in ['∑', '∫', '∏', 'frac', 'sqrt', r'\sum', r'\frac', r'\sqrt'])
-    complex_recognition = len(target_tokens) >= 2 and structural_operator_in_source
-    
-    # Semantic agreement: lenient for simple math, strict for complex
-    if complex_recognition:
-        # Require BOTH token presence AND structural completeness
-        semantic_agreement = token_sems and structural_score > 0
+    trunc_res = detect_truncation(recognized_text, is_partial_crop=is_partial_crop)
+    truncation_detected = trunc_res['detected']
+    structural_issues = list(trunc_res['indicators'])
+
+    # Delimiter balance
+    if ref_entry and 'required_delimiters' in ref_entry:
+        req_delims = ref_entry['required_delimiters']
     else:
-        # Simple inline math: token presence is sufficient
-        semantic_agreement = token_sems
+        req_delims = []
+        if r'\langle' in recognized_text or r'\rangle' in recognized_text:
+            req_delims.append((r'\langle', r'\rangle'))
+        if r'\{' in recognized_text or r'\}' in recognized_text:
+            req_delims.append((r'\{', r'\}'))
+        if '(' in recognized_text or ')' in recognized_text:
+            req_delims.append(('(', ')'))
+
+    delim_res = check_delimiter_balance(recognized_text, req_delims)
+    delimiter_balance = delim_res['balanced']
+    structural_issues.extend(delim_res['issues'])
+
+    # Candidate-specific required structures
+    if ref_entry and 'required_structures' in ref_entry:
+        req_structures = ref_entry['required_structures']
+    else:
+        req_structures = []
+        if any(g in source_text or any(g in tok for tok in target_tokens) for g in ['ζ', 'σ', 'λ', 'ρ', 'χ', 'θ', r'\zeta', r'\sigma', r'\lambda', r'\rho', r'\chi', r'\theta']):
+            req_structures.append('greek_letter')
+        if any(s in source_text for s in ['∑', r'\sum']):
+            req_structures.append('summation')
+        if any(r in source_text for r in ['√', r'\sqrt']):
+            req_structures.append('radical')
+        if r'\partial' in source_text or '∂' in source_text:
+            req_structures.append('partial_derivative')
+        if r'\nabla' in source_text or '∇' in source_text:
+            req_structures.append('gradient')
+
+    missing_structures = [s for s in req_structures if not check_structure(recognized_text, s)]
+    required_structures_complete = len(missing_structures) == 0
+    for s in missing_structures:
+        structural_issues.append(f'missing_{s}')
+
+    # Unexpected operator detection (spurious derivatives, overlines, stackrel)
+    ref_latex = ref_entry.get('reference_latex', '') if ref_entry else ''
+    
+    if r'\partial' in recognized_text:
+        ref_has_partial = (r'\partial' in ref_latex) or ('∂' in source_text) or ('partial_derivative' in req_structures)
+        if not ref_has_partial:
+            structural_issues.append('unexpected_operator')
+        elif recognized_text.count(r'\partial') > 1 and ref_latex.count(r'\partial') <= 1:
+            structural_issues.append('unexpected_operator')
+
+    if r'\overline' in recognized_text and r'\overline' not in ref_latex:
+        structural_issues.append('unexpected_operator')
+
+    if r'\stackrel' in recognized_text and r'\stackrel' not in ref_latex:
+        structural_issues.append('unexpected_operator')
+
+    # Token recall
+    recall_res = compute_token_recall(recognized_text, target_tokens)
+    token_recall = recall_res['recall']
+    tokens_found = recall_res['found']
+    tokens_missing = recall_res['missing']
+
+    # Structural score
+    total_checks = max(1, len(req_structures) + len(req_delims) + 1)
+    passed_checks = total_checks - len(structural_issues)
+    structural_score = max(0.0, round(passed_checks / total_checks, 3))
+
+    # Clipping detection
+    clipping_detected = truncation_detected or not delimiter_balance or (len(tokens_found) == 0 and len(target_tokens) > 0)
+
+    # Semantic agreement composite gate
+    has_unexpected = any('unexpected_operator' in issue for issue in structural_issues)
+    token_threshold = 0.5 if len(target_tokens) >= 2 else (1.0 if len(target_tokens) == 1 else 0.0)
+
+    semantic_agreement = (
+        is_isolated
+        and not truncation_detected
+        and delimiter_balance
+        and required_structures_complete
+        and (token_recall >= token_threshold)
+        and not has_unexpected
+    )
 
     return {
         'is_empty': False,
@@ -381,9 +461,14 @@ def evaluate_output(recognized_text: str, target_tokens: list[str], source_text:
         'prose_contamination': prose_contamination,
         'clipping_detected': clipping_detected,
         'semantic_agreement': semantic_agreement,
-        'structural_score': round(structural_score, 3),
-        'structural_issues': structural_issues,
+        'token_recall': token_recall,
         'tokens_found': tokens_found,
+        'tokens_missing': tokens_missing,
+        'required_structures_complete': required_structures_complete,
+        'delimiter_balance': delimiter_balance,
+        'truncation_detected': truncation_detected,
+        'structural_score': structural_score,
+        'structural_issues': structural_issues,
     }
 
 
@@ -391,6 +476,12 @@ def evaluate_output(recognized_text: str, target_tokens: list[str], source_text:
 
 
 def run_experiment():
+    import fitz  # type: ignore[import-not-found]
+    import cv2  # type: ignore[import-not-found]
+    import numpy as np  # type: ignore[import-not-found]
+    from PIL import Image  # type: ignore[import-not-found]
+    from pix2text import Pix2Text  # type: ignore[import-not-found]
+
     # 1. Preserve baseline records
     baseline_src = OUTPUT_DIR / 'vision_comparison_results.jsonl'
     if baseline_src.exists() and not FROZEN_BASELINE.exists():
@@ -409,6 +500,15 @@ def run_experiment():
 
     logger.info(f"Running multi-paper experiment across {attempted} candidates using padding=(3, 2)...")
 
+    for cand in CANDIDATES:
+        cid = cand['candidate_id']
+        if cid in REFERENCE_DATA:
+            cand.setdefault('reference_latex', REFERENCE_DATA[cid]['reference_latex'])
+            cand.setdefault('crop_scope', REFERENCE_DATA[cid]['crop_scope'])
+            cand.setdefault('required_structures', REFERENCE_DATA[cid]['required_structures'])
+            cand.setdefault('required_delimiters', REFERENCE_DATA[cid]['required_delimiters'])
+            cand.setdefault('reference_provenance', REFERENCE_DATA[cid]['reference_provenance'])
+
     for idx, cand in enumerate(CANDIDATES):
         cid = cand['candidate_id']
         pid = cand['paper_id']
@@ -426,7 +526,7 @@ def run_experiment():
                 'page': cand['page'],
                 'crop_successful': False,
                 'recognized_latex': '',
-                'evaluation': evaluate_output('', cand['target_tokens'], ''),
+                'evaluation': evaluate_output('', cand['target_tokens'], '', candidate_id=cid, cand_meta=cand),
                 'error': 'pdf_not_found',
             }
             results.append(res)
@@ -470,7 +570,7 @@ def run_experiment():
                     'crop_shape': list(img_bgr.shape),
                     'content_ratio': content_ratio,
                     'recognized_latex': '',
-                    'evaluation': evaluate_output('', cand['target_tokens'], ''),
+                    'evaluation': evaluate_output('', cand['target_tokens'], '', candidate_id=cid, cand_meta=cand),
                     'error': 'empty_content',
                 }
                 results.append(res)
@@ -483,7 +583,7 @@ def run_experiment():
             raw_rec = p2t.recognize_formula(pil_img)
             rec_text = raw_rec.get('text', '') if isinstance(raw_rec, dict) else str(raw_rec).strip()
 
-            eval_res = evaluate_output(rec_text, cand['target_tokens'], cand['source_text'])
+            eval_res = evaluate_output(rec_text, cand['target_tokens'], cand['source_text'], candidate_id=cid, cand_meta=cand)
 
             if not eval_res['is_empty']:
                 nonempty_count += 1
@@ -501,6 +601,9 @@ def run_experiment():
                 'math_structure': cand['math_structure'],
                 'classification': cand['classification'],
                 'source_text': cand['source_text'],
+                'reference_latex': cand.get('reference_latex', ''),
+                'crop_scope': cand.get('crop_scope', 'complete'),
+                'reference_provenance': cand.get('reference_provenance', {}),
                 'bbox': bbox,
                 'crop_successful': True,
                 'crop_shape': list(img_bgr.shape),
@@ -522,7 +625,7 @@ def run_experiment():
                 'crop_successful': False,
                 'error': str(e),
                 'recognized_latex': '',
-                'evaluation': evaluate_output('', cand['target_tokens'], ''),
+                'evaluation': evaluate_output('', cand['target_tokens'], '', candidate_id=cid, cand_meta=cand),
             }
             results.append(record)
 
@@ -537,6 +640,31 @@ def run_experiment():
 
 
 def generate_report(results, attempted, cropped, nonempty, isolated, clipped, agreement):
+    # Assert summary counts reconcile with individual record tallies
+    calc_attempted = len(results)
+    calc_cropped = sum(1 for r in results if r.get('crop_successful'))
+    calc_nonempty = sum(1 for r in results if not r.get('evaluation', {}).get('is_empty'))
+    calc_isolated = sum(1 for r in results if r.get('evaluation', {}).get('is_isolated'))
+    calc_clipped = sum(1 for r in results if r.get('evaluation', {}).get('clipping_detected'))
+    calc_agreement = sum(1 for r in results if r.get('evaluation', {}).get('semantic_agreement'))
+
+    assert attempted == calc_attempted, f"Attempted mismatch: {attempted} vs {calc_attempted}"
+    assert cropped == calc_cropped, f"Cropped mismatch: {cropped} vs {calc_cropped}"
+    assert nonempty == calc_nonempty, f"Nonempty mismatch: {nonempty} vs {calc_nonempty}"
+    assert isolated == calc_isolated, f"Isolated mismatch: {isolated} vs {calc_isolated}"
+    assert clipped == calc_clipped, f"Clipped mismatch: {clipped} vs {calc_clipped}"
+    assert agreement == calc_agreement, f"Agreement mismatch: {agreement} vs {calc_agreement}"
+
+    for r in results:
+        ev = r.get('evaluation', {})
+        if ev.get('semantic_agreement'):
+            cid = r.get('candidate_id')
+            assert not ev.get('is_empty'), f"Candidate {cid} agreed but was empty"
+            assert ev.get('is_isolated'), f"Candidate {cid} agreed but had prose/multiline"
+            assert not ev.get('truncation_detected'), f"Candidate {cid} agreed but was truncated"
+            assert ev.get('delimiter_balance'), f"Candidate {cid} agreed but delimiters unbalanced"
+            assert ev.get('required_structures_complete'), f"Candidate {cid} agreed but missing required structure"
+
     # Group by paper
     paper_groups = {}
     structure_groups = {}
