@@ -178,7 +178,7 @@ CANDIDATES = [
         'candidate_id': '2104_01277_cand8_summation_lambda',
         'paper_id': '2104.01277',
         'page': 3,
-        'bbox': {'x0': 200.0, 'y0': 180.0, 'x1': 275.0, 'y1': 195.0},
+        'bbox': {'x0': 418.0, 'y0': 404.0, 'x1': 488.0, 'y1': 423.0},
         'source_text': 'j=1(λj+Q)).',
         'classification': 'true_equation',
         'math_structure': 'Indexed Summation Parameter',
@@ -210,7 +210,7 @@ CANDIDATES = [
         'candidate_id': '2206_00364_cand6_dot_derivative',
         'paper_id': '2206.00364',
         'page': 2,
-        'bbox': {'x0': 430.0, 'y0': 430.0, 'x1': 475.0, 'y1': 445.0},
+        'bbox': {'x0': 250.0, 'y0': 629.0, 'x1': 280.0, 'y1': 643.0},
         'source_text': '−˙σ(t)',
         'classification': 'true_equation',
         'math_structure': 'Differential Dot Operator',
@@ -220,8 +220,8 @@ CANDIDATES = [
         'candidate_id': '2206_00364_cand7_denoiser_function',
         'paper_id': '2206.00364',
         'page': 3,
-        'bbox': {'x0': 120.0, 'y0': 200.0, 'x1': 165.0, 'y1': 213.0},
-        'source_text': 'Dθ(x;',
+        'bbox': {'x0': 107.0, 'y0': 121.0, 'x1': 150.0, 'y1': 135.0},
+        'source_text': 'Dθ(x; σ)',
         'classification': 'inline_math',
         'math_structure': 'Composite Functional Operator',
         'target_tokens': ['D', '\\theta'],
@@ -230,7 +230,7 @@ CANDIDATES = [
         'candidate_id': '2206_00364_cand8_skip_scaling',
         'paper_id': '2206.00364',
         'page': 3,
-        'bbox': {'x0': 100.0, 'y0': 225.0, 'x1': 160.0, 'y1': 238.0},
+        'bbox': {'x0': 157.0, 'y0': 121.0, 'x1': 198.0, 'y1': 135.0},
         'source_text': 'cskip(σ)x',
         'classification': 'inline_math',
         'math_structure': 'Composite Functional Scaling',
@@ -291,6 +291,7 @@ CANDIDATES = [
         'target_tokens': ['\\partial', 'e'],
     },
 ]
+
 
 
 def evaluate_output(recognized_text: str, target_tokens: list[str]) -> dict:
