@@ -294,7 +294,7 @@ CANDIDATES = [
 
 
 
-def evaluate_output(recognized_text: str, target_tokens: list[str]) -> dict:
+def evaluate_output(recognized_text: str, target_tokens: list[str], source_text: str) -> dict:
     """Evaluate isolation, clipping, and semantic agreement.
     
     Balanced evaluator with TWO levels:
@@ -333,24 +333,26 @@ def evaluate_output(recognized_text: str, target_tokens: list[str]) -> dict:
     tokens_found = [tok for tok in target_tokens if tok.lower() in recognized_text.lower()]
     token_sems = len(tokens_found) >= max(1, len(target_tokens) - 1)
 
-    # Structural completeness check
+    # Structural completeness check: verify key operators appear in recognized output
     structural_score = 0.0
     structural_issues = []
     
-    # Key structural markers
+    # Key structural markers with both unicode and LaTeX representations
     structural_markers = {
-        'summation': bool(re.search(r'\\sum', recognized_text)) or '∑' in recognized_text,
-        'integral': bool(re.search(r'\\int', recognized_text)) or '∫' in recognized_text,
-        'product': bool(re.search(r'\\prod', recognized_text)) or '∏' in recognized_text,
-        'fraction': bool(re.search(r'\\frac', recognized_text)) or '/' in recognized_text,
-        'square_root': bool(re.search(r'\\sqrt', recognized_text)) or '√' in recognized_text,
+        'summation': ('∑', r'\sum'),
+        'integral': ('∫', r'\int'),
+        'product': ('∏', r'\prod'),
+        'fraction': ('/', r'\frac'),
+        'square_root': ('√', r'\sqrt'),
     }
     
-    for key, present in structural_markers.items():
-        if target_tokens and any(t in key for t in [t.lower() for t in target_tokens]):
-            structural_score += 1 if present else 0
-            if not present:
-                structural_issues.append('missing_' + key)
+    for key, (unicode_marker, latex_marker) in structural_markers.items():
+        # Check if the recognized text contains either representation
+        recognized_has_operator = (unicode_marker in recognized_text) or (latex_marker in recognized_text)
+        if recognized_has_operator:
+            structural_score += 1
+        else:
+            structural_issues.append('missing_' + key)
     
     # Truncation detection
     has_truncation = bool(re.search(r'\\left\)', recognized_text)) and '\\right' not in recognized_text
@@ -361,7 +363,7 @@ def evaluate_output(recognized_text: str, target_tokens: list[str]) -> dict:
     
     # Determine if this is complex recognition (requires structural completeness)
     # Complex: multiple target tokens AND structural operator detected in source
-    structural_operator_in_source = any(k in source_text for k in ['∑', '∫', '∏', 'frac', 'sqrt', '\sum', '\frac', '\sqrt'])
+    structural_operator_in_source = any(k in source_text for k in ['∑', '∫', '∏', 'frac', 'sqrt', r'\sum', r'\frac', r'\sqrt'])
     complex_recognition = len(target_tokens) >= 2 and structural_operator_in_source
     
     # Semantic agreement: lenient for simple math, strict for complex
@@ -424,7 +426,7 @@ def run_experiment():
                 'page': cand['page'],
                 'crop_successful': False,
                 'recognized_latex': '',
-                'evaluation': evaluate_output('', cand['target_tokens']),
+                'evaluation': evaluate_output('', cand['target_tokens'], ''),
                 'error': 'pdf_not_found',
             }
             results.append(res)
@@ -449,7 +451,7 @@ def run_experiment():
                     'page': cand['page'],
                     'crop_successful': False,
                     'recognized_latex': '',
-                    'evaluation': evaluate_output('', cand['target_tokens']),
+                    'evaluation': evaluate_output('', cand['target_tokens'], ''),
                     'error': 'imdecode_failed',
                 }
                 results.append(res)
@@ -468,7 +470,7 @@ def run_experiment():
                     'crop_shape': list(img_bgr.shape),
                     'content_ratio': content_ratio,
                     'recognized_latex': '',
-                    'evaluation': evaluate_output('', cand['target_tokens']),
+                    'evaluation': evaluate_output('', cand['target_tokens'], ''),
                     'error': 'empty_content',
                 }
                 results.append(res)
@@ -481,7 +483,7 @@ def run_experiment():
             raw_rec = p2t.recognize_formula(pil_img)
             rec_text = raw_rec.get('text', '') if isinstance(raw_rec, dict) else str(raw_rec).strip()
 
-            eval_res = evaluate_output(rec_text, cand['target_tokens'])
+            eval_res = evaluate_output(rec_text, cand['target_tokens'], cand['source_text'])
 
             if not eval_res['is_empty']:
                 nonempty_count += 1
@@ -520,7 +522,7 @@ def run_experiment():
                 'crop_successful': False,
                 'error': str(e),
                 'recognized_latex': '',
-                'evaluation': evaluate_output('', cand['target_tokens']),
+                'evaluation': evaluate_output('', cand['target_tokens'], ''),
             }
             results.append(record)
 
