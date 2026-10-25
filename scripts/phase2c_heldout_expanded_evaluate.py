@@ -19,6 +19,8 @@ import tempfile
 from pathlib import Path
 
 EVALUATOR_COMMIT = "fe2843963e66c9131ebd442ce05b8e84b90f4374"
+# Frozen gate library SHA-256 at commit fe2843963e
+FROZEN_GATE_LIB_SHA256 = "73970cd2b18f18c5d79ea673913fd19ea57a0974732f6fe759338f4a27d0afd4"
 REPO_ROOT = Path(__file__).parent.parent
 
 
@@ -48,8 +50,13 @@ def load_frozen_gate_library():
     spec.loader.exec_module(mod)
 
     actual_hash = hashlib.sha256(frozen_code.encode("utf-8")).hexdigest()
+    if actual_hash != FROZEN_GATE_LIB_SHA256:
+        raise RuntimeError(
+            f"Gate library hash mismatch: expected {FROZEN_GATE_LIB_SHA256}, "
+            f"got {actual_hash}. Refusing to run evaluation."
+        )
     print(f"Evaluator commit verified: {EVALUATOR_COMMIT}")
-    print(f"Gate library SHA-256 (frozen): {actual_hash}")
+    print(f"Gate library SHA-256 (frozen): {actual_hash} [MATCHED]")
 
     return mod
 
@@ -128,8 +135,20 @@ def main():
         results.append({"case_id": f"EXP-VAR-{i+1:03d}", "expected": "control",
                         "outcome": r["outcome"], "subs": detected, "type": vt, "ok": ok})
 
+    # Non-identical controls v2 (expected: pass)
+    for i, (ref, rec, ctrl_type) in enumerate(expanded.held_out_non_identical_controls_v2):
+        r = gate_3_operator_delimiter(ref, rec)
+        detected = r['evidence']['substituted_operators']
+        ok = r['outcome'] == 'pass'
+        if ok:
+            tn += 1
+        else:
+            fp += 1
+        results.append({'case_id': f'EXP-NIC2-{i+1:03d}', 'expected': 'control',
+                        'outcome': r['outcome'], 'subs': detected, 'type': ctrl_type, 'ok': ok})
+
     n_mut = len(expanded.held_out_mutations_expanded) + len(expanded.held_out_multi_defect)
-    n_ctl = len(expanded.held_out_controls_expanded) + len(expanded.held_out_variants) + len(expanded.held_out_non_identical_controls)
+    n_ctl = len(expanded.held_out_controls_expanded) + len(expanded.held_out_variants) + len(expanded.held_out_non_identical_controls) + len(expanded.held_out_non_identical_controls_v2)
 
     print("=" * 60)
     print("Phase 2C Expanded Held-Out Evaluation")

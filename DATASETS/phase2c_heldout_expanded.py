@@ -90,3 +90,23 @@ held_out_non_identical_controls = [
     # I in summation index (not substitution)
     (r"\sum_{i=1}^{I} a_i", r"\sum_{i=1}^{I} a_i", "I_as_upper_bound_not_substitution"),
 ]
+
+
+# Non-identical negative controls v2: reference and candidate DIFFER
+# but the symbol is NOT a substitution (legitimate notational variant)
+# These test that the gate can DISTINGUISH legitimate symbol use from
+# operator substitution when reference and candidate differ.
+held_out_non_identical_controls_v2 = [
+    # Legitimate: summation with different bounds (no substitution)
+    (r"\sum_{i=1}^{n} a_i", r"\sum_{i=1}^{m} a_i", "sum_bounds_variant_pass"),
+    # Legitimate: partial derivative with different variable (no substitution)
+    (r"\frac{\partial f}{\partial x}", r"\frac{\partial g}{\partial y}", "partial_derivative_variant_pass"),
+    # Legitimate: integral with different bounds (no substitution)
+    (r"\int_{0}^{1} f(x) dx", r"\int_{0}^{2} f(x) dx", "integral_bounds_variant_pass"),
+    # Legitimate: fraction with different numerator/denominator (no substitution)
+    (r"\frac{a}{b}", r"\frac{c}{d}", "fraction_variant_pass"),
+    # Legitimate: product with different bounds (no substitution)
+    (r"\prod_{i=1}^{n} x_i", r"\prod_{i=1}^{m} x_i", "product_bounds_variant_pass"),
+    # Legitimate: radical with different radicand (no substitution)
+    (r"\sqrt{x}", r"\sqrt{y}", "radical_variant_pass"),
+]
