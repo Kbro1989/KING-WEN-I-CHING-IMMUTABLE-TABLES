@@ -22,16 +22,32 @@ except ImportError:
 
 
 def test_evaluate_output_accepts_source_text():
-    """evaluate_output() should accept source_text as third argument."""
+    """evaluate_output() should accept source_text and evaluate with candidate reference."""
     result = evaluate_output(
-        recognized_text="\\left( \\zeta_{v}^{(\\ell+1)} \\right)",
+        recognized_text=r"\left( \zeta_{v}^{(\ell+1)} \right)",
         target_tokens=['\\zeta', 'v'],
         source_text="ζ(ℓ+1)",
+        candidate_id='1907_04931_cand1_expectation',
     )
     # Should complete without NameError
     assert 'semantic_agreement' in result
     assert 'structural_score' in result
-    assert result['semantic_agreement'] is True  # tokens present
+    assert result['reference_match'] is True
+    assert result['semantic_agreement'] is True
+
+
+def test_evaluate_output_missing_reference_strictly_fails():
+    """A candidate with no reference must receive semantic_agreement=False in strict mode."""
+    result = evaluate_output(
+        recognized_text=r"\left( \zeta_{v}^{(\ell+1)} \right)",
+        target_tokens=['\\zeta', 'v'],
+        source_text="ζ(ℓ+1)",
+        # Missing candidate_id and cand_meta
+    )
+    assert result['semantic_agreement'] is False
+    assert result['reference_match'] is None
+    assert result['reference_status'] == 'no_reference'
+    assert 'reference_missing' in result['structural_issues']
 
 
 def test_evaluate_output_with_complex_source():
@@ -59,15 +75,54 @@ def test_evaluate_output_truncated_not_passing():
 
 
 def test_evaluate_output_with_summation_marker():
-    """Summation should be detected as a structural operator."""
+    """Summation should be detected as a structural operator with valid reference."""
     result = evaluate_output(
-        recognized_text="\\sum_{k=0}^{n} a_{k}",
-        target_tokens=['b_{n}', '\\sum', 'a_{k}'],
+        recognized_text=r"\sum_{k=0}^{n} a_{k}",
+        target_tokens=['b_{n}', r'\sum', 'a_{k}'],
         source_text="bn = ∑ S(n,k) ak",
+        cand_meta={'reference_latex': r'\sum_{k=0}^{n} a_k'},
     )
     assert result['semantic_agreement'] is True
     assert result['structural_score'] >= 0
-    assert '\\sum' in result['tokens_found'] or '\\\\sum' in result['tokens_found']
+    assert r'\sum' in result['tokens_found'] or '\\sum' in result['tokens_found']
+
+
+def test_escape_table_pipe_preserves_latex_backslashes():
+    """escape_table_pipe must escape unescaped pipes without stripping existing backslashes."""
+    import re
+    def escape_table_pipe(t: str) -> str:
+        return re.sub(r'(?<!\\)((\\\\)*)\|', r'\1\\|', t)
+
+    # 1. Raw pipe -> escaped
+    assert escape_table_pipe('|⟨TχI,') == r'\|⟨TχI,'
+    # 2. LaTeX single backslash norm delimiter -> unchanged
+    assert escape_table_pipe(r'\leq\| T \| \mu') == r'\leq\| T \| \mu'
+    # 3. Double backslash before pipe -> double backslash preserved, pipe escaped
+    assert escape_table_pipe(r'foo\\|bar') == r'foo\\\|bar'
+
+
+def test_expected_boundary_enforcement():
+    """Boundary enforcement must reject spurious delimiters after open comma."""
+    from evaluate_output_reference import compare_reference_latex
+    # Inner product fragment with open comma: valid fragment passes
+    valid_res = compare_reference_latex(
+        recognized=r"\langle T \chi_{I} ,",
+        reference=r"\langle T \chi_I ,",
+        crop_scope='partial',
+        expected_boundary={'left': 'closed', 'right': 'open_at_comma'},
+    )
+    assert valid_res['match'] is True
+
+    # Inner product fragment with spurious trailing pipe delimiter fails boundary check
+    invalid_res = compare_reference_latex(
+        recognized=r"\langle T \chi_{I} , |",
+        reference=r"\langle T \chi_I ,",
+        crop_scope='partial',
+        expected_boundary={'left': 'closed', 'right': 'open_at_comma'},
+    )
+    assert invalid_res['match'] is False
+    assert invalid_res['status'] in ['boundary_violation', 'extraneous_content']
+
 
 
 # ===========================================================================

@@ -394,7 +394,12 @@ def normalize_latex(s: str) -> str:
     return s.strip()
 
 
-def compare_reference_latex(recognized: str, reference: str, crop_scope: str = 'complete') -> dict:
+def compare_reference_latex(
+    recognized: str,
+    reference: str,
+    crop_scope: str = 'complete',
+    expected_boundary: dict | None = None,
+) -> dict:
     """Compare normalized recognized LaTeX against verified reference LaTeX.
 
     Enforces:
@@ -402,6 +407,7 @@ def compare_reference_latex(recognized: str, reference: str, crop_scope: str = '
       - Rejection of duplicated expressions (e.g. sigma_data, sigma_data)
       - Rejection of extraneous trailing content (e.g. break..., , 1)
       - For partial crops: verifies expected visible fragment without extraneous tokens
+      - Independent validation of declared expected_boundary conditions
     """
     n_rec = normalize_latex(recognized)
     n_ref = normalize_latex(reference)
@@ -414,6 +420,30 @@ def compare_reference_latex(recognized: str, reference: str, crop_scope: str = '
             'status': 'empty_comparison',
             'difference': 'empty_recognized_or_reference',
         }
+
+    # Expected boundary enforcement
+    if expected_boundary:
+        right_b = expected_boundary.get('right')
+        if right_b == 'open_at_comma':
+            # Recognized output must not invent trailing closing delimiters (e.g. |, \rangle) after the comma
+            if re.search(r',\s*[|\\\}\)\]]', n_rec):
+                return {
+                    'match': False,
+                    'normalized_recognized': n_rec,
+                    'normalized_reference': n_ref,
+                    'status': 'boundary_violation',
+                    'difference': 'spurious_delimiter_after_open_comma',
+                }
+        elif right_b == 'closed':
+            # Recognized output must not terminate in open punctuation or trailing binary/relational ops
+            if n_rec and n_rec[-1] in '=+-/*':
+                return {
+                    'match': False,
+                    'normalized_recognized': n_rec,
+                    'normalized_reference': n_ref,
+                    'status': 'boundary_violation',
+                    'difference': f'trailing_operator_on_closed_boundary: {n_rec[-1]!r}',
+                }
 
     # Duplication check: if reference expression is duplicated in recognized output
     if n_ref in n_rec and n_rec.count(n_ref) > 1:
@@ -455,6 +485,15 @@ def compare_reference_latex(recognized: str, reference: str, crop_scope: str = '
                     'status': 'extraneous_content',
                     'difference': f'extraneous_partial_tail: {remainder!r}',
                 }
+        elif n_ref.startswith(n_rec) and len(n_ref) > len(n_rec):
+            remainder = n_ref[len(n_rec):].strip()
+            return {
+                'match': False,
+                'normalized_recognized': n_rec,
+                'normalized_reference': n_ref,
+                'status': 'incomplete_partial',
+                'difference': f'missing_partial_tail: {remainder!r}',
+            }
 
     # Extraneous trailing content check
     if n_rec.startswith(n_ref) and len(n_rec) > len(n_ref):

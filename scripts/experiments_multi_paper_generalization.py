@@ -69,8 +69,11 @@ OUTPUT_DIR = REPO_ROOT / 'DATASETS' / 'vision_comparison'
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 EXP_JSONL = OUTPUT_DIR / 'multi_paper_experiment_padding_3_2.jsonl'
+RAW_EXP_JSONL = OUTPUT_DIR / 'raw_multi_paper_experiment_padding_3_2.jsonl'
 REPORT_MD = OUTPUT_DIR / 'multi_paper_generalization_report.md'
 FROZEN_BASELINE = OUTPUT_DIR / 'baseline_frozen_padding15.jsonl'
+RAW_BASELINE_JSONL = OUTPUT_DIR / 'raw_multi_paper_baseline_padding15.jsonl'
+BASELINE_JSONL = OUTPUT_DIR / 'multi_paper_baseline_padding15.jsonl'
 
 # Pinned and discovered paper paths
 PDF_MAP = {
@@ -446,10 +449,14 @@ def evaluate_output(
             recognized=recognized_text,
             reference=ref_latex,
             crop_scope=ref_entry.get('crop_scope', 'complete') if ref_entry else 'complete',
+            expected_boundary=ref_entry.get('expected_boundary', None) if ref_entry else None,
         )
         reference_match = ref_comparison['match']
         if not reference_match:
             structural_issues.append(f"reference_{ref_comparison['status']}")
+    else:
+        reference_match = None
+        structural_issues.append("reference_missing")
 
     # Structural score
     total_checks = max(1, len(req_structures) + len(req_delims) + 1)
@@ -459,7 +466,7 @@ def evaluate_output(
     # Clipping detection
     clipping_detected = truncation_detected or not delimiter_balance or (len(tokens_found) == 0 and len(target_tokens) > 0)
 
-    # Semantic agreement composite gate
+    # Semantic agreement composite gate: strict mode requires reference_match is True
     has_unexpected = any('unexpected_operator' in issue for issue in structural_issues)
     token_threshold = 0.5 if len(target_tokens) >= 2 else (1.0 if len(target_tokens) == 1 else 0.0)
 
@@ -470,7 +477,7 @@ def evaluate_output(
         and required_structures_complete
         and (token_recall >= token_threshold)
         and not has_unexpected
-        and (reference_match is True or reference_match is None)
+        and (reference_match is True)
     )
 
     return {
@@ -686,15 +693,16 @@ def generate_report(results, attempted, cropped, nonempty, isolated, clipped, ag
             assert not ev.get('truncation_detected'), f"Candidate {cid} agreed but was truncated"
             assert ev.get('delimiter_balance'), f"Candidate {cid} agreed but delimiters unbalanced"
             assert ev.get('required_structures_complete'), f"Candidate {cid} agreed but missing required structure"
-            assert ev.get('reference_match') is True or ev.get('reference_match') is None, f"Candidate {cid} agreed but reference did not match"
+            assert ev.get('reference_match') is True, f"Candidate {cid} agreed but reference did not match"
 
     # Group by paper
     paper_groups = {}
     structure_groups = {}
 
-    def escape_pipe(t: str) -> str:
-        t = re.sub(r'\\+\|', '|', t)
-        return t.replace('|', r'\|')
+    def escape_table_pipe(t: str) -> str:
+        # Escape unescaped pipes for Markdown table cells without destroying existing backslashes.
+        # Targets pipes preceded by an even number of backslashes (0, 2, 4...) and inserts a backslash.
+        return re.sub(r'(?<!\\)((\\\\)*)\|', r'\1\\|', t)
 
     for r in results:
         pid = r.get('paper_id', 'unknown')
@@ -786,7 +794,7 @@ def generate_report(results, attempted, cropped, nonempty, isolated, clipped, ag
         tot = len(s_cands)
         s_iso = sum(1 for c in s_cands if c.get('evaluation', {}).get('is_isolated'))
         s_agr = sum(1 for c in s_cands if c.get('evaluation', {}).get('semantic_agreement'))
-        sample_rec = escape_pipe(s_cands[0].get('recognized_latex', '')[:45])
+        sample_rec = escape_table_pipe(s_cands[0].get('recognized_latex', '')[:45])
         md.append(f"| {struct} | {tot} | {s_iso}/{tot} ({s_iso/tot*100:.0f}%) | {s_agr}/{tot} ({s_agr/tot*100:.0f}%) | `{sample_rec}` |")
 
     md.append("")
@@ -801,8 +809,8 @@ def generate_report(results, attempted, cropped, nonempty, isolated, clipped, ag
         cid = r.get('candidate_id', '')
         pid = r.get('paper_id', '')
         pg = r.get('page', 0)
-        src = escape_pipe(r.get('source_text', ''))
-        rec = escape_pipe(r.get('recognized_latex', ''))
+        src = escape_table_pipe(r.get('source_text', ''))
+        rec = escape_table_pipe(r.get('recognized_latex', ''))
         shape = 'x'.join(map(str, r.get('crop_shape', [])[:2]))
         ev = r.get('evaluation', {})
         iso = "YES" if ev.get('is_isolated') else "NO"
@@ -819,11 +827,24 @@ def generate_report(results, attempted, cropped, nonempty, isolated, clipped, ag
     md.append("- **Reference Audit Status:** All 21 reference expressions audited against source-paper PDF clips with exact text, boundaries, and provenance (`scripts/evaluate_output_reference.py`)")
 
     if file_hashes:
+        raw_exp_h = file_hashes.get('raw_exp_sha256')
+        raw_base_h = file_hashes.get('raw_base_sha256')
         exp_h = file_hashes.get('exp_sha256', 'unknown')
         base_h = file_hashes.get('base_sha256', 'unknown')
+        manifest_h = file_hashes.get('manifest_sha256')
+        ref_h = file_hashes.get('ref_sha256')
         legacy_h = file_hashes.get('legacy_sha256', 'unknown')
-        md.append(f"- **Experiment JSONL (Padding 3, 2):** [`DATASETS/vision_comparison/multi_paper_experiment_padding_3_2.jsonl`](file:///{EXP_JSONL.as_posix()}) (SHA-256: `{exp_h}`)")
-        md.append(f"- **Paired Baseline JSONL (Padding 15, 15, 21 candidates):** [`DATASETS/vision_comparison/multi_paper_baseline_padding15.jsonl`](file:///{(OUTPUT_DIR / 'multi_paper_baseline_padding15.jsonl').as_posix()}) (SHA-256: `{base_h}`)")
+
+        if raw_exp_h:
+            md.append(f"- **Raw Experiment OCR Inputs (Padding 3, 2, Immutable):** [`DATASETS/vision_comparison/raw_multi_paper_experiment_padding_3_2.jsonl`](file:///{(RAW_EXP_JSONL).as_posix()}) (SHA-256: `{raw_exp_h}`)")
+        if raw_base_h:
+            md.append(f"- **Raw Baseline OCR Inputs (Padding 15, 15, Immutable):** [`DATASETS/vision_comparison/raw_multi_paper_baseline_padding15.jsonl`](file:///{(RAW_BASELINE_JSONL).as_posix()}) (SHA-256: `{raw_base_h}`)")
+        md.append(f"- **Evaluated Experiment JSONL (Padding 3, 2):** [`DATASETS/vision_comparison/multi_paper_experiment_padding_3_2.jsonl`](file:///{EXP_JSONL.as_posix()}) (SHA-256: `{exp_h}`)")
+        md.append(f"- **Evaluated Paired Baseline JSONL (Padding 15, 15, 21 candidates):** [`DATASETS/vision_comparison/multi_paper_baseline_padding15.jsonl`](file:///{(OUTPUT_DIR / 'multi_paper_baseline_padding15.jsonl').as_posix()}) (SHA-256: `{base_h}`)")
+        if manifest_h:
+            md.append(f"- **Candidate Audit Manifest:** [`DATASETS/vision_comparison/candidate_audit_manifest.json`](file:///{(OUTPUT_DIR / 'candidate_audit_manifest.json').as_posix()}) (SHA-256: `{manifest_h}`)")
+        if ref_h:
+            md.append(f"- **Reference Ground Truth:** [`scripts/evaluate_output_reference.py`](file:///{(REPO_ROOT / 'scripts' / 'evaluate_output_reference.py').as_posix()}) (SHA-256: `{ref_h}`)")
         md.append(f"- **Legacy Frozen Baseline (4 candidates):** [`DATASETS/vision_comparison/baseline_frozen_padding15.jsonl`](file:///{FROZEN_BASELINE.as_posix()}) (SHA-256: `{legacy_h}`)")
     else:
         md.append(f"- **Experiment JSONL:** [`DATASETS/vision_comparison/multi_paper_experiment_padding_3_2.jsonl`](file:///{EXP_JSONL.as_posix()})")

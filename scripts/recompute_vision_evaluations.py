@@ -32,12 +32,16 @@ from experiments_multi_paper_generalization import (
     CANDIDATES,
     OUTPUT_DIR,
     EXP_JSONL,
+    RAW_EXP_JSONL,
+    BASELINE_JSONL,
+    RAW_BASELINE_JSONL,
     FROZEN_BASELINE,
     generate_report,
     evaluate_output,
 )
 
-BASELINE_JSONL = OUTPUT_DIR / 'multi_paper_baseline_padding15.jsonl'
+MANIFEST_PATH = OUTPUT_DIR / 'candidate_audit_manifest.json'
+REF_FILE = REPO_ROOT / 'scripts' / 'evaluate_output_reference.py'
 
 
 def recompute():
@@ -61,9 +65,11 @@ def recompute():
     b_clipped = 0
     b_agreement = 0
 
-    if BASELINE_JSONL.exists():
-        print(f"Reading and re-evaluating baseline {BASELINE_JSONL} under identical evaluator rules...")
-        with open(BASELINE_JSONL, 'r', encoding='utf-8') as f:
+    baseline_source = RAW_BASELINE_JSONL if RAW_BASELINE_JSONL.exists() else BASELINE_JSONL
+
+    if baseline_source.exists():
+        print(f"Reading and re-evaluating baseline from {baseline_source} under identical evaluator rules...")
+        with open(baseline_source, 'r', encoding='utf-8') as f:
             base_records = [json.loads(line) for line in f if line.strip()]
 
         for r in base_records:
@@ -114,8 +120,9 @@ def recompute():
     }
 
     # 3. Recompute padding=(3, 2) experiment
-    print(f"\nReading {EXP_JSONL}...")
-    with open(EXP_JSONL, 'r', encoding='utf-8') as f:
+    exp_source = RAW_EXP_JSONL if RAW_EXP_JSONL.exists() else EXP_JSONL
+    print(f"\nReading experiment inputs from {exp_source}...")
+    with open(exp_source, 'r', encoding='utf-8') as f:
         exp_records = [json.loads(line) for line in f if line.strip()]
 
     updated_exp = []
@@ -171,8 +178,12 @@ def recompute():
 
     # Compute SHA-256 hashes
     file_hashes = {
+        'raw_exp_sha256': hashlib.sha256(RAW_EXP_JSONL.read_bytes()).hexdigest() if RAW_EXP_JSONL.exists() else None,
+        'raw_base_sha256': hashlib.sha256(RAW_BASELINE_JSONL.read_bytes()).hexdigest() if RAW_BASELINE_JSONL.exists() else None,
         'exp_sha256': hashlib.sha256(EXP_JSONL.read_bytes()).hexdigest(),
         'base_sha256': hashlib.sha256(BASELINE_JSONL.read_bytes()).hexdigest() if BASELINE_JSONL.exists() else 'missing',
+        'manifest_sha256': hashlib.sha256(MANIFEST_PATH.read_bytes()).hexdigest() if MANIFEST_PATH.exists() else None,
+        'ref_sha256': hashlib.sha256(REF_FILE.read_bytes()).hexdigest() if REF_FILE.exists() else None,
         'legacy_sha256': hashlib.sha256(FROZEN_BASELINE.read_bytes()).hexdigest() if FROZEN_BASELINE.exists() else 'missing',
     }
 
@@ -193,4 +204,5 @@ def recompute():
 
 if __name__ == '__main__':
     recompute()
+
 
