@@ -96,14 +96,41 @@ def run_audit(save_manifest: bool = True) -> dict:
         wide_text = page.get_text('text', clip=wide_rect).strip().replace('\n', ' ')
         doc.close()
 
-        # Audit status determination:
-        # Check if extracted text contains key recognizable tokens or if font rendering requires manual audit status
+        # Audit evidence classification: three-tier model.
+        #
+        # 'pdf_text_overlap_verified'  — all alphanumeric tokens in source_text are found
+        #   in exact_clip_text. Machine-confirmed that the bbox points to the correct PDF
+        #   region. Does NOT verify LaTeX structure, index placement, or every mathematical
+        #   glyph (e.g. does not distinguish union from summation when both are indexed).
+        #
+        # 'pdf_text_overlap_partial'   — at least one but not all source_text tokens appear
+        #   in clip text. Region may be correct but clip coverage is incomplete.
+        #
+        # 'metadata_assertions_only'   — no alphanumeric overlap confirmed from PDF clip.
+        #   Metadata (reference_latex, boundary, provenance) passed structural assertions
+        #   but PDF text extraction did not confirm the region. Requires human visual review.
+        #
+        # NONE of these statuses constitute independent mathematical verification of the
+        # reference_latex LaTeX expression. Index placement, glyph identity, and expression
+        # boundaries require human visual review of the rendered PDF crop.
         src_text = cand.get('source_text', '')
-        has_overlap = bool(exact_text and (any(ch in exact_text for ch in src_text if ch.isalnum())))
-        if has_overlap:
-            audit_status = 'verified_pdf_match'
+        src_tokens = [ch for ch in src_text if ch.isalnum()]
+        if src_tokens and exact_text:
+            matched = [ch for ch in src_tokens if ch in exact_text]
+            overlap_fraction = len(matched) / len(src_tokens)
+            if overlap_fraction >= 1.0:
+                audit_status = 'pdf_text_overlap_verified'
+                evidence_notes = f'All {len(src_tokens)} source tokens present in exact clip text.'
+            elif overlap_fraction > 0.0:
+                audit_status = 'pdf_text_overlap_partial'
+                missing_toks = [ch for ch in src_tokens if ch not in exact_text]
+                evidence_notes = f'{len(matched)}/{len(src_tokens)} source tokens present. Missing: {missing_toks!r}'
+            else:
+                audit_status = 'metadata_assertions_only'
+                evidence_notes = 'No source tokens found in exact clip text. Human review required.'
         else:
-            audit_status = 'manual_review_verified'
+            audit_status = 'metadata_assertions_only'
+            evidence_notes = 'Empty exact_clip_text or no source tokens. Human review required.'
 
         record = {
             'candidate_id': cid,
@@ -119,12 +146,14 @@ def run_audit(save_manifest: bool = True) -> dict:
             'wide_context_text': wide_text,
             'reference_provenance': provenance,
             'audit_status': audit_status,
+            'evidence_notes': evidence_notes,
             'machine_assertions_passed': True,
         }
         manifest_records.append(record)
         passed_count += 1
 
         print(f"[{idx+1}/21] {cid}: {audit_status} (exact: {exact_text!r})")
+
 
     manifest = {
         'total_candidates': total_candidates,

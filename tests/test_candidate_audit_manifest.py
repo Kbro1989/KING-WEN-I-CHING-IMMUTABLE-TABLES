@@ -28,13 +28,23 @@ def test_audit_manifest_all_21_candidates_pass():
     assert manifest['all_assertions_passed'] is True
     assert len(manifest['records']) == 21
 
+    VALID_AUDIT_STATUSES = {
+        'pdf_text_overlap_verified',
+        'pdf_text_overlap_partial',
+        'metadata_assertions_only',
+    }
     for rec in manifest['records']:
         assert rec['machine_assertions_passed'] is True
         assert rec['reference_latex'] != ''
         assert rec['crop_scope'] in ['complete', 'partial']
         assert 'left' in rec['expected_boundary']
         assert 'right' in rec['expected_boundary']
-        assert rec['audit_status'] in ['verified_pdf_match', 'manual_review_verified']
+        assert rec['audit_status'] in VALID_AUDIT_STATUSES, (
+            f"{rec['candidate_id']}: unexpected audit_status {rec['audit_status']!r}"
+        )
+        # Three-tier model requires evidence_notes explaining what was and was not verified
+        assert 'evidence_notes' in rec, f"{rec['candidate_id']}: missing evidence_notes"
+        assert rec['evidence_notes'], f"{rec['candidate_id']}: evidence_notes is empty"
 
 
 def test_manifest_file_exists_and_valid():

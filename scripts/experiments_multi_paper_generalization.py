@@ -368,12 +368,20 @@ def evaluate_output(
     prose_contamination = len(prose_words) > 0 or is_multiline
     is_isolated = not is_multiline and not prose_contamination
 
-    # Lookup reference entry
+    # Lookup reference entry.
+    # ref_is_audited is True only when the reference comes from REFERENCE_DATA (machine-checked
+    # against source PDFs). A reference supplied only through cand_meta is caller-supplied and
+    # is NOT considered an audited reference for the purposes of semantic_agreement.
     ref_entry = None
+    ref_is_audited = False
     if candidate_id and candidate_id in REFERENCE_DATA:
         ref_entry = REFERENCE_DATA[candidate_id]
+        ref_is_audited = True
     elif cand_meta:
+        # Use cand_meta for structural checks (delimiter, scope, structures)
+        # but do NOT treat it as an audited reference for semantic_agreement.
         ref_entry = cand_meta
+        ref_is_audited = False
 
     is_partial_crop = (ref_entry.get('crop_scope') == 'partial') if ref_entry else False
 
@@ -441,10 +449,16 @@ def evaluate_output(
     tokens_found = recall_res['found']
     tokens_missing = recall_res['missing']
 
-    # Mathematical Reference Comparison
+    # Mathematical Reference Comparison.
+    # reference_match can only be True when:
+    #   (a) ref_latex is non-empty AND
+    #   (b) the reference came from REFERENCE_DATA (ref_is_audited=True) AND
+    #   (c) normalized expression comparison succeeds.
+    # Caller-supplied cand_meta references do not satisfy (b); they are compared
+    # for diagnostics only and yield reference_match=None.
     ref_comparison = None
     reference_match = None
-    if ref_latex:
+    if ref_latex and ref_is_audited:
         ref_comparison = compare_reference_latex(
             recognized=recognized_text,
             reference=ref_latex,
@@ -454,9 +468,19 @@ def evaluate_output(
         reference_match = ref_comparison['match']
         if not reference_match:
             structural_issues.append(f"reference_{ref_comparison['status']}")
+    elif ref_latex and not ref_is_audited:
+        # Run comparison for diagnostics only; do not allow it to confer semantic_agreement.
+        ref_comparison = compare_reference_latex(
+            recognized=recognized_text,
+            reference=ref_latex,
+            crop_scope=ref_entry.get('crop_scope', 'complete') if ref_entry else 'complete',
+            expected_boundary=ref_entry.get('expected_boundary', None) if ref_entry else None,
+        )
+        reference_match = None  # Explicitly indeterminate: unverified source
+        structural_issues.append('reference_unverified')
     else:
         reference_match = None
-        structural_issues.append("reference_missing")
+        structural_issues.append('reference_missing')
 
     # Structural score
     total_checks = max(1, len(req_structures) + len(req_delims) + 1)
@@ -496,7 +520,11 @@ def evaluate_output(
         'structural_score': structural_score,
         'structural_issues': structural_issues,
         'reference_match': reference_match,
-        'reference_status': ref_comparison['status'] if ref_comparison else 'no_reference',
+        'reference_is_audited': ref_is_audited,
+        'reference_status': (
+            'unverified_cand_meta' if (ref_latex and not ref_is_audited)
+            else (ref_comparison['status'] if ref_comparison else 'no_reference')
+        ),
         'reference_diff': ref_comparison['difference'] if ref_comparison else '',
     }
 
