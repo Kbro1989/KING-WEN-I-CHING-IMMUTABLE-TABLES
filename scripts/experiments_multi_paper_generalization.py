@@ -772,7 +772,7 @@ def generate_report(results, attempted, cropped, nonempty, isolated, clipped, ag
         md.append(f"| **Non-Empty OCR Outputs** | {b_nonempty}/{b_tot} (100.0%) | {nonempty}/{attempted} ({nonempty/attempted*100:.1f}%) | Recognizer returned non-whitespace LaTeX |")
         md.append(f"| **Formula-Isolation Rate** | {b_iso}/{b_tot} ({b_iso/b_tot*100:.1f}%) | {isolated}/{attempted} ({isolated/attempted*100:.1f}%) | {iso_delta:+.1f}% elimination of prose arrays |")
         md.append(f"| **Clipping / Truncation Rate** | {b_clip}/{b_tot} ({b_clip/b_tot*100:.1f}%) | {clipped}/{attempted} ({clipped/attempted*100:.1f}%) | Tighter crop boundary sensitivity |")
-        md.append(f"| **Semantic Agreement Rate** | {b_agr}/{b_tot} ({b_agr/b_tot*100:.1f}%) | {agreement}/{attempted} ({agreement/attempted*100:.1f}%) | {agr_delta:+.1f}% verified against audited references |")
+        md.append(f"| **Semantic Agreement Rate** | {b_agr}/{b_tot} ({b_agr/b_tot*100:.1f}%) | {agreement}/{attempted} ({agreement/attempted*100:.1f}%) | {agr_delta:+.1f}% agreement (provisional; visual review outstanding) |")
     else:
         md.append("| Metric | Count | Rate (%) | Description |")
         md.append("| :--- | :---: | :---: | :--- |")
@@ -852,7 +852,7 @@ def generate_report(results, attempted, cropped, nonempty, isolated, clipped, ag
     md.append("## 5. Artifact Provenance & Traceability")
     md.append("")
     md.append("- **Evaluator Version:** `v2.0-strict-reference-comparison` (enforces mathematical reference equivalence, rejects duplicated tokens and extraneous trailing expressions)")
-    md.append("- **Reference Audit Status:** All 21 reference expressions audited against source-paper PDF clips with exact text, boundaries, and provenance (`scripts/evaluate_output_reference.py`)")
+    md.append("- **Reference Audit Status:** All 21 candidates have reference metadata and recorded PDF-clip extraction evidence. Nineteen have complete ordered token overlap; two have partial overlap. These automated checks do not independently verify mathematical notation or expression boundaries. Visual review of all 21 references remains outstanding (`scripts/evaluate_output_reference.py`, `DATASETS/vision_comparison/candidate_audit_manifest.json`).")
 
     if file_hashes:
         raw_exp_h = file_hashes.get('raw_exp_sha256')

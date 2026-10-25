@@ -298,11 +298,14 @@ def run_audit(save_manifest: bool = True) -> dict:
     #                                    assertions (PDF path, bbox, reference_latex, etc.).
     #                                    This does NOT mean text or mathematical verification.
     # 'all_metadata_assertions_passed' – True when every candidate passed all five assertions.
-    # '*_count' fields               – breakdown by three-tier text-evidence status.
-    # 'human_visual_review_required_count' – candidates where automated text extraction did
-    #                                        not fully confirm the source region; a human
-    #                                        must visually inspect the rendered crop before
-    #                                        treating the reference_latex as ground truth.
+    # '*_count' fields                 – breakdown by three-tier text-evidence status.
+    # 'text_extraction_review_required_count' – candidates where automated text extraction was
+    #                                           partial or absent (e.g. non-text glyph paths).
+    # 'mathematical_visual_review_required_count' – candidates whose printed crop has not yet
+    #                                               been independently visually verified for
+    #                                               subscripts, superscripts, bounds, and glyph
+    #                                               identities (all 21 candidates until documented).
+    # 'human_visual_review_required_count' – alias for mathematical_visual_review_required_count.
     manifest = {
         'total_candidates': total_candidates,
         'metadata_assertions_passed': passed_count,
@@ -310,10 +313,12 @@ def run_audit(save_manifest: bool = True) -> dict:
         'pdf_text_overlap_verified_count': status_counts.get('pdf_text_overlap_verified', 0),
         'pdf_text_overlap_partial_count': status_counts.get('pdf_text_overlap_partial', 0),
         'metadata_assertions_only_count': status_counts.get('metadata_assertions_only', 0),
-        'human_visual_review_required_count': (
+        'text_extraction_review_required_count': (
             status_counts.get('pdf_text_overlap_partial', 0)
             + status_counts.get('metadata_assertions_only', 0)
         ),
+        'mathematical_visual_review_required_count': total_candidates,
+        'human_visual_review_required_count': total_candidates,
         'manifest_version': '2.0',
         'records': manifest_records,
     }

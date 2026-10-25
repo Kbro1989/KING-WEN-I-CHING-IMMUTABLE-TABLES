@@ -141,9 +141,12 @@ def test_audit_manifest_all_21_candidates_pass():
     verified  = manifest['pdf_text_overlap_verified_count']
     partial   = manifest['pdf_text_overlap_partial_count']
     meta_only = manifest['metadata_assertions_only_count']
-    review_required = manifest['human_visual_review_required_count']
+    text_review_required = manifest['text_extraction_review_required_count']
+    math_review_required = manifest['mathematical_visual_review_required_count']
     assert verified + partial + meta_only == 21
-    assert review_required == partial + meta_only
+    assert text_review_required == partial + meta_only
+    assert math_review_required == 21
+    assert manifest['human_visual_review_required_count'] == 21
     # At least some candidates should have text-extraction confirmation
     assert verified > 0, 'Expected at least one pdf_text_overlap_verified candidate'
 
@@ -180,9 +183,15 @@ def test_manifest_file_exists_and_valid():
         'pdf_text_overlap_verified_count',
         'pdf_text_overlap_partial_count',
         'metadata_assertions_only_count',
+        'text_extraction_review_required_count',
+        'mathematical_visual_review_required_count',
         'human_visual_review_required_count',
     ):
         assert field in data, f'Manifest missing field: {field}'
+    assert data['mathematical_visual_review_required_count'] == 21
+    assert data['text_extraction_review_required_count'] == (
+        data['pdf_text_overlap_partial_count'] + data['metadata_assertions_only_count']
+    )
 
 
 def test_generated_report_table_column_integrity():
