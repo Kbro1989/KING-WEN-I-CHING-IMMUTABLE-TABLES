@@ -7,12 +7,18 @@ crops against the source papers.
 """
 import sys
 from pathlib import Path
-import pytest
+import pytest  # type: ignore[import-not-found]
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / 'scripts'))
 
-from audit_candidate_crops import run_audit, MANIFEST_PATH
+try:
+    from scripts.audit_candidate_crops import run_audit, MANIFEST_PATH
+    from scripts.experiments_multi_paper_generalization import REPORT_MD, OUTPUT_DIR
+except ImportError:
+    from audit_candidate_crops import run_audit, MANIFEST_PATH  # type: ignore[import-not-found]
+    from experiments_multi_paper_generalization import REPORT_MD, OUTPUT_DIR  # type: ignore[import-not-found]
+
 
 
 def test_audit_manifest_all_21_candidates_pass():
@@ -43,7 +49,6 @@ def test_manifest_file_exists_and_valid():
 def test_generated_report_table_column_integrity():
     """Verify that every row in every table in REPORT_MD has the expected column count."""
     import re
-    from experiments_multi_paper_generalization import REPORT_MD
     assert REPORT_MD.exists()
     content = REPORT_MD.read_text(encoding='utf-8')
 
@@ -67,7 +72,6 @@ def test_reported_file_hashes_match_committed_artifacts():
     """Verify that the SHA-256 hashes listed in the report match the actual artifact bytes."""
     import hashlib
     import re
-    from experiments_multi_paper_generalization import REPORT_MD, OUTPUT_DIR
     content = REPORT_MD.read_text(encoding='utf-8')
 
     # Extract SHA-256 hashes from section 5

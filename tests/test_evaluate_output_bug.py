@@ -17,8 +17,10 @@ sys.path.insert(0, str(REPO_ROOT / 'scripts'))
 
 try:
     from scripts.experiments_multi_paper_generalization import evaluate_output
+    from scripts.evaluate_output_reference import compare_reference_latex
 except ImportError:
     from experiments_multi_paper_generalization import evaluate_output  # type: ignore[import-not-found]
+    from evaluate_output_reference import compare_reference_latex  # type: ignore[import-not-found]
 
 
 def test_evaluate_output_accepts_source_text():
@@ -103,7 +105,6 @@ def test_escape_table_pipe_preserves_latex_backslashes():
 
 def test_expected_boundary_enforcement():
     """Boundary enforcement must reject spurious delimiters after open comma."""
-    from evaluate_output_reference import compare_reference_latex
     # Inner product fragment with open comma: valid fragment passes
     valid_res = compare_reference_latex(
         recognized=r"\langle T \chi_{I} ,",
