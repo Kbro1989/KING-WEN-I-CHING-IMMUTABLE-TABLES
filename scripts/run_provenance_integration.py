@@ -38,7 +38,10 @@ def crop_pdf_region(pdf_path, page_0based, bbox, output_path):
     import fitz
     doc = fitz.open(pdf_path)
     page = doc[page_0based]
-    rect = fitz.Rect(bbox['x0'], bbox['y0'], bbox['x1'], bbox['y1'])
+    if isinstance(bbox, (list, tuple)):
+        rect = fitz.Rect(bbox[0], bbox[1], bbox[2], bbox[3])
+    else:
+        rect = fitz.Rect(bbox['x0'], bbox['y0'], bbox['x1'], bbox['y1'])
     # Add small padding
     rect = rect + (-2, -2, 2, 2)
     pix = page.get_pixmap(matrix=fitz.Matrix(3, 3), clip=rect)
@@ -118,9 +121,9 @@ def main():
     pdf_path = pin['pdf_path']
     results = []
 
-    # Only process VERIFIED equations (GS-005 is PENDING)
-    verified_entries = [gs for gs in gold['gold_set'] if gs.get('visual_status') == 'VERIFIED']
-    pending_entries = [gs for gs in gold['gold_set'] if gs.get('visual_status') == 'PENDING_ADJUDICATION']
+    # Process VERIFIED and CORRECTED entries (CORRECTED = bbox fixed, pending OCR verification)
+    verified_entries = [gs for gs in gold['gold_set'] if gs.get('visual_status') in ('VERIFIED', 'CORRECTED - pending OCR verification')]
+    pending_entries = [gs for gs in gold['gold_set'] if gs.get('visual_status') not in ('VERIFIED', 'CORRECTED - pending OCR verification')]
 
     print(f"\nProcessing {len(verified_entries)} VERIFIED equations")
     print(f"Skipping {len(pending_entries)} PENDING equations (GS-005)")
