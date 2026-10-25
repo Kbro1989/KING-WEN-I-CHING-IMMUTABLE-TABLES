@@ -59,6 +59,10 @@ Of the 27 control cases:
 
 **Important**: These are zero observed errors on 47 tested cases, NOT a demonstrated 100% error-free rate on unseen equations. Rule-of-three upper bound: ~15% (47 cases, 0 failures).
 
+## Metric Separation Note
+
+The 47-case aggregate (20 TP + 27 TN) describes the reported gate-evaluation cases from the Phase 2C calibration and held-out evaluation. The 434-test repository suite describes the reported software tests (unit, integration, and contract tests). These are separate metrics: neither substitutes for the other, and neither constitutes source-derived, paper-level generalization testing.
+
 ## Statistical Limitation
 
 - 47 test cases (20 mutations + 27 controls) is a small sample
