@@ -696,7 +696,7 @@ def run_experiment():
     generate_report(results, attempted, cropped_count, nonempty_count, isolated_count, clipped_count, agreement_count)
 
 
-def generate_report(results, attempted, cropped, nonempty, isolated, clipped, agreement, baseline_summary=None, file_hashes=None):
+def generate_report(results, attempted, cropped, nonempty, isolated, clipped, agreement, baseline_summary=None, file_hashes=None, output_path=None):
     # Assert summary counts reconcile with individual record tallies
     calc_attempted = len(results)
     calc_cropped = sum(1 for r in results if r.get('crop_successful'))
@@ -883,8 +883,9 @@ def generate_report(results, attempted, cropped, nonempty, isolated, clipped, ag
     md.append(f"- **Runner Script:** [`scripts/experiments_multi_paper_generalization.py`](file:///{Path(__file__).resolve().as_posix()})")
     md.append("")
 
-    REPORT_MD.write_text('\n'.join(md), encoding='utf-8')
-    logger.info(f"Wrote generalization report to {REPORT_MD}")
+    target_report = Path(output_path) if output_path else REPORT_MD
+    target_report.write_text('\n'.join(md), encoding='utf-8')
+    logger.info(f"Wrote generalization report to {target_report}")
 
 
 if __name__ == '__main__':

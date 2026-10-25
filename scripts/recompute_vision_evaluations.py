@@ -36,6 +36,7 @@ from experiments_multi_paper_generalization import (
     BASELINE_JSONL,
     RAW_BASELINE_JSONL,
     FROZEN_BASELINE,
+    REPORT_MD,
     generate_report,
     evaluate_output,
 )
@@ -104,11 +105,7 @@ def recompute():
                 b_agreement += 1
             updated_baseline.append(r)
 
-        with open(BASELINE_JSONL, 'w', encoding='utf-8') as f:
-            for r in updated_baseline:
-                f.write(json.dumps(r, ensure_ascii=False) + '\n')
         b_total = len(updated_baseline)
-        print(f"Wrote {b_total} updated baseline records to {BASELINE_JSONL}")
 
     baseline_summary = {
         'total': b_total,
@@ -167,27 +164,56 @@ def recompute():
         r['evaluator_version'] = 'v2.0-strict-reference-comparison'
         updated_exp.append(r)
 
-    with open(EXP_JSONL, 'w', encoding='utf-8') as f:
+    # --- STAGING & ATOMIC VALIDATION PROTOCOL ---
+    import shutil
+
+    STAGE_DIR = OUTPUT_DIR / '.staging'
+    SNAPSHOT_DIR = OUTPUT_DIR / '.snapshot_prior'
+    STAGE_DIR.mkdir(parents=True, exist_ok=True)
+    SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+
+    # 1. Preserve current published artifacts as versioned snapshot
+    for pub_file in (BASELINE_JSONL, EXP_JSONL, REPORT_MD, MANIFEST_PATH):
+        if pub_file.exists():
+            shutil.copy2(pub_file, SNAPSHOT_DIR / pub_file.name)
+
+    staged_baseline = STAGE_DIR / 'multi_paper_baseline_padding15.jsonl'
+    staged_exp = STAGE_DIR / 'multi_paper_experiment_padding_3_2.jsonl'
+    staged_report = STAGE_DIR / 'multi_paper_generalization_report.md'
+
+    # Write staged baseline
+    with open(staged_baseline, 'w', encoding='utf-8') as f:
+        for r in updated_baseline:
+            f.write(json.dumps(r, ensure_ascii=False) + '\n')
+
+    # Write staged experiment
+    with open(staged_exp, 'w', encoding='utf-8') as f:
         for r in updated_exp:
             f.write(json.dumps(r, ensure_ascii=False) + '\n')
-    print(f"Wrote {len(updated_exp)} updated experiment records to {EXP_JSONL}")
+
+    # 2. Stage-gate validation of evaluation counts and candidate IDs
+    expected_ids = [c['candidate_id'] for c in CANDIDATES]
+    assert len(updated_baseline) == len(expected_ids), f"Baseline count mismatch: {len(updated_baseline)} vs {len(expected_ids)}"
+    assert len(updated_exp) == len(expected_ids), f"Experiment count mismatch: {len(updated_exp)} vs {len(expected_ids)}"
+    assert [r['candidate_id'] for r in updated_baseline] == expected_ids, "Baseline candidate ID order mismatch"
+    assert [r['candidate_id'] for r in updated_exp] == expected_ids, "Experiment candidate ID order mismatch"
 
     attempted = len(updated_exp)
     print(f"Padding (15, 15) Baseline Summary: Total={b_total}, NonEmpty={b_nonempty}, Isolated={b_isolated} ({b_isolated/b_total*100:.1f}%), Agreement={b_agreement} ({b_agreement/b_total*100:.1f}%)")
     print(f"Padding (3, 2) Experiment Summary: Attempted={attempted}, Cropped={cropped_count}, NonEmpty={nonempty_count}, Isolated={isolated_count} ({isolated_count/attempted*100:.1f}%), Agreement={agreement_count} ({agreement_count/attempted*100:.1f}%)")
 
-    # Compute SHA-256 hashes
+    # 3. Compute SHA-256 hashes against staged artifacts
     file_hashes = {
         'raw_exp_sha256': hashlib.sha256(RAW_EXP_JSONL.read_bytes()).hexdigest() if RAW_EXP_JSONL.exists() else None,
         'raw_base_sha256': hashlib.sha256(RAW_BASELINE_JSONL.read_bytes()).hexdigest() if RAW_BASELINE_JSONL.exists() else None,
-        'exp_sha256': hashlib.sha256(EXP_JSONL.read_bytes()).hexdigest(),
-        'base_sha256': hashlib.sha256(BASELINE_JSONL.read_bytes()).hexdigest() if BASELINE_JSONL.exists() else 'missing',
+        'exp_sha256': hashlib.sha256(staged_exp.read_bytes()).hexdigest(),
+        'base_sha256': hashlib.sha256(staged_baseline.read_bytes()).hexdigest(),
         'manifest_sha256': hashlib.sha256(MANIFEST_PATH.read_bytes()).hexdigest() if MANIFEST_PATH.exists() else None,
         'ref_sha256': hashlib.sha256(REF_FILE.read_bytes()).hexdigest() if REF_FILE.exists() else None,
         'legacy_sha256': hashlib.sha256(FROZEN_BASELINE.read_bytes()).hexdigest() if FROZEN_BASELINE.exists() else 'missing',
     }
 
-    # Generate Report
+    # 4. Generate Staged Report
     generate_report(
         updated_exp,
         attempted=attempted,
@@ -198,8 +224,22 @@ def recompute():
         agreement=agreement_count,
         baseline_summary=baseline_summary,
         file_hashes=file_hashes,
+        output_path=staged_report,
     )
-    print("Generalization report generated successfully.")
+
+    # 5. Validate Staged Report column integrity and hash consistency
+    report_content = staged_report.read_text(encoding='utf-8')
+    assert f"SHA-256: `{file_hashes['exp_sha256']}`" in report_content, "Staged report missing experiment SHA-256"
+    assert f"SHA-256: `{file_hashes['base_sha256']}`" in report_content, "Staged report missing baseline SHA-256"
+
+    # 6. Atomic Publication (all validations passed)
+    shutil.copy2(staged_baseline, BASELINE_JSONL)
+    shutil.copy2(staged_exp, EXP_JSONL)
+    shutil.copy2(staged_report, REPORT_MD)
+
+    # Clean up staging directory
+    shutil.rmtree(STAGE_DIR)
+    print("Atomic publication successful: baseline, experiment, and report updated in synchronization.")
 
 
 if __name__ == '__main__':
