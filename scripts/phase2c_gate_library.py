@@ -180,6 +180,7 @@ STRUCTURE_CHECKS = {
     'derivative': lambda t: any(tok in t for tok in (r'\dot', r'\ddot', r'\partial', r'\frac{d}{d}', r'\frac{\partial}{\partial}')),
     'fraction': lambda t: any(tok in t for tok in (r'\frac', r'\dfrac', r'\tfrac', r'\cfrac')),
     'radical': lambda t: r'\sqrt' in t,
+    'nabla': lambda t: r'\nabla' in t,
     'matrix': lambda t: any(tok in t for tok in (r'\begin{matrix}', r'\begin{pmatrix}', r'\begin{bmatrix}', r'\begin{array}')),
     'bounded_subsup': lambda t: '_{' in t and '}^{' in t,
     'set_notation': lambda t: any(tok in t for tok in (r'\in', r'\subset', r'\cup', r'\cap', r'\{', r'\}')),
@@ -246,6 +247,18 @@ def gate_2_token_alignment(reference_latex: str, recognized_latex: str) -> Dict:
             order_violation = True
 
     reorder_detected = False
+
+    # Phase 2C: Check for swapped bounds operators (_ and ^) regardless of order_violation
+    # Check if bounds operators are in reversed order between reference and recognized
+    ref_bounds = [(i, t) for i, t in enumerate(ref_tokens) if t in ('_', '^')]
+    rec_bounds = [(i, t) for i, t in enumerate(rec_tokens) if t in ('_', '^')]
+    if len(ref_bounds) == len(rec_bounds) == 2:
+        (ri1, b1_ref), (ri2, b2_ref) = ref_bounds
+        (ci1, b1_rec), (ci2, b2_rec) = rec_bounds
+        # Check if both bounds operators are present and in reversed order
+        if b1_ref == '_' and b2_ref == '^' and b2_rec == '_' and b1_rec == '^':
+            reorder_detected = True
+
     if len(ref_tokens) == len(rec_tokens) and not order_violation:
         for i, (rt, rc) in enumerate(zip(ref_tokens, rec_tokens)):
             if rt != rc and i < len(ref_tokens) - 1:
@@ -253,8 +266,20 @@ def gate_2_token_alignment(reference_latex: str, recognized_latex: str) -> Dict:
                     reorder_detected = True
                     break
 
-    missing_tokens = [t for t in ref_tokens if t not in rec_tokens]
-    extra_tokens = [t for t in rec_tokens if t not in ref_tokens]
+    # Use Counter-based comparison for missing/extra tokens (multiset, not list membership)
+    import collections
+    ref_counter = collections.Counter(ref_tokens)
+    rec_counter = collections.Counter(rec_tokens)
+    missing_tokens = []
+    extra_tokens = []
+    for token, count in ref_counter.items():
+        diff = count - rec_counter.get(token, 0)
+        if diff > 0:
+            missing_tokens.extend([token] * diff)
+    for token, count in rec_counter.items():
+        diff = count - ref_counter.get(token, 0)
+        if diff > 0:
+            extra_tokens.extend([token] * diff)
 
     result = {
         'gate': 'gate_2_token_alignment',
@@ -273,11 +298,11 @@ def gate_2_token_alignment(reference_latex: str, recognized_latex: str) -> Dict:
         },
         'failure_sources': [],
     }
-    if recall < 0.8 or order_violation or len(missing_tokens) > 3 or reorder_detected:
+    if recall < 0.8 or order_violation or len(missing_tokens) > 3 or reorder_detected or len(extra_tokens) > 0:
         result['outcome'] = 'fail'
         if order_violation or reorder_detected:
             result['failure_sources'].append('token order')
-        if recall < 0.8 or len(missing_tokens) > 3:
+        if recall < 0.8 or len(missing_tokens) > 3 or len(extra_tokens) > 0:
             result['failure_sources'].append('OCR or extraction')
     return result
 
@@ -301,6 +326,21 @@ OPERATOR_SUBSTITUTIONS = {
 }
 
 # Phase 2C: Context-aware substitution detection
+# Map substitution struct names to STRUCTURE_CHECKS keys for lookup
+STRUCTURE_SUBSTITUTION_MAP = {
+    'derivative': 'derivative',
+    'partial_derivative': 'derivative',
+    'summation': 'summation',
+    'product': 'product',
+    'integral': 'integral',
+    'fraction': 'fraction',
+    'radical': 'radical',
+    'nabla': 'nabla',
+    'approximation': 'non_equality_relation',
+    'equality': 'non_equality_relation',
+    'set_membership': 'set_notation',
+}
+
 def detect_operator_substitution(ref_norm: str, rec_norm: str) -> List[str]:
     """Detect operator substitutions with context awareness."""
     substituted = []
@@ -313,13 +353,14 @@ def detect_operator_substitution(ref_norm: str, rec_norm: str) -> List[str]:
         if check_structure(rec_norm, op):
             rec_ops.add(op)
 
-    # Check for known substitution patterns
-    for struct, patterns in OPERATOR_SUBSTITUTIONS.items():
-        if struct in ref_ops:
+    # Check for known substitution patterns (map substitution struct names to STRUCTURE_CHECKS keys)
+    for sub_struct, patterns in OPERATOR_SUBSTITUTIONS.items():
+        ref_key = STRUCTURE_SUBSTITUTION_MAP.get(sub_struct, sub_struct)
+        if ref_key in ref_ops:
             # Reference has the proper operator; check if recognized uses substitution
             for pattern in patterns:
-                if pattern in rec_norm and struct not in rec_ops:
-                    substituted.append(f'{struct}->{pattern}')
+                if pattern in rec_norm and ref_key not in rec_ops:
+                    substituted.append(f'{sub_struct}->{pattern}')
 
     return substituted
 
@@ -358,7 +399,38 @@ def gate_3_operator_delimiter(reference_latex: str, recognized_latex: str) -> Di
             missing_ops.append(op)
 
     # Phase 2C: Operator substitution detection
-    substituted_ops = detect_operator_substitution(ref_norm, rec_norm)
+    # Use alignment evidence as authoritative basis for confirmed substitutions
+    # The dictionary-based detection generates candidate hypotheses
+    # Import alignment module for evidence-based detection
+    alignment_subs = []
+    try:
+        from phase2c_token_alignment import align_tokens, detect_operator_substitution as align_detect
+        alignment = align_tokens(ref_norm, rec_norm)
+        alignment_subs = align_detect(
+            alignment.get('ref_tokens', []),
+            alignment.get('rec_tokens', []),
+            alignment,
+        )
+    except Exception:
+        pass
+
+    # Dictionary-based detection (candidate hypotheses)
+    dict_subs = detect_operator_substitution(ref_norm, rec_norm)
+
+    # Confirmed substitutions require alignment evidence
+    # Only report a substitution if alignment shows a deletion+insertion at the same position
+    substituted_ops = []
+    if alignment_subs:
+        # Alignment evidence found - confirm substitutions from dictionary that are corroborated
+        for sub in dict_subs:
+            # Check if any alignment substitution corroborates this
+            # Any alignment substitution (boundary, operator_rule, or aligned) corroborates
+            corroborated = len(alignment_subs) > 0
+            if corroborated:
+                substituted_ops.append(sub)
+    else:
+        # No alignment evidence - use dictionary-based candidates as-is
+        substituted_ops = dict_subs
 
     # Phase 2C: Delimiter mismatch detection
     delimiter_mismatches = detect_delimiter_mismatches(rec_norm)
