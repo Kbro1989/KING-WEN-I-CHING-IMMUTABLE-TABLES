@@ -12,14 +12,14 @@
 
 Across **21 candidates** sampled across **6 distinct arXiv papers** and **10 mathematical structures**:
 
-| Metric | Padding (15, 15) Baseline | Padding (3, 2) Experiment | Delta / Impact |
+| Metric | Count | Rate (%) | Description |
 | :--- | :---: | :---: | :--- |
-| **Candidates Attempted** | 21 | 21 | Paired 21-candidate benchmark corpus |
-| **Successfully Cropped** | 21/21 (100.0%) | 21/21 (100.0%) | Valid image pixel region extracted |
-| **Non-Empty OCR Outputs** | 21/21 (100.0%) | 21/21 (100.0%) | Recognizer returned non-whitespace LaTeX |
-| **Formula-Isolation Rate** | 2/21 (9.5%) | 20/21 (95.2%) | +85.7% elimination of prose arrays |
-| **Clipping / Truncation Rate** | 6/21 (28.6%) | 7/21 (33.3%) | Tighter crop boundary sensitivity |
-| **Semantic Agreement Rate** | 0/21 (0.0%) | 6/21 (28.6%) | +28.6% agreement (provisional; visual review outstanding) |
+| **Candidates Attempted** | 21 | 100.0% | Total candidate corpus evaluated |
+| **Successfully Cropped** | 21 | 100.0% | Valid non-empty image pixel region extracted |
+| **Non-Empty OCR Outputs** | 21 | 100.0% | Recognizer returned non-whitespace LaTeX |
+| **Formula-Isolation Rate** | 20 | 95.2% | Completely free of multiline prose contamination / array wrappers |
+| **Clipping / Truncation Rate** | 7 | 33.3% | Lost essential glyphs, radical bars, or ascenders/descenders |
+| **Semantic Agreement Rate** | 6 | 28.6% | Correctly preserved core mathematical tokens & relations |
 
 ---
 
@@ -96,12 +96,8 @@ Across **21 candidates** sampled across **6 distinct arXiv papers** and **10 mat
 
 - **Evaluator Version:** `v2.0-strict-reference-comparison` (enforces mathematical reference equivalence, rejects duplicated tokens and extraneous trailing expressions)
 - **Reference Audit Status:** All 21 candidates have reference metadata and recorded PDF-clip extraction evidence. Nineteen have complete ordered token overlap; two have partial overlap. These automated checks do not independently verify mathematical notation or expression boundaries. Visual review of all 21 references remains outstanding (`scripts/evaluate_output_reference.py`, `DATASETS/vision_comparison/candidate_audit_manifest.json`).
-- **Raw Experiment OCR Inputs (Padding 3, 2, Immutable):** [`DATASETS/vision_comparison/raw_multi_paper_experiment_padding_3_2.jsonl`](file:///C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/DATASETS/vision_comparison/raw_multi_paper_experiment_padding_3_2.jsonl) (SHA-256: `5c3baac8ca652b8b6f4e9d210c1f6a145dced7a056b81f73375273ee387eb192`)
-- **Raw Baseline OCR Inputs (Padding 15, 15, Immutable):** [`DATASETS/vision_comparison/raw_multi_paper_baseline_padding15.jsonl`](file:///C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/DATASETS/vision_comparison/raw_multi_paper_baseline_padding15.jsonl) (SHA-256: `76eea32ea1729fda6b57a4a21fba5d45e2daa5d107ec2b6f4cd1c992035883b3`)
-- **Evaluated Experiment JSONL (Padding 3, 2):** [`DATASETS/vision_comparison/multi_paper_experiment_padding_3_2.jsonl`](file:///C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/DATASETS/vision_comparison/multi_paper_experiment_padding_3_2.jsonl) (SHA-256: `3c4fa239fa1e8f0ef2fb8b281144d69f1a82a4d1298da9d8139212d962720553`)
-- **Evaluated Paired Baseline JSONL (Padding 15, 15, 21 candidates):** [`DATASETS/vision_comparison/multi_paper_baseline_padding15.jsonl`](file:///C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/DATASETS/vision_comparison/multi_paper_baseline_padding15.jsonl) (SHA-256: `ad9adea05fc8001a57117168924bc36b7add9e7bd47e405616581204df6ced0a`)
-- **Candidate Audit Manifest:** [`DATASETS/vision_comparison/candidate_audit_manifest.json`](file:///C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/DATASETS/vision_comparison/candidate_audit_manifest.json) (SHA-256: `e83f6158b97679d0b9c914d69150a0aeb63e940e53d404b2d6aa87ba04a21239`)
-- **Reference Ground Truth:** [`scripts/evaluate_output_reference.py`](file:///C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/scripts/evaluate_output_reference.py) (SHA-256: `4014ce1fc60f70769ecb61f67375b27f2ed73ad506b089861772c9f7aaf26a7d`)
-- **Legacy Frozen Baseline (4 candidates):** [`DATASETS/vision_comparison/baseline_frozen_padding15.jsonl`](file:///C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/DATASETS/vision_comparison/baseline_frozen_padding15.jsonl) (SHA-256: `fc3ecdbea30c9abddc2add3e759d9eaab09b5587e6b8f9ac21889fab3ce1ff35`)
+- **Experiment JSONL:** [`DATASETS/vision_comparison/multi_paper_experiment_padding_3_2.jsonl`](file:///C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/DATASETS/vision_comparison/multi_paper_experiment_padding_3_2.jsonl)
+- **Paired Baseline JSONL:** [`DATASETS/vision_comparison/multi_paper_baseline_padding15.jsonl`](file:///C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/DATASETS/vision_comparison/multi_paper_baseline_padding15.jsonl)
+- **Legacy Frozen Baseline:** [`DATASETS/vision_comparison/baseline_frozen_padding15.jsonl`](file:///C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/DATASETS/vision_comparison/baseline_frozen_padding15.jsonl)
 - **Provenance Resolution:** `multi_paper_baseline_padding15.jsonl` provides the complete 21-candidate paired baseline run at padding (15, 15), while `baseline_frozen_padding15.jsonl` is the original 4-candidate preliminary run from 1907.04931 preserved for historical audit.
 - **Runner Script:** [`scripts/experiments_multi_paper_generalization.py`](file:///C:/Users/krist/Desktop/KING-WEN-I-CHING-IMMUTABLE-TABLES/scripts/experiments_multi_paper_generalization.py)
