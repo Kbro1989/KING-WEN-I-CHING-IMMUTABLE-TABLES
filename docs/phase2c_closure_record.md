@@ -20,7 +20,15 @@
 | Development mutations | 4 | `\sum→S`, `\int→I`, `\partial→d`, `\frac→/` | 4/4 |
 | Held-out mutations | 8 | Including `product→P`, `radical→v`, multi-operator | 8/8 |
 | Expanded mutations | 12 | Nested operators, simultaneous substitutions | 12/12 |
-| **Total mutations** | **24** | | **24/24** |
+| **Total mutations** | **24** | | **24/24** | Overlapping stages, not 24 distinct cases |
+
+### Overlapping Stages Note
+
+The per-stage mutation counts (4 + 8 + 12 = 24) describe overlapping evaluation stages, not 24 distinct mutation cases. The same mutation types appear across multiple stages. The 47-case aggregate (20 TP + 27 TN) is the non-overlapping total. Overlapping stages, not 24 distinct cases |
+
+### Overlapping Stages Note
+
+The per-stage mutation counts (4 + 8 + 12 = 24) describe overlapping evaluation stages, not 24 distinct mutation cases. The same mutation types (e.g., ) appear across multiple stages. The 47-case aggregate (20 TP + 27 TN) is the non-overlapping total.
 
 ### Control Cases (Expected: pass)
 
@@ -31,7 +39,7 @@
 | Expanded controls (identical) | 10 | Valid expressions with no substitution | 10/10 | No (self-comparison) |
 | Expanded variants | 3 | Spacing, parenthesis, identical | 3/3 | No (self-comparison) |
 | Non-identical controls v1 | 8 | Self-comparison with S, I, d, /, P, v in legitimate roles | 8/8 | No (self-comparison) |
-| Non-identical controls v2 | 6 | **Reference and candidate DIFFER** but symbol is legitimate notational variant | 6/6 | **Yes** (non-identical pairs) |
+| Non-identical controls v2 | 6 | **Reference and candidate DIFFER** but symbol is legitimate notational variant | 6/6 | **Partial** (tests acceptance of changed expressions, not contextual discrimination) |
 | **Total controls** | **27** | | **27/27** | **6/27 test contextual discrimination** |
 
 ### Key Distinction
