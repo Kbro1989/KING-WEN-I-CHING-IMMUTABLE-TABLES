@@ -55,17 +55,18 @@ def test_token_overlap_repeated_character_requires_repeated_occurrences():
 
 
 def test_token_overlap_reordered_tokens_counted_as_partial():
-    """Tokens that appear in clip but not in source order must not all register as matched.
+    """LCS alignment cannot match both tokens when they appear in opposite order.
 
-    Consumption-aware search is strictly left-to-right in clip_text.  If clip has
-    'ak bn' but source order requires 'bn' first then 'ak', only the tokens that
-    are found at or after the current search position count.
+    Source order: 'bn' first, then 'ak'.
+    Clip order:   'ak' first, then 'bn'.
+
+    LCS of ['bn', 'ak'] and ['ak', 'bn'] has length 1.  The backtracker
+    (prefer 'go up') recovers 'bn' as the single matched token.  'ak' is
+    missing because it would require reversing the source order.
     """
-    # Source order: bn, then ak. Clip order: ak comes first, then bn.
     result = _compute_token_overlap("bn ak", "ak bn")
-    # 'bn' is searched first; it is at position 3 (after 'ak '), so it IS found.
-    # 'ak' is then searched from pos 3+2=5; 'ak' doesn't appear at or after pos 5.
-    # So: 'bn' matched, 'ak' missing (order matters).
+    assert result['algorithm'] == 'lcs'
+    assert result['lcs_length'] == 1
     assert 'bn' in result['matched']
     assert 'ak' in result['missing']
     assert result['overlap_fraction'] < 1.0
@@ -101,14 +102,50 @@ def test_token_overlap_missing_symbol():
     assert result['overlap_fraction'] < 1.0
 
 
+def test_token_overlap_whole_token_boundary_no_substring_collision():
+    """Whole-token matching: 'ak' must not match inside 'bakz' or 'bakk'."""
+    result = _compute_token_overlap("ak", "bakz and bakk")
+    assert result['matched'] == []
+    assert result['missing'] == ['ak']
+    assert result['overlap_fraction'] == 0.0
+
+
+def test_token_overlap_lcs_order_preservation():
+    """Source ['a', 'b', 'c'] against clip 'c b' has LCS length 1, not matching both out-of-order."""
+    result = _compute_token_overlap("a b c", "c b")
+    assert result['algorithm'] == 'lcs'
+    assert result['lcs_length'] == 1
+    assert len(result['matched']) == 1
+    assert len(result['missing']) == 2
+    assert abs(result['overlap_fraction'] - 1 / 3) < 1e-6
+
+
+def test_token_overlap_adjacent_unicode_symbols():
+    """Adjacent Unicode math symbols are treated as distinct tokens."""
+    result = _compute_token_overlap("∇∑x", "∇ ∑ x")
+    assert result['tokens'] == ['∇', '∑', 'x']
+    assert result['overlap_fraction'] == 1.0
+    assert result['missing'] == []
+
+
 
 
 def test_audit_manifest_all_21_candidates_pass():
     manifest = run_audit(save_manifest=False)
     assert manifest['total_candidates'] == 21
-    assert manifest['passed_assertions'] == 21
-    assert manifest['all_assertions_passed'] is True
+    # Renamed fields: distinguish metadata-assertion completion from text-verification
+    assert manifest['metadata_assertions_passed'] == 21
+    assert manifest['all_metadata_assertions_passed'] is True
     assert len(manifest['records']) == 21
+    # Per-status counts must be present and consistent
+    verified  = manifest['pdf_text_overlap_verified_count']
+    partial   = manifest['pdf_text_overlap_partial_count']
+    meta_only = manifest['metadata_assertions_only_count']
+    review_required = manifest['human_visual_review_required_count']
+    assert verified + partial + meta_only == 21
+    assert review_required == partial + meta_only
+    # At least some candidates should have text-extraction confirmation
+    assert verified > 0, 'Expected at least one pdf_text_overlap_verified candidate'
 
     VALID_AUDIT_STATUSES = {
         'pdf_text_overlap_verified',
@@ -135,7 +172,17 @@ def test_manifest_file_exists_and_valid():
     with open(MANIFEST_PATH, 'r', encoding='utf-8') as f:
         data = json.load(f)
     assert data['total_candidates'] == 21
-    assert data['all_assertions_passed'] is True
+    # Renamed field from all_assertions_passed -> all_metadata_assertions_passed
+    assert data['all_metadata_assertions_passed'] is True
+    assert data['manifest_version'] == '2.0'
+    # Per-status count fields must be present
+    for field in (
+        'pdf_text_overlap_verified_count',
+        'pdf_text_overlap_partial_count',
+        'metadata_assertions_only_count',
+        'human_visual_review_required_count',
+    ):
+        assert field in data, f'Manifest missing field: {field}'
 
 
 def test_generated_report_table_column_integrity():

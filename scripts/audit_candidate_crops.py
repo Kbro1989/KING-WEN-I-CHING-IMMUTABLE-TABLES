@@ -41,74 +41,116 @@ from experiments_multi_paper_generalization import CANDIDATES, PDF_MAP, OUTPUT_D
 MANIFEST_PATH = OUTPUT_DIR / 'candidate_audit_manifest.json'
 
 
+def _tokenize(text: str) -> list:
+    """Extract ordered tokens from text for overlap matching.
+
+    Two complementary patterns, merged in left-to-right source order:
+      Pattern A: r'[a-zA-Z0-9]+'  – alphanumeric word runs ('bn', 'ak', '0')
+      Pattern B: r'[^\x00-\x7F]'  – individual non-ASCII Unicode codepoints
+                                    ('∑', 'ζ', '∇', '√', '⟨')
+
+    Because alnum tokens are extracted as whole runs by pattern A, the tokenizer
+    inherently preserves word boundaries: 'ak' and 'bakz' are distinct tokens
+    and can never match each other during LCS comparison.
+    """
+    import re
+    alnum = [(m.start(), m.group()) for m in re.finditer(r'[a-zA-Z0-9]+', text)]
+    uni   = [(m.start(), m.group()) for m in re.finditer(r'[^\x00-\x7F]', text)]
+    return [tok for _, tok in sorted(alnum + uni, key=lambda x: x[0])]
+
+
 def _compute_token_overlap(source_text: str, clip_text: str) -> dict:
-    """Compute ordered, consumption-aware token overlap between source_text and clip_text.
+    """Compute token-boundary-aware, LCS-based token overlap.
 
     Algorithm
     ---------
-    1. Tokenise ``source_text`` into *ordered* tokens using two complementary
-       patterns that together cover ASCII identifiers / numbers and individual
-       non-ASCII Unicode symbols (e.g. Greek letters, ∑, ∇, √, ⟨).
+    1. Tokenise both ``source_text`` and ``clip_text`` with ``_tokenize()``.
+       Because alphanumeric tokens are extracted as whole word-runs, a token
+       'ak' cannot match the substring inside 'bakz'; both sides must have 'ak'
+       as a distinct token for it to count as a match.
 
-       Pattern A: r'[a-zA-Z0-9]+' — alphanumeric word runs ('bn', 'S', 'ak', '0')
-       Pattern B: r'[^\x00-\x7F]'  — single non-ASCII codepoints ('∑', 'ζ')
+    2. Run standard Longest-Common-Subsequence (LCS) DP between the two token
+       lists.  Token equality is exact string equality.
 
-       Tokens are emitted in left-to-right source order by interleaving both
-       patterns' matches sorted by start position.
+       LCS guarantees:
+         - Order-preserving: matched source tokens appear in the same relative
+           order in both lists.
+         - Globally optimal: the alignment is the largest set of matching tokens
+           that satisfies the ordering constraint.  There is no greedy ambiguity
+           from a missing earlier token shifting what later tokens can match.
+         - Reproducible: for equal-length paths the backtracker prefers the
+           'go up' direction, producing a deterministic result.
 
-    2. Match tokens against ``clip_text`` in a *consumption-aware* manner:
-       each token is found in clip_text starting from the position where the
-       previous match ended.  This prevents repeated characters (e.g. three
-       occurrences of 'k' in source) from all matching the same single 'k' in
-       clip_text.
+    3. Return matched/missing source tokens, the LCS length, and the clip
+       token list so callers can inspect the alignment evidence.
+
+    Properties that do NOT hold:
+      - This is text extraction, not mathematical verification.  Two different
+        glyphs that map to the same Unicode codepoint are indistinguishable.
+      - Superscript, subscript, and delimiter placement cannot be determined
+        from extracted text alone.
 
     Returns
     -------
     dict with keys:
       'tokens'           – ordered list of extracted source tokens
-      'matched'          – list of tokens found (in order) in clip_text
-      'missing'          – list of tokens not found
+      'matched'          – source tokens that appear in the LCS (in source order)
+      'missing'          – source tokens absent from the LCS
       'overlap_fraction' – len(matched) / len(tokens), or 0.0 if no tokens
-      'consumed_indices' – clip_text positions where each matched token was found
+      'algorithm'        – 'lcs' (for traceability)
+      'clip_tokens'      – ordered list of tokens extracted from clip_text
+      'lcs_length'       – length of the longest common subsequence
     """
-    import re
-    if not source_text:
-        return {'tokens': [], 'matched': [], 'missing': [],
-                'overlap_fraction': 0.0, 'consumed_indices': []}
+    src_tokens  = _tokenize(source_text)
+    clip_tokens = _tokenize(clip_text)
 
-    # Build ordered token list from two complementary patterns.
-    alnum_matches = [(m.start(), m.group()) for m in re.finditer(r'[a-zA-Z0-9]+', source_text)]
-    uni_matches   = [(m.start(), m.group()) for m in re.finditer(r'[^\x00-\x7F]', source_text)]
-    all_matches   = sorted(alnum_matches + uni_matches, key=lambda x: x[0])
-    tokens        = [tok for _, tok in all_matches]
+    if not src_tokens:
+        return {
+            'tokens': [], 'matched': [], 'missing': [],
+            'overlap_fraction': 0.0, 'algorithm': 'lcs',
+            'clip_tokens': clip_tokens, 'lcs_length': 0,
+        }
 
-    if not tokens:
-        return {'tokens': [], 'matched': [], 'missing': [],
-                'overlap_fraction': 0.0, 'consumed_indices': []}
+    m, n = len(src_tokens), len(clip_tokens)
 
-    # Consumption-aware search through clip_text.
-    matched = []
-    missing = []
-    consumed_indices = []
-    search_from = 0
-    for tok in tokens:
-        pos = clip_text.find(tok, search_from)
-        if pos != -1:
-            matched.append(tok)
-            consumed_indices.append(pos)
-            search_from = pos + len(tok)
+    # Standard O(mn) LCS dynamic programming table.
+    dp = [[0] * (n + 1) for _ in range(m + 1)]
+    for i in range(1, m + 1):
+        for j in range(1, n + 1):
+            if src_tokens[i - 1] == clip_tokens[j - 1]:
+                dp[i][j] = dp[i - 1][j - 1] + 1
+            else:
+                dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
+
+    # Backtrack to recover the set of matched source-token indices.
+    # Tie-break: prefer 'go up' (i--) so repeated tokens match the earliest
+    # available clip occurrence, keeping the alignment left-anchored.
+    matched_src_indices: set[int] = set()
+    i, j = m, n
+    while i > 0 and j > 0:
+        if src_tokens[i - 1] == clip_tokens[j - 1]:
+            matched_src_indices.add(i - 1)
+            i -= 1
+            j -= 1
+        elif dp[i - 1][j] >= dp[i][j - 1]:
+            i -= 1
         else:
-            missing.append(tok)
-            # Do not advance search_from; remaining tokens still search forward.
+            j -= 1
 
-    overlap_fraction = len(matched) / len(tokens) if tokens else 0.0
+    matched = [src_tokens[idx] for idx in sorted(matched_src_indices)]
+    missing = [src_tokens[idx] for idx in range(m) if idx not in matched_src_indices]
+    overlap_fraction = len(matched) / m
+
     return {
-        'tokens': tokens,
+        'tokens': src_tokens,
         'matched': matched,
         'missing': missing,
         'overlap_fraction': overlap_fraction,
-        'consumed_indices': consumed_indices,
+        'algorithm': 'lcs',
+        'clip_tokens': clip_tokens,
+        'lcs_length': dp[m][n],
     }
+
 
 
 def run_audit(save_manifest: bool = True) -> dict:
@@ -207,7 +249,7 @@ def run_audit(save_manifest: bool = True) -> dict:
             audit_status = 'pdf_text_overlap_verified'
             evidence_notes = (
                 f'All {n_tokens} ordered source tokens found in exact clip text '
-                f'(consumption-aware). '
+                f'(LCS). '
                 f'Does not verify LaTeX structure or index placement.'
             )
         elif n_matched > 0:
@@ -248,11 +290,31 @@ def run_audit(save_manifest: bool = True) -> dict:
         print(f"[{idx+1}/21] {cid}: {audit_status} (exact: {exact_text!r})")
 
 
+    from collections import Counter
+    status_counts = Counter(r['audit_status'] for r in manifest_records)
+
+    # Field-name contract:
+    # 'metadata_assertions_passed'     – how many candidates completed the five structural
+    #                                    assertions (PDF path, bbox, reference_latex, etc.).
+    #                                    This does NOT mean text or mathematical verification.
+    # 'all_metadata_assertions_passed' – True when every candidate passed all five assertions.
+    # '*_count' fields               – breakdown by three-tier text-evidence status.
+    # 'human_visual_review_required_count' – candidates where automated text extraction did
+    #                                        not fully confirm the source region; a human
+    #                                        must visually inspect the rendered crop before
+    #                                        treating the reference_latex as ground truth.
     manifest = {
         'total_candidates': total_candidates,
-        'passed_assertions': passed_count,
-        'all_assertions_passed': passed_count == total_candidates,
-        'manifest_version': '1.0',
+        'metadata_assertions_passed': passed_count,
+        'all_metadata_assertions_passed': passed_count == total_candidates,
+        'pdf_text_overlap_verified_count': status_counts.get('pdf_text_overlap_verified', 0),
+        'pdf_text_overlap_partial_count': status_counts.get('pdf_text_overlap_partial', 0),
+        'metadata_assertions_only_count': status_counts.get('metadata_assertions_only', 0),
+        'human_visual_review_required_count': (
+            status_counts.get('pdf_text_overlap_partial', 0)
+            + status_counts.get('metadata_assertions_only', 0)
+        ),
+        'manifest_version': '2.0',
         'records': manifest_records,
     }
 
