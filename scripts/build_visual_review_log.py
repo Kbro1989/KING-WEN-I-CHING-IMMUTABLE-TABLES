@@ -13,6 +13,7 @@ Outputs:
 """
 import sys
 import json
+import re
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -143,6 +144,13 @@ REVIEW_RECORDS = [
             'details': 'Complete standalone display equation captured cleanly with trailing comma.'
         },
         'overall_visual_verdict': 'NOTATION_AMBIGUITY',
+        'literal_notation_match': False,
+        'mathematical_equivalence': True,
+        'benchmark_evaluation_note': (
+            'Whether this counts as a match depends on whether the benchmark targets '
+            'literal visual transcription or mathematical equivalence. These are different '
+            'evaluation targets.'
+        ),
         'ambiguities_or_notes': 'OCR recognized \\biggl\\{\\begin{matrix} {n} \\\\ {k} \\end{matrix} \\biggr\\}, reflecting actual printed typography. Reference was declared as functional S(n,k). Kept as pdf_text_overlap_partial.',
     },
     {
@@ -532,13 +540,21 @@ REVIEW_RECORDS = [
 ]
 
 
-def generate_logs():
+def generate_logs(json_path: Path | None = None, md_path: Path | None = None):
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    json_path = OUTPUT_DIR / 'visual_review_audit_log.json'
-    md_path = OUTPUT_DIR / 'visual_review_audit_log.md'
+    if json_path is None:
+        json_path = OUTPUT_DIR / 'visual_review_audit_log.json'
+    if md_path is None:
+        md_path = OUTPUT_DIR / 'visual_review_audit_log.md'
+
+    glyph_passes = sum(1 for r in REVIEW_RECORDS if r['visual_glyph_fidelity']['status'] == 'PASS')
+    struct_passes = sum(1 for r in REVIEW_RECORDS if r['mathematical_structure']['status'] == 'PASS')
+    bound_passes = sum(1 for r in REVIEW_RECORDS if r['crop_boundary_fidelity']['status'] == 'PASS')
+    total = len(REVIEW_RECORDS)
 
     log_data = {
         'audit_title': '21-Candidate Visual Crop Audit Log',
+        'audit_version': '2.1',
         'audit_date': '2026-10-24',
         'reviewer': 'Antigravity Autonomous Math Reviewer & Human-in-the-Loop Pair',
         'evaluation_axes': [
@@ -546,15 +562,30 @@ def generate_logs():
             'mathematical_structure',
             'crop_boundary_fidelity',
         ],
-        'total_candidates_audited': len(REVIEW_RECORDS),
+        'total_candidates_audited': total,
         'summary': {
-            'glyph_fidelity_passes': sum(1 for r in REVIEW_RECORDS if r['visual_glyph_fidelity']['status'] == 'PASS'),
-            'structure_passes': sum(1 for r in REVIEW_RECORDS if r['mathematical_structure']['status'] == 'PASS'),
-            'boundary_passes': sum(1 for r in REVIEW_RECORDS if r['crop_boundary_fidelity']['status'] == 'PASS'),
+            'glyph_fidelity_passes': glyph_passes,
+            'glyph_fidelity_non_passes': total - glyph_passes,
+            'structure_passes': struct_passes,
+            'structure_non_passes': total - struct_passes,
+            'boundary_passes': bound_passes,
+            'boundary_non_passes': total - bound_passes,
             'fully_confirmed_exact_reference': sum(1 for r in REVIEW_RECORDS if r['overall_visual_verdict'] == 'CONFIRMED_ACCURATE'),
             'intended_partial_fragments': sum(1 for r in REVIEW_RECORDS if r['overall_visual_verdict'] == 'INTENDED_PARTIAL_FRAGMENT'),
             'boundary_ambiguities_or_truncations': sum(1 for r in REVIEW_RECORDS if 'AMBIGUITY' in r['overall_visual_verdict'] or 'TRUNCATION' in r['overall_visual_verdict'] or 'NOTATION' in r['overall_visual_verdict']),
         },
+        'correction_history': [
+            {
+                'version': '2.0',
+                'date': '2026-10-24',
+                'description': 'Initial 21-candidate three-axis visual audit log baseline (19/21 glyph pass, 19/21 structure pass, 10/21 boundary pass).',
+            },
+            {
+                'version': '2.1',
+                'date': '2026-10-24',
+                'description': 'Annotated 1212_0957_eq1.1_forward_summation with literal_notation_match: false and mathematical_equivalence: true distinguishing typography from semantic meaning without altering existing observations.',
+            },
+        ],
         'records': REVIEW_RECORDS,
     }
 
@@ -575,11 +606,11 @@ def generate_logs():
         "",
         "## 1. Audit Summary Across Independent Axes",
         "",
-        "| Evaluation Axis | Pass Count | Pass Rate (%) | Criteria |",
-        "| :--- | :---: | :---: | :--- |",
-        f"| **Visual Glyph Fidelity** | {log_data['summary']['glyph_fidelity_passes']}/21 | {log_data['summary']['glyph_fidelity_passes']/21*100:.1f}% | Visible symbols, accents, and font glyphs correspond to reference |",
-        f"| **Mathematical Structure** | {log_data['summary']['structure_passes']}/21 | {log_data['summary']['structure_passes']/21*100:.1f}% | Subscripts, superscripts, bounds, grouping, and operator scope |",
-        f"| **Crop Boundary Fidelity** | {log_data['summary']['boundary_passes']}/21 | {log_data['summary']['boundary_passes']/21*100:.1f}% | Matches declared complete or partial/open boundary specification |",
+        "| Evaluation Axis | Pass Count | Non-Pass Count | Pass Rate (%) | Criteria |",
+        "| :--- | :---: | :---: | :---: | :--- |",
+        f"| **Visual Glyph Fidelity** | {glyph_passes}/21 | {total - glyph_passes} | {glyph_passes/21*100:.1f}% | Visible symbols, accents, and font glyphs correspond to reference |",
+        f"| **Mathematical Structure** | {struct_passes}/21 | {total - struct_passes} | {struct_passes/21*100:.1f}% | Subscripts, superscripts, bounds, grouping, and operator scope |",
+        f"| **Crop Boundary Fidelity** | {bound_passes}/21 | {total - bound_passes} | {bound_passes/21*100:.1f}% | Matches declared complete or partial/open boundary specification |",
         "",
         "---",
         "",
@@ -591,7 +622,8 @@ def generate_logs():
 
     for r in REVIEW_RECORDS:
         cid = r['candidate_id']
-        ref = r['declared_reference_latex'].replace('|', '\\|')
+        ref = r['declared_reference_latex'].replace(r'\|', r'\Vert ')
+        ref = re.sub(r'(?<!\\)\|', r'\|', ref)
         bnd = f"{r['crop_scope']} ({list(r['expected_boundary'].values())[0]})"
         g_stat = r['visual_glyph_fidelity']['status']
         s_stat = r['mathematical_structure']['status']
@@ -600,16 +632,15 @@ def generate_logs():
         md.append(f"| `{cid}` | `{ref}` | {bnd} | {g_stat} | {s_stat} | {b_stat} | `{verdict}` |")
 
     md.append("")
-    md.append("---",)
+    md.append("---")
     md.append("")
     md.append("## 3. Key Forensic Visual Observations")
     md.append("")
     md.append("1. **`2104_01277_cand8_summation_lambda` Operator Identity:** Visually confirmed to be a big union $\\bigcup_{j=1}^{i-1} (\\lambda_j + \\mathbb{Q})$, NOT a summation $\\sum$. The legacy candidate ID is misnamed, but the declared reference LaTeX is mathematically correct.")
-    md.append("2. **`1212_0957_eq1.1_forward_summation` Stirling Notation:** Source paper visually prints 2D vertical curly braces $\\left\\{ \\begin{matrix} n \\\\ k \\end{matrix} \\right\\}$ rather than horizontal $S(n,k)$. The PDF text layer uses non-Unicode glyphs (`\\x1a`/`\\x1b`), explaining why automated text extraction is partial.")
+    md.append("2. **`1212_0957_eq1.1_forward_summation` Stirling Notation:** Source paper visually prints 2D vertical curly braces $\\left\\{ \\begin{matrix} n \\\\ k \\end{matrix} \\right\\}$ rather than horizontal $S(n,k)$. The PDF text layer uses non-Unicode glyphs (`\\x1a`/`\\x1b`), explaining why automated text extraction is partial. Explicitly annotated with `literal_notation_match: false` and `mathematical_equivalence: true` to distinguish typographic transcription from mathematical equivalence.")
     md.append("3. **`1212_0957_eq1.2_inverse_summation` Display Limits:** Source paper visually prints display limits $\\sum_{k=0}^n$ with lowercase Stirling cycle notation $s(n,k)$.")
     md.append("4. **`2605_27315_cand0_parameter_set` Right BBox Truncation:** Physical crop cuts off the subscript bound digit `1`, leaving only $k=$. The OCR model faithfully read what was in the crop.")
     md.append("5. **Fraction Denominators (`2605_22902_cand3`, `2605_27315_cand2`):** Crops contain the horizontal fraction bar touching the top border, causing OCR overline/fraction hallucinations.")
-    md.append("")
 
     with open(md_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(md) + '\n')

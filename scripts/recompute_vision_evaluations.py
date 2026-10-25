@@ -26,7 +26,11 @@ if sys.platform == 'win32':
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / 'scripts'))
 
+import os
+import shutil
 import hashlib
+import datetime
+import uuid
 from evaluate_output_reference import REFERENCE_DATA
 from experiments_multi_paper_generalization import (
     CANDIDATES,
@@ -40,12 +44,57 @@ from experiments_multi_paper_generalization import (
     generate_report,
     evaluate_output,
 )
+from audit_candidate_crops import run_audit
+from build_visual_review_log import generate_logs
 
+GENERATIONS_DIR = OUTPUT_DIR / 'generations'
+CURRENT_POINTER_FILE = OUTPUT_DIR / 'CURRENT.json'
+SNAPSHOT_DIR = OUTPUT_DIR / '.snapshot_prior'
 MANIFEST_PATH = OUTPUT_DIR / 'candidate_audit_manifest.json'
 REF_FILE = REPO_ROOT / 'scripts' / 'evaluate_output_reference.py'
 
+CANONICAL_FILES = [
+    'candidate_audit_manifest.json',
+    'multi_paper_baseline_padding15.jsonl',
+    'multi_paper_experiment_padding_3_2.jsonl',
+    'multi_paper_generalization_report.md',
+    'visual_review_audit_log.json',
+    'visual_review_audit_log.md',
+]
 
-def recompute():
+
+def resolve_active_generation(output_dir: Path | None = None) -> Path:
+    """Resolve the currently active generation directory via CURRENT.json pointer."""
+    out_dir = output_dir if output_dir is not None else OUTPUT_DIR
+    current_file = out_dir / 'CURRENT.json'
+    if current_file.exists():
+        try:
+            with open(current_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+            gen_rel = data.get('generation_dir')
+            if gen_rel:
+                gen_path = out_dir / gen_rel
+                if gen_path.exists():
+                    return gen_path
+        except Exception:
+            pass
+    return out_dir
+
+
+def get_active_artifact(artifact_name: str, output_dir: Path | None = None) -> Path:
+    """Resolve artifact path inside the active generation, falling back to canonical path."""
+    out_dir = output_dir if output_dir is not None else OUTPUT_DIR
+    active_gen = resolve_active_generation(out_dir)
+    candidate = active_gen / artifact_name
+    if candidate.exists():
+        return candidate
+    return out_dir / artifact_name
+
+
+def recompute(
+    output_dir: Path | None = None,
+    failure_injection_point: str | None = None,
+) -> dict:
     # 1. Map candidates
     cand_by_id = {c['candidate_id']: c for c in CANDIDATES}
     for cid, cand in cand_by_id.items():
@@ -164,82 +213,201 @@ def recompute():
         r['evaluator_version'] = 'v2.0-strict-reference-comparison'
         updated_exp.append(r)
 
-    # --- STAGING & ATOMIC VALIDATION PROTOCOL ---
-    import shutil
+    # --- STAGED GENERATION & ATOMIC PUBLICATION PROTOCOL ---
+    out_dir = output_dir if output_dir is not None else OUTPUT_DIR
+    generations_dir = out_dir / 'generations'
+    current_file = out_dir / 'CURRENT.json'
+    snapshot_dir = out_dir / '.snapshot_prior'
 
-    STAGE_DIR = OUTPUT_DIR / '.staging'
-    SNAPSHOT_DIR = OUTPUT_DIR / '.snapshot_prior'
-    STAGE_DIR.mkdir(parents=True, exist_ok=True)
-    SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    timestamp_str = datetime.datetime.now(datetime.timezone.utc).strftime('%Y%m%d_%H%M%S')
+    short_id = uuid.uuid4().hex[:8]
+    gen_id = f"gen_{timestamp_str}_{short_id}"
+    stage_dir = out_dir / f".staging_{gen_id}"
+    stage_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1. Preserve current published artifacts as versioned snapshot
-    for pub_file in (BASELINE_JSONL, EXP_JSONL, REPORT_MD, MANIFEST_PATH):
-        if pub_file.exists():
-            shutil.copy2(pub_file, SNAPSHOT_DIR / pub_file.name)
+    try:
+        # 1. Stage candidate crop manifest
+        staged_manifest = stage_dir / 'candidate_audit_manifest.json'
+        run_audit(save_manifest=True, output_path=staged_manifest)
 
-    staged_baseline = STAGE_DIR / 'multi_paper_baseline_padding15.jsonl'
-    staged_exp = STAGE_DIR / 'multi_paper_experiment_padding_3_2.jsonl'
-    staged_report = STAGE_DIR / 'multi_paper_generalization_report.md'
+        # 2. Stage visual review audit logs (JSON & MD)
+        staged_vlog_json = stage_dir / 'visual_review_audit_log.json'
+        staged_vlog_md = stage_dir / 'visual_review_audit_log.md'
+        generate_logs(json_path=staged_vlog_json, md_path=staged_vlog_md)
 
-    # Write staged baseline
-    with open(staged_baseline, 'w', encoding='utf-8') as f:
-        for r in updated_baseline:
-            f.write(json.dumps(r, ensure_ascii=False) + '\n')
+        # 3. Stage baseline evaluation
+        staged_baseline = stage_dir / 'multi_paper_baseline_padding15.jsonl'
+        with open(staged_baseline, 'w', encoding='utf-8') as f:
+            for r in updated_baseline:
+                f.write(json.dumps(r, ensure_ascii=False) + '\n')
 
-    # Write staged experiment
-    with open(staged_exp, 'w', encoding='utf-8') as f:
-        for r in updated_exp:
-            f.write(json.dumps(r, ensure_ascii=False) + '\n')
+        # 4. Stage experiment evaluation
+        staged_exp = stage_dir / 'multi_paper_experiment_padding_3_2.jsonl'
+        with open(staged_exp, 'w', encoding='utf-8') as f:
+            for r in updated_exp:
+                f.write(json.dumps(r, ensure_ascii=False) + '\n')
 
-    # 2. Stage-gate validation of evaluation counts and candidate IDs
-    expected_ids = [c['candidate_id'] for c in CANDIDATES]
-    assert len(updated_baseline) == len(expected_ids), f"Baseline count mismatch: {len(updated_baseline)} vs {len(expected_ids)}"
-    assert len(updated_exp) == len(expected_ids), f"Experiment count mismatch: {len(updated_exp)} vs {len(expected_ids)}"
-    assert [r['candidate_id'] for r in updated_baseline] == expected_ids, "Baseline candidate ID order mismatch"
-    assert [r['candidate_id'] for r in updated_exp] == expected_ids, "Experiment candidate ID order mismatch"
+        if failure_injection_point == 'fail_staging_write':
+            raise IOError("Simulated failure during staging write")
 
-    attempted = len(updated_exp)
-    print(f"Padding (15, 15) Baseline Summary: Total={b_total}, NonEmpty={b_nonempty}, Isolated={b_isolated} ({b_isolated/b_total*100:.1f}%), Agreement={b_agreement} ({b_agreement/b_total*100:.1f}%)")
-    print(f"Padding (3, 2) Experiment Summary: Attempted={attempted}, Cropped={cropped_count}, NonEmpty={nonempty_count}, Isolated={isolated_count} ({isolated_count/attempted*100:.1f}%), Agreement={agreement_count} ({agreement_count/attempted*100:.1f}%)")
+        # 5. Compute SHA-256 hashes for staged inputs & artifacts
+        file_hashes = {
+            'raw_exp_sha256': hashlib.sha256(RAW_EXP_JSONL.read_bytes()).hexdigest() if RAW_EXP_JSONL.exists() else None,
+            'raw_base_sha256': hashlib.sha256(RAW_BASELINE_JSONL.read_bytes()).hexdigest() if RAW_BASELINE_JSONL.exists() else None,
+            'exp_sha256': hashlib.sha256(staged_exp.read_bytes()).hexdigest(),
+            'base_sha256': hashlib.sha256(staged_baseline.read_bytes()).hexdigest(),
+            'manifest_sha256': hashlib.sha256(staged_manifest.read_bytes()).hexdigest(),
+            'ref_sha256': hashlib.sha256(REF_FILE.read_bytes()).hexdigest() if REF_FILE.exists() else None,
+            'legacy_sha256': hashlib.sha256(FROZEN_BASELINE.read_bytes()).hexdigest() if FROZEN_BASELINE.exists() else 'missing',
+        }
 
-    # 3. Compute SHA-256 hashes against staged artifacts
-    file_hashes = {
-        'raw_exp_sha256': hashlib.sha256(RAW_EXP_JSONL.read_bytes()).hexdigest() if RAW_EXP_JSONL.exists() else None,
-        'raw_base_sha256': hashlib.sha256(RAW_BASELINE_JSONL.read_bytes()).hexdigest() if RAW_BASELINE_JSONL.exists() else None,
-        'exp_sha256': hashlib.sha256(staged_exp.read_bytes()).hexdigest(),
-        'base_sha256': hashlib.sha256(staged_baseline.read_bytes()).hexdigest(),
-        'manifest_sha256': hashlib.sha256(MANIFEST_PATH.read_bytes()).hexdigest() if MANIFEST_PATH.exists() else None,
-        'ref_sha256': hashlib.sha256(REF_FILE.read_bytes()).hexdigest() if REF_FILE.exists() else None,
-        'legacy_sha256': hashlib.sha256(FROZEN_BASELINE.read_bytes()).hexdigest() if FROZEN_BASELINE.exists() else 'missing',
+        # 6. Generate staged report
+        staged_report = stage_dir / 'multi_paper_generalization_report.md'
+        attempted = len(updated_exp)
+        generate_report(
+            updated_exp,
+            attempted=attempted,
+            cropped=cropped_count,
+            nonempty=nonempty_count,
+            isolated=isolated_count,
+            clipped=clipped_count,
+            agreement=agreement_count,
+            baseline_summary=baseline_summary,
+            file_hashes=file_hashes,
+            output_path=staged_report,
+        )
+
+        # 7. Collect digests for all 6 generation artifacts
+        artifact_digests = {}
+        for fname in CANONICAL_FILES:
+            fpath = stage_dir / fname
+            assert fpath.exists() and fpath.stat().st_size > 0, f"Missing staged artifact: {fname}"
+            artifact_digests[fname] = hashlib.sha256(fpath.read_bytes()).hexdigest()
+
+        # 8. Write generation_manifest.json inside staging
+        gen_manifest = {
+            'generation_id': gen_id,
+            'created_at_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            'evaluator_version': 'v2.0-strict-reference-comparison',
+            'artifact_digests': artifact_digests,
+            'total_candidates': len(CANDIDATES),
+            'status': 'staged',
+        }
+        with open(stage_dir / 'generation_manifest.json', 'w', encoding='utf-8') as f:
+            json.dump(gen_manifest, f, indent=2, ensure_ascii=False)
+
+        # 9. Stage-gate validation of entire generation
+        expected_ids = [c['candidate_id'] for c in CANDIDATES]
+        assert len(updated_baseline) == len(expected_ids), f"Baseline count mismatch: {len(updated_baseline)} vs {len(expected_ids)}"
+        assert len(updated_exp) == len(expected_ids), f"Experiment count mismatch: {len(updated_exp)} vs {len(expected_ids)}"
+        assert [r['candidate_id'] for r in updated_baseline] == expected_ids, "Baseline candidate ID order mismatch"
+        assert [r['candidate_id'] for r in updated_exp] == expected_ids, "Experiment candidate ID order mismatch"
+
+        report_content = staged_report.read_text(encoding='utf-8')
+        assert f"SHA-256: `{file_hashes['exp_sha256']}`" in report_content, "Staged report missing experiment SHA-256"
+        assert f"SHA-256: `{file_hashes['base_sha256']}`" in report_content, "Staged report missing baseline SHA-256"
+        assert "(provisional; visual review outstanding)" in report_content, "Missing provisional qualification in report"
+
+        with open(staged_vlog_json, 'r', encoding='utf-8') as f:
+            vlog = json.load(f)
+        assert vlog['summary']['glyph_fidelity_passes'] == 19
+        assert vlog['summary']['glyph_fidelity_non_passes'] == 2
+        assert vlog['summary']['structure_passes'] == 19
+        assert vlog['summary']['structure_non_passes'] == 2
+        assert vlog['summary']['boundary_passes'] == 10
+        assert vlog['summary']['boundary_non_passes'] == 11
+        assert len(vlog['records']) == 21
+
+        with open(staged_manifest, 'r', encoding='utf-8') as f:
+            cman = json.load(f)
+        assert cman['all_metadata_assertions_passed'] is True
+        assert cman['metadata_assertions_passed'] == 21
+        assert len(cman['records']) == 21
+
+        if failure_injection_point == 'fail_validation':
+            raise AssertionError("Simulated validation failure on staged generation")
+
+        gen_manifest['status'] = 'validated'
+        with open(stage_dir / 'generation_manifest.json', 'w', encoding='utf-8') as f:
+            json.dump(gen_manifest, f, indent=2, ensure_ascii=False)
+
+    except Exception:
+        if stage_dir.exists():
+            shutil.rmtree(stage_dir, ignore_errors=True)
+        raise
+
+    # --- PUBLICATION STAGE ---
+    target_gen_dir = generations_dir / gen_id
+    generations_dir.mkdir(parents=True, exist_ok=True)
+    stage_dir.rename(target_gen_dir)
+
+    if failure_injection_point == 'fail_publish_pointer':
+        raise IOError("Simulated failure before atomic pointer switch")
+
+    prior_pointer_data = None
+    if current_file.exists():
+        try:
+            with open(current_file, 'r', encoding='utf-8') as f:
+                prior_pointer_data = json.load(f)
+        except Exception:
+            pass
+
+    # Atomic pointer replacement via os.replace()
+    tmp_pointer = out_dir / f"CURRENT_{gen_id}.tmp"
+    pointer_data = {
+        'generation_id': gen_id,
+        'generation_dir': f"generations/{gen_id}",
+        'published_at_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        'artifact_digests': artifact_digests,
     }
+    with open(tmp_pointer, 'w', encoding='utf-8') as f:
+        json.dump(pointer_data, f, indent=2)
+    os.replace(tmp_pointer, current_file)
 
-    # 4. Generate Staged Report
-    generate_report(
-        updated_exp,
-        attempted=attempted,
-        cropped=cropped_count,
-        nonempty=nonempty_count,
-        isolated=isolated_count,
-        clipped=clipped_count,
-        agreement=agreement_count,
-        baseline_summary=baseline_summary,
-        file_hashes=file_hashes,
-        output_path=staged_report,
-    )
+    # Transactional canonical files synchronization with rollback
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+    for fname in CANONICAL_FILES:
+        can_path = out_dir / fname
+        if can_path.exists():
+            shutil.copy2(can_path, snapshot_dir / fname)
 
-    # 5. Validate Staged Report column integrity and hash consistency
-    report_content = staged_report.read_text(encoding='utf-8')
-    assert f"SHA-256: `{file_hashes['exp_sha256']}`" in report_content, "Staged report missing experiment SHA-256"
-    assert f"SHA-256: `{file_hashes['base_sha256']}`" in report_content, "Staged report missing baseline SHA-256"
+    try:
+        for idx, fname in enumerate(CANONICAL_FILES):
+            if failure_injection_point == 'fail_canonical_sync' and idx == 2:
+                raise IOError("Simulated failure during canonical file synchronization")
+            src_f = target_gen_dir / fname
+            dst_f = out_dir / fname
+            tmp_dst = out_dir / f"{fname}.pub_tmp"
+            shutil.copy2(src_f, tmp_dst)
+            os.replace(tmp_dst, dst_f)
+    except Exception:
+        print("Transactional publication failed: rolling back canonical files from snapshot...")
+        for fname in CANONICAL_FILES:
+            snap_f = snapshot_dir / fname
+            if snap_f.exists():
+                shutil.copy2(snap_f, out_dir / fname)
+        if prior_pointer_data is not None:
+            tmp_rp = out_dir / "CURRENT_rollback.tmp"
+            with open(tmp_rp, 'w', encoding='utf-8') as f:
+                json.dump(prior_pointer_data, f, indent=2)
+            os.replace(tmp_rp, current_file)
+        elif current_file.exists():
+            current_file.unlink(missing_ok=True)
+        raise
 
-    # 6. Atomic Publication (all validations passed)
-    shutil.copy2(staged_baseline, BASELINE_JSONL)
-    shutil.copy2(staged_exp, EXP_JSONL)
-    shutil.copy2(staged_report, REPORT_MD)
-
-    # Clean up staging directory
-    shutil.rmtree(STAGE_DIR)
-    print("Atomic publication successful: baseline, experiment, and report updated in synchronization.")
+    print(f"Publication successful: generation {gen_id} published atomically to CURRENT.json and canonical files synced.")
+    return {
+        'generation_id': gen_id,
+        'generation_dir': str(target_gen_dir),
+        'artifact_digests': artifact_digests,
+        'attempted': attempted,
+        'cropped': cropped_count,
+        'nonempty': nonempty_count,
+        'isolated': isolated_count,
+        'clipped': clipped_count,
+        'agreement': agreement_count,
+        'baseline_summary': baseline_summary,
+    }
 
 
 if __name__ == '__main__':

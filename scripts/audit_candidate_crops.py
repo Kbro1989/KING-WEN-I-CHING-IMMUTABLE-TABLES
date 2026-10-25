@@ -153,7 +153,7 @@ def _compute_token_overlap(source_text: str, clip_text: str) -> dict:
 
 
 
-def run_audit(save_manifest: bool = True) -> dict:
+def run_audit(save_manifest: bool = True, output_path: Path | None = None) -> dict:
     if fitz is None:
         raise ImportError("PyMuPDF (fitz) is required to run candidate crop PDF audit.")
 
@@ -324,10 +324,11 @@ def run_audit(save_manifest: bool = True) -> dict:
     }
 
     if save_manifest:
-        OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-        with open(MANIFEST_PATH, 'w', encoding='utf-8') as f:
+        target_path = output_path if output_path is not None else MANIFEST_PATH
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(target_path, 'w', encoding='utf-8') as f:
             json.dump(manifest, f, indent=2, ensure_ascii=False)
-        print(f"\nSaved machine-checked manifest ({passed_count}/{total_candidates} passed) to {MANIFEST_PATH}")
+        print(f"\nSaved machine-checked manifest ({passed_count}/{total_candidates} passed) to {target_path}")
 
     return manifest
 
