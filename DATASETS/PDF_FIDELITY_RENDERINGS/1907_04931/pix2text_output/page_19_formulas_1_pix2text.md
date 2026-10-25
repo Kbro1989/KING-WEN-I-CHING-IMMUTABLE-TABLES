@@ -1,0 +1,3 @@
+Table 11: Test set FI-micro for the baselines under various batch sizes
+
+inu ae. tetatheful tiningag izof edis istarun $1 . 5 \times1 0^{5}$ .Thus, no matter which nodes are sampled in the output layer, GraphSAGE would almost always propagate features within the full training graph for initial layers. We suspect this would lead to difficulties in learning. For S-GCN, with batch size of 500, it fails to learn properly on Reddit and Yelp. The accuracy fluctuates in a region of very low value, even after appropriate hyperparameter tuning. For AS-GCN, its accuracy is not sensitive to the batch size, since AS-GCN addresses neighbor explosion and also ensures good inter-layer connectivity within the minibatch.
