@@ -14,6 +14,13 @@ import hashlib
 import os
 import sys
 
+def sha256_file(path):
+    h = hashlib.sha256()
+    with open(path, 'rb') as f:
+        for chunk in iter(lambda: f.read(8192), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GOLD_SET_PATH = os.path.join(REPO_ROOT, 'DATASETS', 'provenance_gold_set_1505.05770.json')
 HTML_CORPUS_PATH = os.path.join(REPO_ROOT, 'DATASETS', 'arxiv_html_corpus', '1505.05770.json')
@@ -23,7 +30,7 @@ def verify_source_pin(gold):
     pin = gold['source_pin']
     errors = []
 
-    # Check HTML corpus file exists
+    # Check HTML corpus file exists and hash matches
     if not os.path.exists(HTML_CORPUS_PATH):
         errors.append(f"HTML corpus file missing: {HTML_CORPUS_PATH}")
     else:
@@ -32,6 +39,11 @@ def verify_source_pin(gold):
             errors.append(f"Equation count mismatch: gold={pin['html_equation_count']}, actual={html_data['equation_count']}")
         if html_data['arxiv_id'] != pin['arxiv_id']:
             errors.append(f"arxiv_id mismatch: gold={pin['arxiv_id']}, actual={html_data['arxiv_id']}")
+        # Verify HTML corpus SHA-256
+        if 'html_corpus_sha256' in pin:
+            actual_hash = sha256_file(HTML_CORPUS_PATH)
+            if actual_hash != pin['html_corpus_sha256']:
+                errors.append(f"HTML corpus SHA-256 mismatch: gold={pin['html_corpus_sha256']}, actual={actual_hash}")
 
     # Check PDF exists
     pdf_path = pin['pdf_path']
@@ -45,10 +57,14 @@ def verify_source_pin(gold):
         if h.hexdigest() != pin['pdf_sha256']:
             errors.append(f"PDF SHA-256 mismatch: gold={pin['pdf_sha256']}, actual={h.hexdigest()}")
 
-    # Check parser exists
+    # Check parser exists and hash matches
     parser_path = os.path.join(REPO_ROOT, pin['parser'])
     if not os.path.exists(parser_path):
         errors.append(f"Parser missing: {parser_path}")
+    elif 'parser_sha256' in pin:
+        actual_hash = sha256_file(parser_path)
+        if actual_hash != pin['parser_sha256']:
+            errors.append(f"Parser SHA-256 mismatch: gold={pin['parser_sha256']}, actual={actual_hash}")
 
     return errors
 
@@ -85,7 +101,6 @@ def verify_pdf_pages(gold):
         import fitz
         doc = fitz.open(pdf_path)
         total_pages = len(doc)
-        doc.close()
 
         for gs in gold['gold_set']:
             page_1based = gs['pdf_page']
@@ -96,10 +111,25 @@ def verify_pdf_pages(gold):
             if page_0based != page_1based - 1:
                 errors.append(f"{gs['gold_id']}: 0-based index {page_0based} != {page_1based}-1")
 
-            # Verify bbox is within page dimensions (if available)
+            # Verify bbox has positive area and is within page dimensions
             bbox = gs['pdf_bbox']
+            width = bbox['x1'] - bbox['x0']
+            height = bbox['y1'] - bbox['y0']
+            if width <= 0 or height <= 0:
+                errors.append(f"{gs['gold_id']}: bbox has non-positive area ({width:.1f}x{height:.1f})")
             if bbox.get('x0', 0) < 0 or bbox.get('y0', 0) < 0:
                 errors.append(f"{gs['gold_id']}: negative bbox coordinates")
+            if page_0based < total_pages:
+                page = doc[page_0based]
+                pw, ph = page.rect.width, page.rect.height
+                if bbox['x1'] > pw + 5 or bbox['y1'] > ph + 5:
+                    errors.append(f"{gs['gold_id']}: bbox exceeds page dimensions ({pw:.0f}x{ph:.0f})")
+
+            # Check visual status
+            if gs.get('visual_status') == 'PENDING_ADJUDICATION':
+                print(f"  NOTE: {gs['gold_id']} is PENDING visual adjudication (approximate bbox)")
+
+        doc.close()
 
     except ImportError:
         errors.append("PyMuPDF (fitz) not available for PDF verification")
