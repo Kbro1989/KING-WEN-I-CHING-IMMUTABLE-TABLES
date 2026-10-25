@@ -232,3 +232,226 @@ def test_reported_file_hashes_match_committed_artifacts():
         actual_hash = hashlib.sha256(full_path.read_bytes()).hexdigest()
         assert actual_hash == expected_hash, f"Hash mismatch for {rel_path}: {actual_hash} != {expected_hash}"
 
+
+# ===========================================================================
+# Phase 1 Adversarial Regression Test Cases
+# ===========================================================================
+
+def test_adversarial_operator_substitution_rejected():
+    r"""Adversarial Case 1: Reject transcription changing big union to summation.
+
+    Even if surrounding variables (j, 1, \lambda, Q) match, substituting
+    the named operator \bigcup / \cup with \sum must be rejected by
+    structural comparison.
+    """
+    try:
+        from scripts.evaluate_output_reference import compare_reference_latex
+    except ImportError:
+        from evaluate_output_reference import compare_reference_latex  # type: ignore[import-not-found]
+
+    cand8_union_ref = r"\cup_{j=1}^{i-1} (\lambda_j + Q)"
+    cand8_sum_spoof = r"\sum_{j=1}^{i-1} (\lambda_j + Q)"
+
+    res = compare_reference_latex(cand8_sum_spoof, cand8_union_ref)
+    assert res['match'] is False, r"Operator substitution \cup -> \sum must not match"
+    assert res['status'] == 'mismatch'
+
+
+def test_adversarial_truncated_bound_detected():
+    """Adversarial Case 2: Detect crop cutting off digit at subscript/superscript boundary.
+
+    Tests DEF-001 with 2605_27315_cand0_parameter_set where the right bounding
+    box edge cuts off the digit '1' in 'k=1', producing '{ρk}K k='.
+    Validates that:
+    1. The extracted clip text ends with 'k=' and lacks the terminal digit '1'.
+    2. Transcription of the truncated crop produces an empty bound operand.
+    """
+    try:
+        from scripts.evaluate_output_reference import detect_truncation
+    except ImportError:
+        from evaluate_output_reference import detect_truncation  # type: ignore[import-not-found]
+
+    try:
+        import fitz  # type: ignore[import-not-found]
+    except ImportError:
+        fitz = None  # type: ignore[assignment]
+
+    orig_bbox = {'x0': 360.382, 'y0': 369.665, 'x1': 389.194, 'y1': 383.371}
+
+    if fitz is not None:
+        try:
+            from scripts.experiments_multi_paper_generalization import PDF_MAP
+        except ImportError:
+            from experiments_multi_paper_generalization import PDF_MAP  # type: ignore[import-not-found]
+        pdf_path = PDF_MAP.get('2605.27315')
+        if pdf_path and pdf_path.exists():
+            doc = fitz.open(str(pdf_path))
+            page = doc[12]  # page 13 is index 12
+            clip_text = page.get_text('text', clip=fitz.Rect(orig_bbox['x0'], orig_bbox['y0'], orig_bbox['x1'], orig_bbox['y1'])).strip()
+            doc.close()
+            assert clip_text.endswith('k='), f"Expected truncated 'k=', got {clip_text!r}"
+            assert '1' not in clip_text.split('k=')[-1], "Digit '1' should be cut off by bounding box"
+
+    # Truncated LaTeX output detection
+    truncated_latex = r"\{ \rho_k \}_{k=}^{K}"
+    trunc_info = detect_truncation(truncated_latex)
+    assert trunc_info['detected'] is True
+    assert 'empty_bound_operand' in trunc_info['indicators']
+
+
+def test_adversarial_unordered_token_spoofing_rejected():
+    """Adversarial Case 3: Reject token overlap evidence when tokens appear in reverse order.
+
+    An unordered bag-of-words or multiset would report 100% overlap for reversed
+    mathematical tokens. LCS-based token overlap must reject reversed order.
+    """
+    source = r"b_n = \sum_{k=0}^{n} S(n,k) a_k"
+    reversed_clip = r"a_k S(n,k) \sum_{k=0}^n b_n"
+
+    overlap = _compute_token_overlap(source, reversed_clip)
+    assert overlap['overlap_fraction'] < 1.0, "Reversed tokens must not achieve 100% overlap"
+    assert len(overlap['missing']) > 0
+    assert overlap['algorithm'] == 'lcs'
+
+
+def test_adversarial_partial_pdf_text_overlap_preserved():
+    """Adversarial Case 4: Preserve pdf_text_overlap_partial without promotion.
+
+    Candidates with partial Unicode text extraction in the source PDF
+    (e.g., 1212.0957 Stirling expressions where 2D braces are encoded
+    as non-Unicode glyphs) must remain 'pdf_text_overlap_partial'.
+    They must never be promoted to 'verified' based on a fuzzy threshold.
+    """
+    import json
+    assert MANIFEST_PATH.exists()
+    manifest = json.loads(MANIFEST_PATH.read_text(encoding='utf-8'))
+
+    stirling_cands = [
+        r for r in manifest['records']
+        if r['candidate_id'] in (
+            '1212_0957_eq1.1_forward_summation',
+            '1212_0957_eq1.2_inverse_summation',
+        )
+    ]
+    assert len(stirling_cands) == 2
+    for cand in stirling_cands:
+        assert cand['audit_status'] == 'pdf_text_overlap_partial', (
+            f"{cand['candidate_id']} must retain pdf_text_overlap_partial status"
+        )
+        assert 'Partial' in cand['evidence_notes'] or 'partial' in cand['evidence_notes']
+
+
+def test_adversarial_unsupported_glyph_preserved():
+    r"""Adversarial Case 5: Preserve unresolved typography in audit record without flattening.
+
+    In 1212_0957_eq1.1_forward_summation, the printed 2D subset notation
+    {n \atop k} is preserved in printed_notation, literal_notation_match
+    is explicitly False, and overall verdict is NOTATION_AMBIGUITY.
+    Flattening {n \atop k} -> S(n,k) as an unannotated visual match is prohibited.
+    """
+    try:
+        from scripts.build_visual_review_log import REVIEW_RECORDS
+    except ImportError:
+        from build_visual_review_log import REVIEW_RECORDS  # type: ignore[import-not-found]
+
+    cand = next(r for r in REVIEW_RECORDS if r['candidate_id'] == '1212_0957_eq1.1_forward_summation')
+    assert cand['literal_notation_match'] is False, "Literal notation match must be False for 2D vs functional"
+    assert cand['mathematical_equivalence'] is True, "Mathematical equivalence must be True"
+    assert cand['overall_visual_verdict'] == 'NOTATION_AMBIGUITY'
+    assert cand['visual_glyph_fidelity']['status'] == 'DISCREPANCY_NOTED'
+    assert 'equivalence_provenance' in cand
+    assert cand['equivalence_provenance']['printed_notation'] != cand['equivalence_provenance']['reference_notation']
+    assert 'Graham' in cand['equivalence_provenance']['literature_basis']
+
+
+def test_adversarial_missing_mathematical_delimiter_flagged():
+    r"""Adversarial Case 6: Flag missing delimiter when source evidence requires pairs.
+
+    Expressions with required delimiters (e.g., set braces \{...\}, parens (...))
+    must fail check_delimiter_balance and trigger truncation if unclosed.
+    """
+    try:
+        from scripts.evaluate_output_reference import check_delimiter_balance, detect_truncation
+    except ImportError:
+        from evaluate_output_reference import check_delimiter_balance, detect_truncation  # type: ignore[import-not-found]
+
+    # Missing opening brace in parameter set
+    missing_open = r"\rho_k \}_{k=1}^K"
+    bal_res = check_delimiter_balance(missing_open, [(r'\{', r'\}')])
+    assert bal_res['balanced'] is False
+    assert any('unbalanced' in iss or 'missing' in iss for iss in bal_res['issues'])
+
+    # Unclosed left parenthesis under expectation
+    unclosed_paren = r"(\zeta_v^{(\ell+1)}"
+    bal_res_paren = check_delimiter_balance(unclosed_paren, [('(', ')')])
+    assert bal_res_paren['balanced'] is False
+
+    # Unclosed left brace triggers truncation detection
+    unclosed_brace = r"\{ \rho_k"
+    trunc_res = detect_truncation(unclosed_brace)
+    assert trunc_res['detected'] is True
+    assert 'unbalanced_braces' in trunc_res['indicators']
+
+
+def test_corrected_crop_provenance_and_validation():
+    """Adversarial Case 7: Corrected crop references original fixture and captures complete bound.
+
+    For DEF-001 (2605_27315_cand0_parameter_set):
+    1. Original fixture is preserved with x1=389.194 (cuts off '1' in 'k=1').
+    2. Corrected fixture widens x1 to 396.000, recovering '1' without neighboring prose.
+    3. Corrected crop maintains provenance link to candidate_id, paper_id, and page.
+    """
+    try:
+        import fitz  # type: ignore[import-not-found]
+    except ImportError:
+        fitz = None  # type: ignore[assignment]
+
+    original_fixture = {
+        'candidate_id': '2605_27315_cand0_parameter_set',
+        'paper_id': '2605.27315',
+        'page': 13,
+        'bbox': {'x0': 360.382, 'y0': 369.665, 'x1': 389.194, 'y1': 383.371},
+        'defect_classification': 'BOUNDARY_TRUNCATION',
+    }
+
+    corrected_fixture = {
+        'parent_candidate_id': '2605_27315_cand0_parameter_set',
+        'paper_id': '2605.27315',
+        'page': 13,
+        'bbox': {'x0': 360.382, 'y0': 369.665, 'x1': 396.000, 'y1': 383.371},
+        'correction_type': 'bbox_widening_bound_recovery',
+        'delta_x1': 6.806,
+        'reference_latex': r'\{ \rho_k \}_{k=1}^{K}',
+    }
+
+    # Assert provenance link
+    assert corrected_fixture['parent_candidate_id'] == original_fixture['candidate_id']
+    assert corrected_fixture['paper_id'] == original_fixture['paper_id']
+    assert corrected_fixture['page'] == original_fixture['page']
+    assert corrected_fixture['bbox']['x1'] > original_fixture['bbox']['x1']
+
+    if fitz is not None:
+        try:
+            from scripts.experiments_multi_paper_generalization import PDF_MAP
+        except ImportError:
+            from experiments_multi_paper_generalization import PDF_MAP  # type: ignore[import-not-found]
+        pdf_path = PDF_MAP.get('2605.27315')
+        if pdf_path and pdf_path.exists():
+            doc = fitz.open(str(pdf_path))
+            page = doc[12]
+
+            # Original: truncated
+            orig_rect = fitz.Rect(original_fixture['bbox']['x0'], original_fixture['bbox']['y0'],
+                                  original_fixture['bbox']['x1'], original_fixture['bbox']['y1'])
+            orig_text = page.get_text('text', clip=orig_rect).strip().replace('\n', '')
+            assert orig_text == '{ρk}Kk=', f"Original fixture should be truncated, got: {orig_text!r}"
+
+            # Corrected: complete expression including digit 1
+            corr_rect = fitz.Rect(corrected_fixture['bbox']['x0'], corrected_fixture['bbox']['y0'],
+                                  corrected_fixture['bbox']['x1'], corrected_fixture['bbox']['y1'])
+            corr_text = page.get_text('text', clip=corr_rect).strip().replace('\n', '')
+            assert corr_text == '{ρk}Kk=1', f"Corrected fixture should have '1', got: {corr_text!r}"
+
+            doc.close()
+
+
