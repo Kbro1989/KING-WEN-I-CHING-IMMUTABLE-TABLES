@@ -356,3 +356,196 @@ def test_failure_injection_canonical_sync_rollback(tmp_path):
     assert (tmp_path / 'CURRENT.json').read_text(encoding='utf-8') == initial_pointer
     active_gen = resolve_active_generation(output_dir=tmp_path)
     assert active_gen.name == initial_gen_id
+
+
+def test_failure_injection_pointer_write_error(tmp_path):
+    """Verify failure while writing the temporary pointer file leaves prior generation active.
+
+    fail_pointer_write fires after the new generation directory has been
+    renamed from staging into generations/<gen_id> but before the temporary
+    CURRENT.json is written.  The implementation must delete the orphaned
+    generation directory and leave CURRENT.json and canonical files unchanged.
+    """
+    # 1. Establish baseline generation
+    res1 = recompute(output_dir=tmp_path)
+    initial_gen_id = res1['generation_id']
+    initial_pointer = (tmp_path / 'CURRENT.json').read_text(encoding='utf-8')
+    initial_file_bytes = {f: (tmp_path / f).read_bytes() for f in CANONICAL_FILES}
+
+    # 2. Inject failure during temporary pointer write
+    with pytest.raises(IOError, match="Simulated failure during temporary pointer write"):
+        recompute(output_dir=tmp_path, failure_injection_point='fail_pointer_write')
+
+    # 3. Orphaned generation directory must have been cleaned up
+    gens_dir = tmp_path / 'generations'
+    if gens_dir.exists():
+        surviving_gens = [d.name for d in gens_dir.iterdir() if d.is_dir()]
+        assert surviving_gens == [initial_gen_id], (
+            f"Unexpected generation directories after fail_pointer_write: {surviving_gens}"
+        )
+
+    # 4. Pointer and canonical files must be byte-identical to baseline
+    assert (tmp_path / 'CURRENT.json').read_text(encoding='utf-8') == initial_pointer
+    for f in CANONICAL_FILES:
+        assert (tmp_path / f).read_bytes() == initial_file_bytes[f], (
+            f"Canonical file {f} modified after fail_pointer_write"
+        )
+
+    active_gen = resolve_active_generation(output_dir=tmp_path)
+    assert active_gen.name == initial_gen_id
+
+
+def test_failure_injection_pointer_replace_error(tmp_path):
+    """Verify failure during os.replace of the pointer file leaves prior generation active.
+
+    fail_pointer_replace fires after the temporary CURRENT.json has been
+    written but before os.replace() promotes it.  The implementation must
+    delete the orphaned generation directory, unlink the temporary file, and
+    leave the live CURRENT.json and canonical files unchanged.
+    """
+    # 1. Establish baseline generation
+    res1 = recompute(output_dir=tmp_path)
+    initial_gen_id = res1['generation_id']
+    initial_pointer = (tmp_path / 'CURRENT.json').read_text(encoding='utf-8')
+    initial_file_bytes = {f: (tmp_path / f).read_bytes() for f in CANONICAL_FILES}
+
+    # 2. Inject failure during atomic pointer replacement
+    with pytest.raises(IOError, match="Simulated failure during atomic pointer replacement"):
+        recompute(output_dir=tmp_path, failure_injection_point='fail_pointer_replace')
+
+    # 3. No temporary pointer file must remain on disk
+    leftover_tmps = list(tmp_path.glob('CURRENT_*.tmp'))
+    assert leftover_tmps == [], f"Temporary pointer files not cleaned up: {leftover_tmps}"
+
+    # 4. Orphaned generation directory must have been cleaned up
+    gens_dir = tmp_path / 'generations'
+    if gens_dir.exists():
+        surviving_gens = [d.name for d in gens_dir.iterdir() if d.is_dir()]
+        assert surviving_gens == [initial_gen_id], (
+            f"Unexpected generation directories after fail_pointer_replace: {surviving_gens}"
+        )
+
+    # 5. Pointer and canonical files must be byte-identical to baseline
+    assert (tmp_path / 'CURRENT.json').read_text(encoding='utf-8') == initial_pointer
+    for f in CANONICAL_FILES:
+        assert (tmp_path / f).read_bytes() == initial_file_bytes[f], (
+            f"Canonical file {f} modified after fail_pointer_replace"
+        )
+
+    active_gen = resolve_active_generation(output_dir=tmp_path)
+    assert active_gen.name == initial_gen_id
+
+
+def test_failure_injection_canonical_sync_rollback_restores_absent_files(tmp_path):
+    """Verify rollback restores original absence for canonical files absent before publication.
+
+    If a canonical file did not exist before a publication attempt and canonical
+    sync fails partway through, any newly-created file must be deleted — not
+    left as an inconsistent partial write — and CURRENT.json must revert to the
+    prior generation.
+    """
+    import shutil as _shutil
+
+    # 1. Establish a first generation, then delete all canonical files to
+    #    simulate the absent-prior-file scenario on the next run.
+    res1 = recompute(output_dir=tmp_path)
+    initial_gen_id = res1['generation_id']
+    initial_pointer_data = json.loads(
+        (tmp_path / 'CURRENT.json').read_text(encoding='utf-8')
+    )
+
+    for f in CANONICAL_FILES:
+        canon = tmp_path / f
+        if canon.exists():
+            canon.unlink()
+
+    # Clear snapshot_prior so rollback sees no prior copies.
+    snap = tmp_path / '.snapshot_prior'
+    if snap.exists():
+        _shutil.rmtree(snap)
+
+    # 2. Inject failure mid-canonical-sync (fires at index 2, so at least 2
+    #    files will have been written before the failure).
+    with pytest.raises(IOError, match="Simulated failure during canonical file synchronization"):
+        recompute(output_dir=tmp_path, failure_injection_point='fail_canonical_sync')
+
+    # 3. All canonical files must be absent — rollback must delete newly-created
+    #    ones rather than leaving partial writes.
+    for f in CANONICAL_FILES:
+        assert not (tmp_path / f).exists(), (
+            f"Rollback left behind a newly-created canonical file: {f}"
+        )
+
+    # 4. CURRENT.json must have been reverted to the first generation's pointer.
+    current_data = json.loads((tmp_path / 'CURRENT.json').read_text(encoding='utf-8'))
+    assert current_data['generation_id'] == initial_pointer_data['generation_id'], (
+        "CURRENT.json was not reverted to the prior generation after failed canonical sync"
+    )
+
+
+def test_failure_real_os_replace_raises(tmp_path):
+    """Verify that a real OSError from os.replace() on pointer promotion is handled correctly.
+
+    This test patches os.replace in the recompute_vision_evaluations module so
+    that the actual os.replace() call on the CURRENT_*.tmp file raises OSError.
+    It is distinct from the fail_pointer_replace injection (which raises before
+    os.replace is called) and validates the except-block cleanup path that
+    handles a genuine replacement failure rather than a pre-call sentinel.
+
+    Specifically, after os.replace raises:
+    - The orphaned generation directory must be removed from generations/.
+    - The temporary CURRENT_*.tmp file must be unlinked.
+    - CURRENT.json must remain pointing at the prior generation.
+    - All canonical files must be byte-identical to the baseline.
+    """
+    import os as _os
+    from unittest.mock import patch
+
+    # 1. Establish baseline generation
+    res1 = recompute(output_dir=tmp_path)
+    initial_gen_id = res1['generation_id']
+    initial_pointer = (tmp_path / 'CURRENT.json').read_text(encoding='utf-8')
+    initial_file_bytes = {f: (tmp_path / f).read_bytes() for f in CANONICAL_FILES}
+
+    _real_replace = _os.replace
+
+    def _replace_raises_on_tmp(src, dst):
+        """Raise only for the CURRENT_*.tmp → CURRENT.json promotion; pass everything else."""
+        src_s = str(src)
+        if 'CURRENT_' in src_s and src_s.endswith('.tmp'):
+            raise OSError("Real os.replace failure on pointer promotion")
+        return _real_replace(src, dst)
+
+    # 2. Patch os.replace in the implementation module so the actual call raises.
+    with patch('recompute_vision_evaluations.os.replace', side_effect=_replace_raises_on_tmp):
+        with pytest.raises(OSError, match="Real os.replace failure on pointer promotion"):
+            recompute(output_dir=tmp_path)
+
+    # 3. Orphaned generation directory must have been cleaned up.
+    gens_dir = tmp_path / 'generations'
+    if gens_dir.exists():
+        surviving_gens = [d.name for d in gens_dir.iterdir() if d.is_dir()]
+        assert surviving_gens == [initial_gen_id], (
+            f"Orphaned generation directories found after os.replace failure: {surviving_gens}"
+        )
+
+    # 4. Temporary pointer file must have been unlinked.
+    leftover_tmps = list(tmp_path.glob('CURRENT_*.tmp'))
+    assert leftover_tmps == [], (
+        f"Temporary pointer file not cleaned up after os.replace failure: {leftover_tmps}"
+    )
+
+    # 5. CURRENT.json must be byte-identical to the baseline pointer.
+    assert (tmp_path / 'CURRENT.json').read_text(encoding='utf-8') == initial_pointer, (
+        "CURRENT.json was modified after os.replace failure on pointer promotion"
+    )
+
+    # 6. Canonical files must be byte-identical to the baseline (canonical sync
+    #    never ran — it follows the pointer block, which raised first).
+    for f in CANONICAL_FILES:
+        assert (tmp_path / f).read_bytes() == initial_file_bytes[f], (
+            f"Canonical file {f} was modified after os.replace failure on pointer promotion"
+        )
+
+    active_gen = resolve_active_generation(output_dir=tmp_path)
+    assert active_gen.name == initial_gen_id

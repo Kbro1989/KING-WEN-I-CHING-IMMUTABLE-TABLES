@@ -151,6 +151,14 @@ REVIEW_RECORDS = [
             'literal visual transcription or mathematical equivalence. These are different '
             'evaluation targets.'
         ),
+        'equivalence_provenance': {
+            'paper_equation': '1.1',
+            'printed_notation': r'\left\{ \begin{matrix} {n} \\ {k} \end{matrix} \right\}',
+            'reference_notation': 'S(n, k)',
+            'standard_identity': r'Knuth 2D curly subset notation {n \atop k} \equiv S(n, k) for Stirling numbers of the second kind',
+            'literature_basis': 'Graham, Knuth, Patashnik, Concrete Mathematics (2nd ed. 1994), §6.1; Charalambides, Enumerative Combinatorics (2002), p. 287',
+            'contextual_role': r'Coefficients of the forward Stirling transform b_n = \sum_{k=0}^n S(n,k) a_k inverted by eq (1.2)',
+        },
         'ambiguities_or_notes': 'OCR recognized \\biggl\\{\\begin{matrix} {n} \\\\ {k} \\end{matrix} \\biggr\\}, reflecting actual printed typography. Reference was declared as functional S(n,k). Kept as pdf_text_overlap_partial.',
     },
     {
@@ -554,7 +562,7 @@ def generate_logs(json_path: Path | None = None, md_path: Path | None = None):
 
     log_data = {
         'audit_title': '21-Candidate Visual Crop Audit Log',
-        'audit_version': '2.1',
+        'audit_version': '2.2',
         'audit_date': '2026-10-24',
         'reviewer': 'Antigravity Autonomous Math Reviewer & Human-in-the-Loop Pair',
         'evaluation_axes': [
@@ -584,6 +592,11 @@ def generate_logs(json_path: Path | None = None, md_path: Path | None = None):
                 'version': '2.1',
                 'date': '2026-10-24',
                 'description': 'Annotated 1212_0957_eq1.1_forward_summation with literal_notation_match: false and mathematical_equivalence: true distinguishing typography from semantic meaning without altering existing observations.',
+            },
+            {
+                'version': '2.2',
+                'date': '2026-10-24',
+                'description': 'Added explicit evidentiary provenance for mathematical equivalence of Stirling subset notation in 1212_0957_eq1.1_forward_summation (Graham-Knuth-Patashnik §6.1, Charalambides p. 287).',
             },
         ],
         'records': REVIEW_RECORDS,
@@ -637,7 +650,7 @@ def generate_logs(json_path: Path | None = None, md_path: Path | None = None):
     md.append("## 3. Key Forensic Visual Observations")
     md.append("")
     md.append("1. **`2104_01277_cand8_summation_lambda` Operator Identity:** Visually confirmed to be a big union $\\bigcup_{j=1}^{i-1} (\\lambda_j + \\mathbb{Q})$, NOT a summation $\\sum$. The legacy candidate ID is misnamed, but the declared reference LaTeX is mathematically correct.")
-    md.append("2. **`1212_0957_eq1.1_forward_summation` Stirling Notation:** Source paper visually prints 2D vertical curly braces $\\left\\{ \\begin{matrix} n \\\\ k \\end{matrix} \\right\\}$ rather than horizontal $S(n,k)$. The PDF text layer uses non-Unicode glyphs (`\\x1a`/`\\x1b`), explaining why automated text extraction is partial. Explicitly annotated with `literal_notation_match: false` and `mathematical_equivalence: true` to distinguish typographic transcription from mathematical equivalence.")
+    md.append("2. **`1212_0957_eq1.1_forward_summation` Stirling Notation:** Source paper visually prints 2D vertical curly braces $\\left\\{ \\begin{matrix} n \\\\ k \\end{matrix} \\right\\}$ rather than horizontal $S(n,k)$. The PDF text layer uses non-Unicode glyphs (`\\x1a`/`\\x1b`), explaining why automated text extraction is partial. Explicitly annotated with `literal_notation_match: false` and `mathematical_equivalence: true` to distinguish typographic transcription from mathematical equivalence. Provenance: standard 2D subset notation $\\left\\{ \\begin{matrix} n \\\\ k \\end{matrix} \\right\\} \\equiv S(n,k)$ denotes Stirling numbers of the second kind (Graham, Knuth, Patashnik, *Concrete Mathematics* §6.1; Charalambides, *Enumerative Combinatorics* p. 287).")
     md.append("3. **`1212_0957_eq1.2_inverse_summation` Display Limits:** Source paper visually prints display limits $\\sum_{k=0}^n$ with lowercase Stirling cycle notation $s(n,k)$.")
     md.append("4. **`2605_27315_cand0_parameter_set` Right BBox Truncation:** Physical crop cuts off the subscript bound digit `1`, leaving only $k=$. The OCR model faithfully read what was in the crop.")
     md.append("5. **Fraction Denominators (`2605_22902_cand3`, `2605_27315_cand2`):** Crops contain the horizontal fraction bar touching the top border, causing OCR overline/fraction hallucinations.")

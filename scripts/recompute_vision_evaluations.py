@@ -341,9 +341,6 @@ def recompute(
     generations_dir.mkdir(parents=True, exist_ok=True)
     stage_dir.rename(target_gen_dir)
 
-    if failure_injection_point == 'fail_publish_pointer':
-        raise IOError("Simulated failure before atomic pointer switch")
-
     prior_pointer_data = None
     if current_file.exists():
         try:
@@ -352,24 +349,41 @@ def recompute(
         except Exception:
             pass
 
-    # Atomic pointer replacement via os.replace()
     tmp_pointer = out_dir / f"CURRENT_{gen_id}.tmp"
-    pointer_data = {
-        'generation_id': gen_id,
-        'generation_dir': f"generations/{gen_id}",
-        'published_at_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        'artifact_digests': artifact_digests,
-    }
-    with open(tmp_pointer, 'w', encoding='utf-8') as f:
-        json.dump(pointer_data, f, indent=2)
-    os.replace(tmp_pointer, current_file)
+    try:
+        if failure_injection_point == 'fail_publish_pointer':
+            raise IOError("Simulated failure before atomic pointer switch")
+
+        pointer_data = {
+            'generation_id': gen_id,
+            'generation_dir': f"generations/{gen_id}",
+            'published_at_utc': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            'artifact_digests': artifact_digests,
+        }
+
+        if failure_injection_point == 'fail_pointer_write':
+            raise IOError("Simulated failure during temporary pointer write")
+
+        with open(tmp_pointer, 'w', encoding='utf-8') as f:
+            json.dump(pointer_data, f, indent=2)
+
+        if failure_injection_point == 'fail_pointer_replace':
+            raise IOError("Simulated failure during atomic pointer replacement")
+
+        os.replace(tmp_pointer, current_file)
+    except Exception:
+        # Prevent leaving an orphaned generation directory in generations/
+        if target_gen_dir.exists():
+            shutil.rmtree(target_gen_dir, ignore_errors=True)
+        if tmp_pointer.exists():
+            tmp_pointer.unlink(missing_ok=True)
+        raise
 
     # Transactional canonical files synchronization with rollback
+    pre_existing_canonical = {fname for fname in CANONICAL_FILES if (out_dir / fname).exists()}
     snapshot_dir.mkdir(parents=True, exist_ok=True)
-    for fname in CANONICAL_FILES:
-        can_path = out_dir / fname
-        if can_path.exists():
-            shutil.copy2(can_path, snapshot_dir / fname)
+    for fname in pre_existing_canonical:
+        shutil.copy2(out_dir / fname, snapshot_dir / fname)
 
     try:
         for idx, fname in enumerate(CANONICAL_FILES):
@@ -383,9 +397,15 @@ def recompute(
     except Exception:
         print("Transactional publication failed: rolling back canonical files from snapshot...")
         for fname in CANONICAL_FILES:
-            snap_f = snapshot_dir / fname
-            if snap_f.exists():
-                shutil.copy2(snap_f, out_dir / fname)
+            dst_f = out_dir / fname
+            if fname in pre_existing_canonical:
+                snap_f = snapshot_dir / fname
+                if snap_f.exists():
+                    shutil.copy2(snap_f, dst_f)
+            else:
+                # Was absent prior to publication attempt; restore original absence
+                if dst_f.exists():
+                    dst_f.unlink(missing_ok=True)
         if prior_pointer_data is not None:
             tmp_rp = out_dir / "CURRENT_rollback.tmp"
             with open(tmp_rp, 'w', encoding='utf-8') as f:
