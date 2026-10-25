@@ -52,6 +52,7 @@ def crop_pdf_region(pdf_path, page_0based, bbox, output_path):
     crop_hash = sha256_file(output_path)
     return {
         'crop_path': output_path,
+        'crop_bbox': bbox,
         'crop_sha256': crop_hash,
         'crop_dimensions': {'width': pix.width, 'height': pix.height},
         'dpi': 216,  # 3x scale of 72 DPI
