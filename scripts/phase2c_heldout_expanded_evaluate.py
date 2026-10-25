@@ -3,33 +3,75 @@
 Evaluates diverse expressions: nested operators, similar-looking symbols,
 multiple simultaneous defects, valid notational variants.
 
+The evaluator is loaded from the frozen commit fe2843963e via git show,
+ensuring the recorded EVALUATOR_COMMIT matches the actual code executed.
+Fail closed if the commit is unreachable or the file cannot be loaded.
+
 Usage:
     python scripts/phase2c_heldout_expanded_evaluate.py
 """
-import sys
+import hashlib
+import importlib.util
 import json
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
-sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
+EVALUATOR_COMMIT = "fe2843963e66c9131ebd442ce05b8e84b90f4374"
+REPO_ROOT = Path(__file__).parent.parent
 
-from phase2c_gate_library import gate_3_operator_delimiter
 
-import importlib.util
+def load_frozen_gate_library():
+    """Load gate library from the frozen evaluator commit via git show.
+    Fail closed if the commit is unreachable or the file cannot be loaded."""
+    try:
+        result = subprocess.run(
+            ["git", "show", f"{EVALUATOR_COMMIT}:scripts/phase2c_gate_library.py"],
+            capture_output=True, text=True, cwd=str(REPO_ROOT),
+            timeout=30,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"git show failed: {result.stderr}")
+        frozen_code = result.stdout
+    except FileNotFoundError:
+        raise RuntimeError("git not found; cannot load frozen evaluator")
+    except subprocess.TimeoutExpired:
+        raise RuntimeError("git show timed out")
+
+    tmp_dir = tempfile.mkdtemp()
+    tmp_path = Path(tmp_dir) / "phase2c_gate_library_frozen.py"
+    tmp_path.write_text(frozen_code, encoding="utf-8")
+
+    spec = importlib.util.spec_from_file_location("phase2c_gate_library_frozen", tmp_path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    actual_hash = hashlib.sha256(frozen_code.encode("utf-8")).hexdigest()
+    print(f"Evaluator commit verified: {EVALUATOR_COMMIT}")
+    print(f"Gate library SHA-256 (frozen): {actual_hash}")
+
+    return mod
+
+
+try:
+    gate_lib = load_frozen_gate_library()
+    gate_3_operator_delimiter = gate_lib.gate_3_operator_delimiter
+except RuntimeError as e:
+    print(f"FATAL: {e}")
+    sys.exit(1)
+
 spec = importlib.util.spec_from_file_location(
-    "expanded", Path(__file__).parent.parent / "DATASETS" / "phase2c_heldout_expanded.py"
+    "expanded", REPO_ROOT / "DATASETS" / "phase2c_heldout_expanded.py"
 )
 expanded = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(expanded)
-
-EVALUATOR_COMMIT = "fe2843963e66c9131ebd442ce05b8e84b90f4374"
 
 
 def main():
     tp = fp = fn = tn = 0
     results = []
 
-    # Mutations (expected: fail)
     for i, (ref, rec, sub_type) in enumerate(expanded.held_out_mutations_expanded):
         r = gate_3_operator_delimiter(ref, rec)
         detected = r["evidence"]["substituted_operators"]
@@ -41,7 +83,6 @@ def main():
         results.append({"case_id": f"EXP-MUT-{i+1:03d}", "expected": "mutation",
                         "outcome": r["outcome"], "subs": detected, "type": sub_type, "ok": ok})
 
-    # Controls (expected: pass)
     for i, (ref, rec, ctrl_type) in enumerate(expanded.held_out_controls_expanded):
         r = gate_3_operator_delimiter(ref, rec)
         detected = r["evidence"]["substituted_operators"]
@@ -53,7 +94,6 @@ def main():
         results.append({"case_id": f"EXP-CTL-{i+1:03d}", "expected": "control",
                         "outcome": r["outcome"], "subs": detected, "type": ctrl_type, "ok": ok})
 
-    # Multi-defect (expected: fail)
     for i, (ref, rec, mt) in enumerate(expanded.held_out_multi_defect):
         r = gate_3_operator_delimiter(ref, rec)
         detected = r["evidence"]["substituted_operators"]
@@ -65,7 +105,18 @@ def main():
         results.append({"case_id": f"EXP-MDF-{i+1:03d}", "expected": "mutation",
                         "outcome": r["outcome"], "subs": detected, "type": mt, "ok": ok})
 
-    # Variants (expected: pass)
+    # Non-identical controls (expected: pass)
+    for i, (ref, rec, ctrl_type) in enumerate(expanded.held_out_non_identical_controls):
+        r = gate_3_operator_delimiter(ref, rec)
+        detected = r['evidence']['substituted_operators']
+        ok = r['outcome'] == 'pass'
+        if ok:
+            tn += 1
+        else:
+            fp += 1
+        results.append({'case_id': f'EXP-NIC-{i+1:03d}', 'expected': 'control',
+                        'outcome': r['outcome'], 'subs': detected, 'type': ctrl_type, 'ok': ok})
+
     for i, (ref, rec, vt) in enumerate(expanded.held_out_variants):
         r = gate_3_operator_delimiter(ref, rec)
         detected = r["evidence"]["substituted_operators"]
@@ -78,7 +129,7 @@ def main():
                         "outcome": r["outcome"], "subs": detected, "type": vt, "ok": ok})
 
     n_mut = len(expanded.held_out_mutations_expanded) + len(expanded.held_out_multi_defect)
-    n_ctl = len(expanded.held_out_controls_expanded) + len(expanded.held_out_variants)
+    n_ctl = len(expanded.held_out_controls_expanded) + len(expanded.held_out_variants) + len(expanded.held_out_non_identical_controls)
 
     print("=" * 60)
     print("Phase 2C Expanded Held-Out Evaluation")
@@ -99,8 +150,7 @@ def main():
         if r["subs"]:
             print(f"    subs: {r['subs']}")
 
-    # Write results
-    out = Path(__file__).parent.parent / "DATASETS" / "phase2c_heldout_expanded_results.jsonl"
+    out = REPO_ROOT / "DATASETS" / "phase2c_heldout_expanded_results.jsonl"
     with open(out, "w") as f:
         for r in results:
             f.write(json.dumps(r) + "\n")

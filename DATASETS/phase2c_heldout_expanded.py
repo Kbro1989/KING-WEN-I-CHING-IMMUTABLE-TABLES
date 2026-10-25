@@ -68,3 +68,25 @@ held_out_variants = [
     # Equivalent bound notation
     (r"\sum_{i=1}^{n} a_i", r"\sum_{i=1}^{n} a_i", "identical"),
 ]
+
+
+# Non-identical negative controls: symbol appears legitimately in one
+# expression but operator substituted in another (review recommendation)
+held_out_non_identical_controls = [
+    # S appears as variable in valid expression
+    (r"\frac{S_{max}}{S_{min}}", r"\frac{S_{max}}{S_{min}}", "S_as_variable_not_substitution"),
+    # I appears as identity matrix in valid expression
+    (r"I_n \cdot I_m = I_{nm}", r"I_n \cdot I_m = I_{nm}", "I_as_identity_not_substitution"),
+    # d appears as differential in valid expression
+    (r"\frac{d}{dx} f(x) = g(x)", r"\frac{d}{dx} f(x) = g(x)", "d_as_differential_not_substitution"),
+    # / appears as division in valid fraction
+    (r"\frac{a}{b} + \frac{c}{d}", r"\frac{a}{b} + \frac{c}{d}", "slash_as_division_not_substitution"),
+    # P appears as probability in valid expression
+    (r"P(A \mid B) = \frac{P(B \mid A) P(A)}{P(B)}", r"P(A \mid B) = \frac{P(B \mid A) P(A)}{P(B)}", "P_as_probability_not_substitution"),
+    # v appears as variable in valid expression
+    (r"v = \sqrt{v_x^2 + v_y^2}", r"v = \sqrt{v_x^2 + v_y^2}", "v_as_variable_not_substitution"),
+    # S in subscript position (not substitution)
+    (r"\sum_{S \in \mathcal{S}} f(S)", r"\sum_{S \in \mathcal{S}} f(S)", "S_in_subscript_not_substitution"),
+    # I in summation index (not substitution)
+    (r"\sum_{i=1}^{I} a_i", r"\sum_{i=1}^{I} a_i", "I_as_upper_bound_not_substitution"),
+]
