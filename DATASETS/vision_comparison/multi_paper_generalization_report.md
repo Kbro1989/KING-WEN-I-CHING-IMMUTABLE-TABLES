@@ -13,7 +13,7 @@
 Across **21 candidates** sampled across **6 distinct arXiv papers** and **10 mathematical structures**:
 
 | Metric | Padding (15, 15) Baseline | Padding (3, 2) Experiment | Delta / Impact |
-|:---|:---:|:---:|:---|
+| :--- | :---: | :---: | :--- |
 | **Candidates Attempted** | 21 | 21 | Paired 21-candidate benchmark corpus |
 | **Successfully Cropped** | 21/21 (100.0%) | 21/21 (100.0%) | Valid image pixel region extracted |
 | **Non-Empty OCR Outputs** | 21/21 (100.0%) | 21/21 (100.0%) | Recognizer returned non-whitespace LaTeX |
@@ -26,7 +26,7 @@ Across **21 candidates** sampled across **6 distinct arXiv papers** and **10 mat
 ## 2. Results Grouped by Paper
 
 | arXiv ID | Domain / Paper Title | Candidates | Cropped | Isolated | Agreement | Key Findings |
-|:---:|:---|:---:|:---:|:---:|:---:|:---|
+| :---: | :--- | :---: | :---: | :---: | :---: | :--- |
 | `1212.0957` | Generalized Stirling Transform (Combinatorics Benchmark) | 2 | 2/2 | 1/2 (50%) | 0/2 (0%) | Full isolation without prose leakage |
 | `1907.04931` | GraphSAINT (Graph Neural Networks) | 4 | 4/4 | 4/4 (100%) | 4/4 (100%) | Full isolation without prose leakage |
 | `2104.01277` | Beyond Low-Pass Filters (Adaptive Feature Propagation) | 5 | 5/5 | 5/5 (100%) | 2/5 (40%) | Full isolation without prose leakage |
@@ -39,8 +39,8 @@ Across **21 candidates** sampled across **6 distinct arXiv papers** and **10 mat
 ## 3. Results Grouped by Mathematical Structure
 
 | Mathematical Structure | Sample Count | Isolation Rate | Semantic Agreement | Sample Extracted LaTeX |
-|:---|:---:|:---:|:---:|:---|
-| Absolute Value & Inner Product | 1 | 1/1 (100%) | 0/1 (0%) | `| \langle T \chi_{I} , |` |
+| :--- | :---: | :---: | :---: | :--- |
+| Absolute Value & Inner Product | 1 | 1/1 (100%) | 0/1 (0%) | `\| \langle T \chi_{I} , \|` |
 | Composite Functional Operator | 1 | 1/1 (100%) | 0/1 (0%) | `\overline{{D_{\theta} ( \boldsymbol{x} ; \sig` |
 | Composite Functional Scaling | 1 | 1/1 (100%) | 0/1 (0%) | `\stackrel{\iota\mathbf{j} , \ \ \alpha=0} {\m` |
 | Delimited Parameter Set | 1 | 1/1 (100%) | 0/1 (0%) | `\{\rho_{k} \}_{k=}^{K^{\cdot}}` |
@@ -49,7 +49,7 @@ Across **21 candidates** sampled across **6 distinct arXiv papers** and **10 mat
 | Greek Subscript & Superscript | 1 | 1/1 (100%) | 1/1 (100%) | `\zeta_{v}^{( \ell+1 )}` |
 | Greek Subscript Parameter | 1 | 1/1 (100%) | 0/1 (0%) | `\mathbf{\sigma}_{\mathrm{d a t a}} , \mathbf{` |
 | Indexed Summation Parameter | 1 | 1/1 (100%) | 0/1 (0%) | `\cup_{j=1}^{i-1} ( \underset{\mathrm{c}} {\la` |
-| Inner Product | 1 | 1/1 (100%) | 0/1 (0%) | `\langle T \chi_{I} , |` |
+| Inner Product | 1 | 1/1 (100%) | 0/1 (0%) | `\langle T \chi_{I} , \|` |
 | Norm & Inequality | 1 | 1/1 (100%) | 1/1 (100%) | `\leq\| T \| \mu( I )^{\frac{1} {2}}` |
 | Parenthesized Expectation | 1 | 1/1 (100%) | 1/1 (100%) | `\left( \zeta_{v}^{( \ell+1 )} \right)` |
 | Partial Derivative with Dual Subscript | 1 | 1/1 (100%) | 0/1 (0%) | `\overline{{\partial e_{t , k}}}` |
@@ -67,7 +67,7 @@ Across **21 candidates** sampled across **6 distinct arXiv papers** and **10 mat
 ## 4. Detailed Candidate Records
 
 | Candidate ID | Paper | Page | Source Text | Recognized LaTeX | Shape | Isolated | Agreement | Reference Match |
-|:---|:---:|:---:|:---|:---|:---:|:---:|:---:|:---:|
+| :--- | :---: | :---: | :--- | :--- | :---: | :---: | :---: | :---: |
 | `1907_04931_cand0_zeta` | `1907.04931` | 4 | `ζ(ℓ+1)` | `\zeta_{v}^{( \ell+1 )}` | 68x124 | YES | YES | `exact_match` |
 | `1907_04931_cand1_expectation` | `1907.04931` | 4 | `ζ(ℓ+1)` | `\left( \zeta_{v}^{( \ell+1 )} \right)` | 68x124 | YES | YES | `exact_match` |
 | `1907_04931_cand2_sqrt` | `1907.04931` | 12 | `√pe` | `( \sqrt{p_{e}} )` | 86x94 | YES | YES | `exact_match` |
@@ -76,15 +76,15 @@ Across **21 candidates** sampled across **6 distinct arXiv papers** and **10 mat
 | `1212_0957_eq1.2_inverse_summation` | `1212.0957` | 1 | `an = ∑ s(n,k) bk` | `a_{n}=\overset{n} {\underset{k=0} {\sum}} s \left( n , k \right) b_{k} .` | 168x376 | YES | NO | `mismatch` |
 | `2104_01277_cand0_set_membership` | `2104.01277` | 1 | `(χQ)Q∈Q` | `( \chi_{Q} )_{Q \in{\cal Q}}` | 68x197 | YES | YES | `exact_match` |
 | `2104_01277_cand1_inner_product` | `2104.01277` | 2 | `⟨TχI,` | `\langle T \chi_{I} , \|` | 69x139 | YES | NO | `extraneous_content` |
-| `2104_01277_cand3_abs_inner_product` | `2104.01277` | 2 | `|⟨TχI,` | `\| \langle T \chi_{I} , \|` | 69x152 | YES | NO | `extraneous_content` |
-| `2104_01277_cand5_norm_inequality` | `2104.01277` | 2 | `≤∥T∥µ(I)` | `\leq\\| T \\| \mu( I )^{\frac{1} {2}}` | 66x253 | YES | YES | `exact_match` |
+| `2104_01277_cand3_abs_inner_product` | `2104.01277` | 2 | `\|⟨TχI,` | `\| \langle T \chi_{I} , \|` | 69x152 | YES | NO | `extraneous_content` |
+| `2104_01277_cand5_norm_inequality` | `2104.01277` | 2 | `≤∥T∥µ(I)` | `\leq\| T \| \mu( I )^{\frac{1} {2}}` | 66x253 | YES | YES | `exact_match` |
 | `2104_01277_cand8_summation_lambda` | `2104.01277` | 3 | `j=1(λj+Q)).` | `\cup_{j=1}^{i-1} ( \underset{\mathrm{c}} {\lambda_{j}+\mathbb{Q}} ) ) .` | 92x304 | YES | NO | `mismatch` |
 | `2206_00364_cand2_sigma_data` | `2206.00364` | 2 | `σdata,` | `\mathbf{\sigma}_{\mathrm{d a t a}} , \mathbf{\sigma}_{\mathrm{d a t a}}` | 60x106 | YES | NO | `duplicated` |
 | `2206_00364_cand4_much_greater_than` | `2206.00364` | 2 | `≫σdata,` | `\gg\sigma_{\mathrm{d a t a}} , \break\cdot\cdot\cdot\cdot` | 62x157 | YES | NO | `extraneous_content` |
 | `2206_00364_cand6_dot_derivative` | `2206.00364` | 2 | `−˙σ(t)` | `\mathbf{\partial}=-\dot{\sigma} ( t ) \, \mathbf{\partial}` | 72x144 | YES | NO | `mismatch` |
 | `2206_00364_cand7_denoiser_function` | `2206.00364` | 3 | `Dθ(x; σ)` | `\overline{{D_{\theta} ( \boldsymbol{x} ; \sigma)}}=` | 72x196 | YES | NO | `mismatch` |
 | `2206_00364_cand8_skip_scaling` | `2206.00364` | 3 | `cskip(σ)x` | `\stackrel{\iota\mathbf{j} , \ \ \alpha=0} {\mathbf{\psi}_{\mathrm{s k i p}} ( \sigma) \mathbf{x}}` | 72x188 | YES | NO | `mismatch` |
-| `2605_22902_cand0_l1_norm` | `2605.22902` | 2 | `λ∥f(x)∥1,` | `\lambda\\| f ( x ) \\|_{1} , 1` | 61x193 | YES | NO | `extraneous_content` |
+| `2605_22902_cand0_l1_norm` | `2605.22902` | 2 | `λ∥f(x)∥1,` | `\lambda\| f ( x ) \|_{1} , 1` | 61x193 | YES | NO | `extraneous_content` |
 | `2605_22902_cand1_gradient` | `2605.22902` | 3 | `∇h(l)y` | `\nabla_{h^{( l )}} y \big)` | 64x131 | YES | NO | `extraneous_content` |
 | `2605_22902_cand3_partial` | `2605.22902` | 3 | `∂h(l)` | `\frac{\partial} {\partial h^{( l )}}` | 47x94 | YES | NO | `mismatch` |
 | `2605_27315_cand0_parameter_set` | `2605.27315` | 13 | `{ρk}K` | `\{\rho_{k} \}_{k=}^{K^{\cdot}}` | 72x140 | YES | NO | `mismatch` |

@@ -692,6 +692,10 @@ def generate_report(results, attempted, cropped, nonempty, isolated, clipped, ag
     paper_groups = {}
     structure_groups = {}
 
+    def escape_pipe(t: str) -> str:
+        t = re.sub(r'\\+\|', '|', t)
+        return t.replace('|', r'\|')
+
     for r in results:
         pid = r.get('paper_id', 'unknown')
         struct = r.get('math_structure', 'unknown')
@@ -726,7 +730,7 @@ def generate_report(results, attempted, cropped, nonempty, isolated, clipped, ag
         agr_delta = (agreement / attempted * 100) - (b_agr / b_tot * 100)
 
         md.append("| Metric | Padding (15, 15) Baseline | Padding (3, 2) Experiment | Delta / Impact |")
-        md.append("|:---|:---:|:---:|:---|")
+        md.append("| :--- | :---: | :---: | :--- |")
         md.append(f"| **Candidates Attempted** | {b_tot} | {attempted} | Paired 21-candidate benchmark corpus |")
         md.append(f"| **Successfully Cropped** | {b_crop}/{b_tot} (100.0%) | {cropped}/{attempted} ({cropped/attempted*100:.1f}%) | Valid image pixel region extracted |")
         md.append(f"| **Non-Empty OCR Outputs** | {b_nonempty}/{b_tot} (100.0%) | {nonempty}/{attempted} ({nonempty/attempted*100:.1f}%) | Recognizer returned non-whitespace LaTeX |")
@@ -735,7 +739,7 @@ def generate_report(results, attempted, cropped, nonempty, isolated, clipped, ag
         md.append(f"| **Semantic Agreement Rate** | {b_agr}/{b_tot} ({b_agr/b_tot*100:.1f}%) | {agreement}/{attempted} ({agreement/attempted*100:.1f}%) | {agr_delta:+.1f}% verified against audited references |")
     else:
         md.append("| Metric | Count | Rate (%) | Description |")
-        md.append("|:---|:---:|:---:|:---|")
+        md.append("| :--- | :---: | :---: | :--- |")
         md.append(f"| **Candidates Attempted** | {attempted} | 100.0% | Total candidate corpus evaluated |")
         md.append(f"| **Successfully Cropped** | {cropped} | {cropped/attempted*100:.1f}% | Valid non-empty image pixel region extracted |")
         md.append(f"| **Non-Empty OCR Outputs** | {nonempty} | {nonempty/attempted*100:.1f}% | Recognizer returned non-whitespace LaTeX |")
@@ -749,7 +753,7 @@ def generate_report(results, attempted, cropped, nonempty, isolated, clipped, ag
     md.append("## 2. Results Grouped by Paper")
     md.append("")
     md.append("| arXiv ID | Domain / Paper Title | Candidates | Cropped | Isolated | Agreement | Key Findings |")
-    md.append("|:---:|:---|:---:|:---:|:---:|:---:|:---|")
+    md.append("| :---: | :--- | :---: | :---: | :---: | :---: | :--- |")
 
     paper_titles = {
         '1907.04931': 'GraphSAINT (Graph Neural Networks)',
@@ -775,14 +779,14 @@ def generate_report(results, attempted, cropped, nonempty, isolated, clipped, ag
     md.append("## 3. Results Grouped by Mathematical Structure")
     md.append("")
     md.append("| Mathematical Structure | Sample Count | Isolation Rate | Semantic Agreement | Sample Extracted LaTeX |")
-    md.append("|:---|:---:|:---:|:---:|:---|")
+    md.append("| :--- | :---: | :---: | :---: | :--- |")
 
     for struct in sorted(structure_groups.keys()):
         s_cands = structure_groups[struct]
         tot = len(s_cands)
         s_iso = sum(1 for c in s_cands if c.get('evaluation', {}).get('is_isolated'))
         s_agr = sum(1 for c in s_cands if c.get('evaluation', {}).get('semantic_agreement'))
-        sample_rec = s_cands[0].get('recognized_latex', '')[:45]
+        sample_rec = escape_pipe(s_cands[0].get('recognized_latex', '')[:45])
         md.append(f"| {struct} | {tot} | {s_iso}/{tot} ({s_iso/tot*100:.0f}%) | {s_agr}/{tot} ({s_agr/tot*100:.0f}%) | `{sample_rec}` |")
 
     md.append("")
@@ -791,14 +795,14 @@ def generate_report(results, attempted, cropped, nonempty, isolated, clipped, ag
     md.append("## 4. Detailed Candidate Records")
     md.append("")
     md.append("| Candidate ID | Paper | Page | Source Text | Recognized LaTeX | Shape | Isolated | Agreement | Reference Match |")
-    md.append("|:---|:---:|:---:|:---|:---|:---:|:---:|:---:|:---:|")
+    md.append("| :--- | :---: | :---: | :--- | :--- | :---: | :---: | :---: | :---: |")
 
     for r in results:
         cid = r.get('candidate_id', '')
         pid = r.get('paper_id', '')
         pg = r.get('page', 0)
-        src = r.get('source_text', '')
-        rec = r.get('recognized_latex', '').replace('|', '\\|')
+        src = escape_pipe(r.get('source_text', ''))
+        rec = escape_pipe(r.get('recognized_latex', ''))
         shape = 'x'.join(map(str, r.get('crop_shape', [])[:2]))
         ev = r.get('evaluation', {})
         iso = "YES" if ev.get('is_isolated') else "NO"
