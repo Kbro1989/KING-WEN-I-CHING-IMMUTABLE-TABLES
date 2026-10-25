@@ -549,3 +549,61 @@ def test_failure_real_os_replace_raises(tmp_path):
 
     active_gen = resolve_active_generation(output_dir=tmp_path)
     assert active_gen.name == initial_gen_id
+
+
+def test_failure_real_canonical_replace_raises(tmp_path):
+    """Verify that a real OSError from os.replace() during canonical file sync triggers rollback.
+
+    This test patches os.replace in recompute_vision_evaluations so that the
+    os.replace() call promoting a .pub_tmp file to its canonical destination
+    raises OSError.
+
+    Specifically, after os.replace raises during canonical sync:
+    - Rollback must restore all pre-existing canonical files to baseline bytes.
+    - Any newly-created canonical files (or leftover .pub_tmp files) must be absent.
+    - CURRENT.json must revert to the baseline generation pointer.
+    - resolve_active_generation() continues resolving the baseline generation.
+    """
+    import os as _os
+    from unittest.mock import patch
+
+    # 1. Establish baseline generation
+    res1 = recompute(output_dir=tmp_path)
+    initial_gen_id = res1['generation_id']
+    initial_pointer = (tmp_path / 'CURRENT.json').read_text(encoding='utf-8')
+    initial_file_bytes = {f: (tmp_path / f).read_bytes() for f in CANONICAL_FILES}
+
+    _real_replace = _os.replace
+
+    def _replace_raises_on_canonical_pub_tmp(src, dst):
+        """Raise only for *.pub_tmp → canonical promotion; pass pointer promotions & rollbacks."""
+        src_s = str(src)
+        if src_s.endswith('.pub_tmp'):
+            raise OSError("Real os.replace failure during canonical sync")
+        return _real_replace(src, dst)
+
+    # 2. Patch os.replace in the implementation module so the canonical promotion raises.
+    with patch('recompute_vision_evaluations.os.replace', side_effect=_replace_raises_on_canonical_pub_tmp):
+        with pytest.raises(OSError, match="Real os.replace failure during canonical sync"):
+            recompute(output_dir=tmp_path)
+
+    # 3. No leftover .pub_tmp files must remain
+    leftover_tmps = list(tmp_path.glob('*.pub_tmp'))
+    assert leftover_tmps == [], (
+        f"Temporary .pub_tmp files not cleaned up after canonical sync failure: {leftover_tmps}"
+    )
+
+    # 4. CURRENT.json must have been rolled back to the initial pointer
+    assert (tmp_path / 'CURRENT.json').read_text(encoding='utf-8') == initial_pointer, (
+        "CURRENT.json was not reverted to the prior generation after canonical sync failure"
+    )
+
+    # 5. All canonical files must match the baseline byte-for-byte
+    for f in CANONICAL_FILES:
+        assert (tmp_path / f).read_bytes() == initial_file_bytes[f], (
+            f"Canonical file {f} was not restored to baseline after canonical sync failure"
+        )
+
+    active_gen = resolve_active_generation(output_dir=tmp_path)
+    assert active_gen.name == initial_gen_id
+

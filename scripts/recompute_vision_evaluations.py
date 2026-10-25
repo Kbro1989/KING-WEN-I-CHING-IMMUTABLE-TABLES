@@ -398,6 +398,9 @@ def recompute(
         print("Transactional publication failed: rolling back canonical files from snapshot...")
         for fname in CANONICAL_FILES:
             dst_f = out_dir / fname
+            pub_tmp = out_dir / f"{fname}.pub_tmp"
+            if pub_tmp.exists():
+                pub_tmp.unlink(missing_ok=True)
             if fname in pre_existing_canonical:
                 snap_f = snapshot_dir / fname
                 if snap_f.exists():
