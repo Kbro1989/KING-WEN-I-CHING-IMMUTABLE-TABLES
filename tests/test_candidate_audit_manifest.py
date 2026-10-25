@@ -13,11 +13,93 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / 'scripts'))
 
 try:
-    from scripts.audit_candidate_crops import run_audit, MANIFEST_PATH
+    from scripts.audit_candidate_crops import run_audit, MANIFEST_PATH, _compute_token_overlap
     from scripts.experiments_multi_paper_generalization import REPORT_MD, OUTPUT_DIR
 except ImportError:
-    from audit_candidate_crops import run_audit, MANIFEST_PATH  # type: ignore[import-not-found]
+    from audit_candidate_crops import run_audit, MANIFEST_PATH, _compute_token_overlap  # type: ignore[import-not-found]
     from experiments_multi_paper_generalization import REPORT_MD, OUTPUT_DIR  # type: ignore[import-not-found]
+
+
+# ===========================================================================
+# Unit tests for _compute_token_overlap
+# These test the exact failure modes the reviewer identified.
+# ===========================================================================
+
+def test_token_overlap_all_matched():
+    """All tokens present in order -> fraction 1.0, nothing missing."""
+    # Source tokens: 'bn', '∑', 'ak'
+    # Clip must contain all three in left-to-right order.
+    result = _compute_token_overlap("bn = ∑ ak", "bn ∑ ak extra text")
+    assert result['overlap_fraction'] == 1.0
+    assert result['missing'] == []
+    assert 'bn' in result['matched']
+    assert '∑' in result['matched']
+    assert 'ak' in result['matched']
+
+
+def test_token_overlap_repeated_character_requires_repeated_occurrences():
+    """A token that appears N times in source must appear N times in clip.
+
+    The old character-set membership check would have falsely reported 'k' as
+    matched three times even if clip contained only one 'k'. The ordered
+    consumption-aware algorithm must correctly fail when occurrences are exhausted.
+    """
+    # Source has 'k' three times: 'k', 'k', 'k' (as tokens ['k', 'k', 'k'])
+    # clip_text has only one 'k' -> second and third 'k' are missing
+    result = _compute_token_overlap("k k k", "one k here")
+    assert result['tokens'] == ['k', 'k', 'k']
+    # First 'k' matched, second and third cannot (consumed)
+    assert len(result['matched']) == 1
+    assert len(result['missing']) == 2
+    assert result['overlap_fraction'] < 1.0
+
+
+def test_token_overlap_reordered_tokens_counted_as_partial():
+    """Tokens that appear in clip but not in source order must not all register as matched.
+
+    Consumption-aware search is strictly left-to-right in clip_text.  If clip has
+    'ak bn' but source order requires 'bn' first then 'ak', only the tokens that
+    are found at or after the current search position count.
+    """
+    # Source order: bn, then ak. Clip order: ak comes first, then bn.
+    result = _compute_token_overlap("bn ak", "ak bn")
+    # 'bn' is searched first; it is at position 3 (after 'ak '), so it IS found.
+    # 'ak' is then searched from pos 3+2=5; 'ak' doesn't appear at or after pos 5.
+    # So: 'bn' matched, 'ak' missing (order matters).
+    assert 'bn' in result['matched']
+    assert 'ak' in result['missing']
+    assert result['overlap_fraction'] < 1.0
+
+
+def test_token_overlap_empty_source():
+    """Empty source_text must return zero tokens and fraction 0.0."""
+    result = _compute_token_overlap("", "some clip text")
+    assert result['tokens'] == []
+    assert result['overlap_fraction'] == 0.0
+
+
+def test_token_overlap_empty_clip():
+    """Non-empty source against empty clip must report all tokens missing."""
+    result = _compute_token_overlap("ζ(ℓ+1)", "")
+    assert len(result['missing']) == len(result['tokens'])
+    assert result['overlap_fraction'] == 0.0
+
+
+def test_token_overlap_unicode_symbols():
+    """Non-ASCII math symbols (∑, ζ, ∇) are extracted as individual tokens."""
+    result = _compute_token_overlap("ζ(ℓ+1) v", "ζ(ℓ+1) v extra")
+    # Expected tokens: 'ζ', 'ℓ', '1', 'v'  (non-ASCII chars + alnum runs)
+    assert 'ζ' in result['tokens']
+    assert 'v' in result['tokens']
+    assert result['overlap_fraction'] == 1.0
+
+
+def test_token_overlap_missing_symbol():
+    """A missing Unicode symbol registers as a missing token."""
+    result = _compute_token_overlap("∑ ak", "ak only no sum")
+    assert '∑' in result['missing']
+    assert result['overlap_fraction'] < 1.0
+
 
 
 

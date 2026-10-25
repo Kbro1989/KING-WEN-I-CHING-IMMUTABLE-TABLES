@@ -41,9 +41,80 @@ from experiments_multi_paper_generalization import CANDIDATES, PDF_MAP, OUTPUT_D
 MANIFEST_PATH = OUTPUT_DIR / 'candidate_audit_manifest.json'
 
 
+def _compute_token_overlap(source_text: str, clip_text: str) -> dict:
+    """Compute ordered, consumption-aware token overlap between source_text and clip_text.
+
+    Algorithm
+    ---------
+    1. Tokenise ``source_text`` into *ordered* tokens using two complementary
+       patterns that together cover ASCII identifiers / numbers and individual
+       non-ASCII Unicode symbols (e.g. Greek letters, ∑, ∇, √, ⟨).
+
+       Pattern A: r'[a-zA-Z0-9]+' — alphanumeric word runs ('bn', 'S', 'ak', '0')
+       Pattern B: r'[^\x00-\x7F]'  — single non-ASCII codepoints ('∑', 'ζ')
+
+       Tokens are emitted in left-to-right source order by interleaving both
+       patterns' matches sorted by start position.
+
+    2. Match tokens against ``clip_text`` in a *consumption-aware* manner:
+       each token is found in clip_text starting from the position where the
+       previous match ended.  This prevents repeated characters (e.g. three
+       occurrences of 'k' in source) from all matching the same single 'k' in
+       clip_text.
+
+    Returns
+    -------
+    dict with keys:
+      'tokens'           – ordered list of extracted source tokens
+      'matched'          – list of tokens found (in order) in clip_text
+      'missing'          – list of tokens not found
+      'overlap_fraction' – len(matched) / len(tokens), or 0.0 if no tokens
+      'consumed_indices' – clip_text positions where each matched token was found
+    """
+    import re
+    if not source_text:
+        return {'tokens': [], 'matched': [], 'missing': [],
+                'overlap_fraction': 0.0, 'consumed_indices': []}
+
+    # Build ordered token list from two complementary patterns.
+    alnum_matches = [(m.start(), m.group()) for m in re.finditer(r'[a-zA-Z0-9]+', source_text)]
+    uni_matches   = [(m.start(), m.group()) for m in re.finditer(r'[^\x00-\x7F]', source_text)]
+    all_matches   = sorted(alnum_matches + uni_matches, key=lambda x: x[0])
+    tokens        = [tok for _, tok in all_matches]
+
+    if not tokens:
+        return {'tokens': [], 'matched': [], 'missing': [],
+                'overlap_fraction': 0.0, 'consumed_indices': []}
+
+    # Consumption-aware search through clip_text.
+    matched = []
+    missing = []
+    consumed_indices = []
+    search_from = 0
+    for tok in tokens:
+        pos = clip_text.find(tok, search_from)
+        if pos != -1:
+            matched.append(tok)
+            consumed_indices.append(pos)
+            search_from = pos + len(tok)
+        else:
+            missing.append(tok)
+            # Do not advance search_from; remaining tokens still search forward.
+
+    overlap_fraction = len(matched) / len(tokens) if tokens else 0.0
+    return {
+        'tokens': tokens,
+        'matched': matched,
+        'missing': missing,
+        'overlap_fraction': overlap_fraction,
+        'consumed_indices': consumed_indices,
+    }
+
+
 def run_audit(save_manifest: bool = True) -> dict:
     if fitz is None:
         raise ImportError("PyMuPDF (fitz) is required to run candidate crop PDF audit.")
+
 
     print("=" * 80)
     print("RUNNING MACHINE-CHECKED AUDIT FOR 21 CANDIDATE CROPS AGAINST SOURCE PDFS")
@@ -98,39 +169,61 @@ def run_audit(save_manifest: bool = True) -> dict:
 
         # Audit evidence classification: three-tier model.
         #
-        # 'pdf_text_overlap_verified'  — all alphanumeric tokens in source_text are found
-        #   in exact_clip_text. Machine-confirmed that the bbox points to the correct PDF
-        #   region. Does NOT verify LaTeX structure, index placement, or every mathematical
-        #   glyph (e.g. does not distinguish union from summation when both are indexed).
+        # Classification is based on _compute_token_overlap(), which uses ordered,
+        # consumption-aware token matching — NOT character-set membership.
+        # A repeated token in source_text (e.g. 'k' appearing three times) requires
+        # three separate occurrences in clip_text to register as fully matched.
         #
-        # 'pdf_text_overlap_partial'   — at least one but not all source_text tokens appear
-        #   in clip text. Region may be correct but clip coverage is incomplete.
+        # 'pdf_text_overlap_verified'
+        #   All ordered source tokens found in clip_text (in order, consuming occurrences).
+        #   Machine-confirmed that the bbox region contains the declared source content.
+        #   Does NOT verify LaTeX structure, index placement, or mathematical glyph
+        #   identity (e.g. cannot distinguish ∪ from ∑ when both appear at the same
+        #   position, or confirm superscript vs. subscript placement).
         #
-        # 'metadata_assertions_only'   — no alphanumeric overlap confirmed from PDF clip.
-        #   Metadata (reference_latex, boundary, provenance) passed structural assertions
-        #   but PDF text extraction did not confirm the region. Requires human visual review.
+        # 'pdf_text_overlap_partial'
+        #   At least one but not all source tokens found, in order. The bbox region
+        #   likely overlaps the expression but some content is not text-extractable
+        #   (e.g. rendered as glyph paths rather than Unicode text).
         #
-        # NONE of these statuses constitute independent mathematical verification of the
-        # reference_latex LaTeX expression. Index placement, glyph identity, and expression
-        # boundaries require human visual review of the rendered PDF crop.
+        # 'metadata_assertions_only'
+        #   No ordered token match confirmed. Metadata (reference_latex, boundary,
+        #   provenance) passed structural assertions but PDF text extraction did not
+        #   corroborate the region. Human visual review of the rendered crop required.
+        #
+        # NONE of these statuses constitutes independent mathematical verification
+        # of the reference_latex expression. Index placement, glyph identity, and
+        # expression boundaries require human visual review of the rendered PDF crop.
         src_text = cand.get('source_text', '')
-        src_tokens = [ch for ch in src_text if ch.isalnum()]
-        if src_tokens and exact_text:
-            matched = [ch for ch in src_tokens if ch in exact_text]
-            overlap_fraction = len(matched) / len(src_tokens)
-            if overlap_fraction >= 1.0:
-                audit_status = 'pdf_text_overlap_verified'
-                evidence_notes = f'All {len(src_tokens)} source tokens present in exact clip text.'
-            elif overlap_fraction > 0.0:
-                audit_status = 'pdf_text_overlap_partial'
-                missing_toks = [ch for ch in src_tokens if ch not in exact_text]
-                evidence_notes = f'{len(matched)}/{len(src_tokens)} source tokens present. Missing: {missing_toks!r}'
-            else:
-                audit_status = 'metadata_assertions_only'
-                evidence_notes = 'No source tokens found in exact clip text. Human review required.'
+        overlap = _compute_token_overlap(src_text, exact_text)
+        n_tokens = len(overlap['tokens'])
+        n_matched = len(overlap['matched'])
+        missing_toks = overlap['missing']
+
+        if n_tokens == 0:
+            audit_status = 'metadata_assertions_only'
+            evidence_notes = 'No extractable tokens in source_text. Human review required.'
+        elif n_matched == n_tokens:
+            audit_status = 'pdf_text_overlap_verified'
+            evidence_notes = (
+                f'All {n_tokens} ordered source tokens found in exact clip text '
+                f'(consumption-aware). '
+                f'Does not verify LaTeX structure or index placement.'
+            )
+        elif n_matched > 0:
+            audit_status = 'pdf_text_overlap_partial'
+            evidence_notes = (
+                f'{n_matched}/{n_tokens} ordered source tokens found. '
+                f'Missing: {missing_toks!r}. '
+                f'Partial text-extraction coverage; human review recommended.'
+            )
         else:
             audit_status = 'metadata_assertions_only'
-            evidence_notes = 'Empty exact_clip_text or no source tokens. Human review required.'
+            evidence_notes = (
+                f'0/{n_tokens} ordered source tokens found in exact clip text. '
+                f'Human visual review of rendered crop required.'
+            )
+
 
         record = {
             'candidate_id': cid,
