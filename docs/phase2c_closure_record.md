@@ -67,7 +67,7 @@ The 47-case aggregate (20 TP + 27 TN) describes the reported gate-evaluation cas
 
 - 47 test cases (20 mutations + 27 controls) is a small sample
 - 21/27 controls are self-comparisons, not independent challenges
-- Only 6/27 controls test contextual discrimination (non-identical pairs)
+- 0/27 controls test paired positive/negative contextual discrimination; 6/27 are non-identical acceptance controls
 - No source-derived equations from the 3,409-equation corpus
 - No cross-paper generalization tested
 
