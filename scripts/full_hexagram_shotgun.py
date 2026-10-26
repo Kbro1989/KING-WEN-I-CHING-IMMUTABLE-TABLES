@@ -11,11 +11,13 @@ Architecture:
 from __future__ import annotations
 
 import csv
+import colorsys
+import itertools
 import json
 import math
 import sys
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -24,11 +26,19 @@ from kingwen_ternary_tables_complete import (
     HEXAGRAM_BASE,
     PHASE_INFO,
     PHASE_LINE_MAP,
-    YAO_VOCABULARY,
     EMOTIONAL_WEIGHTS,
-    HEXAGRAM_INJECTION_SITE,
     VOICEBOX_VOICE_POOL,
 )
+from emotional_engine import (  # noqa: E402
+    VEC_KEYS,
+    _clamp,  # noqa: reportPrivateUsage
+    expand_hexagram,
+    _hamiltonian_energy,  # noqa: reportPrivateUsage
+    _yao_vocabulary_map,  # noqa: reportPrivateUsage
+    _line_yao_key,  # noqa: reportPrivateUsage
+)
+from schauberger_parsing_layers import schauberger_parsing_layers  # noqa: E402
+from hexagram_personality import resolve_personality_by_consensus, build_hexagram_personality_map  # noqa: E402
 
 
 # Trigram temperature perturbations — same values as the deterministic spectrum script
@@ -43,20 +53,7 @@ TRIGRAM_TEMP: Dict[str, float] = {
     "Gen": -0.60,   # Mountain (still terrestrial)
     "Dui": 0.40,    # Lake (joyous mist)
 }
-from emotional_engine import (  # noqa: E402
-    VEC_KEYS,
-    _clamp,
-    _lerp,
-    expand_hexagram,
-    _hamiltonian_energy,
-    _yao_vocabulary_map,
-    _line_yao_key,
-)
-from schauberger_parsing_layers import schauberger_parsing_layers  # noqa: E402
-from hexagram_personality import HEXAGRAM_PERSONALITY_MAP, resolve_personality_by_consensus, build_hexagram_personality_map  # noqa: E402
-from build_hexagram_skill_cards import PERSONALITIES, skill_cards_for_binary  # noqa: E402
-import colorsys
-import itertools
+
 
 
 def binary_str_count(binary_str: str) -> int:
@@ -179,10 +176,10 @@ def _derive_domain_routing_palette(
       - keeps the hue anchor on (hex_id-1)*5.625 + trigram perturbation so adjacent
         hexagrams on the 8x8 grid remain adjacent in hue space (checkerboard routing).
     """
-    base = HEXAGRAM_BASE[hex_id]
-    binary_str = base.get("binary_bottom_to_top", "111111")
-    upper_tri = base.get("upper_trigram", "Qian")
-    lower_tri = base.get("lower_trigram", "Kun")
+    base: Dict[str, Any] = HEXAGRAM_BASE[hex_id]  # type: ignore[index]
+    _binary_str = base.get("binary_bottom_to_top", "111111")
+    upper_tri: str = base.get("upper_trigram", "Qian")
+    lower_tri: str = base.get("lower_trigram", "Kun")
 
     # 1. Hue anchor from grid position: (hex_id-1)*5.625 keeps the 64-hex circle
     hue_anchor = (hex_id - 1) * (360.0 / 64.0)
@@ -227,11 +224,11 @@ def _derive_domain_routing_palette(
         palette_16_derived.append(step_hex)
 
     # 7. Primary/secondary/blended colors (same derivation as existing spectrum script)
-    p_r, p_g, p_b, p_hex = _hsl_to_rgb_hex(hue_anchor, saturation, lightness)
-    s_r, s_g, s_b, s_hex = _hsl_to_rgb_hex(
+    _, _, _, p_hex = _hsl_to_rgb_hex(hue_anchor, saturation, lightness)
+    _, _, _, s_hex = _hsl_to_rgb_hex(
         hue_anchor - 15.0, _clamp(saturation * 1.1, 0.3, 1.0), _clamp(lightness * 0.85, 0.2, 0.8)
     )
-    b_r, b_g, b_b, b_hex = _hsl_to_rgb_hex(
+    _, _, _, b_hex = _hsl_to_rgb_hex(
         hue_anchor - 7.5, _clamp(saturation * 1.05, 0.3, 1.0), _clamp(lightness * 0.92, 0.2, 0.8)
     )
 
@@ -288,12 +285,12 @@ def _ternary_slot_matrix(hexagram_id: int, phase_bits: int = 0) -> List[Dict[str
     Each slot carries its own ternary state options (0/1/2) before anything passes.
     No aggregation, no early collapse. Changing is inferred from phase changing map.
     """
-    base_ternary = HEXAGRAM_BASE[hexagram_id].get("binary_bottom_to_top", "")
+    base_ternary = HEXAGRAM_BASE[hexagram_id].get("binary_bottom_to_top", "")  # type: ignore[index]
     changing_positions = PHASE_LINE_MAP.get(phase_bits, [])
-    slots = []
+    slots: List[Dict[str, Any]] = []
     for pos in range(1, 7):
         bit = int(base_ternary[pos - 1]) if pos <= len(base_ternary) else 0
-        options = []
+        options: List[Dict[str, Any]] = []
         for ternary_state in (0, 1, 2):
             is_changing = pos in changing_positions
             yao_key = _line_yao_key(ternary_state, "present")
@@ -321,8 +318,8 @@ def _personality_subsets_for_slot(slot: Dict[str, Any], inject: Dict[str, Any], 
     """
     primary_pool = inject.get("primary_pool", "voice_narrator")
     secondary_pool = inject.get("secondary_pool", "voice_narrator")
-    primary_vec = EMOTIONAL_POOL.get(primary_pool, (0.1, 0.2, 0.1, 0.85, 0.85))
-    secondary_vec = EMOTIONAL_POOL.get(secondary_pool, (0.1, 0.2, 0.1, 0.85, 0.85))
+    _primary_vec = EMOTIONAL_POOL.get(primary_pool, (0.1, 0.2, 0.1, 0.85, 0.85))
+    _secondary_vec = EMOTIONAL_POOL.get(secondary_pool, (0.1, 0.2, 0.1, 0.85, 0.85))
 
     subsets = []
     for opt in slot.get("options", []):
@@ -330,7 +327,7 @@ def _personality_subsets_for_slot(slot: Dict[str, Any], inject: Dict[str, Any], 
         yao_key = opt.get("yao_key", "stable_yao")
         # Project ternary state into pool space: no hardcoded bool, open from available pools
         if ternary_state == 0:  # yin
-            pool_names = [primary_pool, "voice_warmth", "voice_subtlety"]
+            pool_names: List[str] = [primary_pool, "voice_warmth", "voice_subtlety"]
             blend_weights = [0.6, 0.25, 0.15]
         elif ternary_state == 1:  # yang
             pool_names = [secondary_pool, "voice_forward", "voice_clarity"]
@@ -360,8 +357,6 @@ def _personality_subsets_for_slot(slot: Dict[str, Any], inject: Dict[str, Any], 
         })
     return subsets
 
-
-import itertools
 
 def _expand_729_ternary_line_permutations(hexagram_id: int, inject: Dict[str, Any]) -> List[Dict[str, Any]]:
     """Generates all 3^6 = 729 ternary line state permutations for a single hexagram.
@@ -526,8 +521,8 @@ def shotgun_expand(request_text: str = "", emotional_input: int | None = None) -
     expanded = []
     for h_id in range(1, 65):
         base = expand_hexagram(h_id, request_text, phase_bits=0, emotional_input=emotional_input)
-        inject = base.get("inject_site") or {}
-        vector = base.get("expanded_vector") or {}
+        inject: Dict[str, Any] = base.get("inject_site") or {}
+        vector: Dict[str, Any] = base.get("expanded_vector") or {}
         slots = _ternary_slot_matrix(h_id, phase_bits=0)
         personality_subsets = []
         for slot in slots:
@@ -647,6 +642,7 @@ def shotgun_expand(request_text: str = "", emotional_input: int | None = None) -
 
     energies = []
     for item in expanded:
+        item = item if isinstance(item, dict) else {}
         vec = [float(item.get("expanded_vector", {}).get(k, 0.0) or 0.0) for k in VEC_KEYS]
         energies.append(
             _hamiltonian_energy(vec, vec, item.get("line_balance", {}))
@@ -655,15 +651,16 @@ def shotgun_expand(request_text: str = "", emotional_input: int | None = None) -
     # Compute real consensus vector as mean across all 64 expanded hexagram vectors
     n = max(1, len(expanded))
     consensus_vector = {
-        k: round(sum(float(item.get("expanded_vector", {}).get(k, 0.0) or 0.0) for item in expanded) / n, 5)
+        k: round(sum(float((item if isinstance(item, dict) else {}).get("expanded_vector", {}).get(k, 0.0) or 0.0) for item in expanded) / n, 5)
         for k in VEC_KEYS
     }
     # Dominant intent: majority vote across all 64
     intent_counts: Dict[str, int] = {}
     for item in expanded:
+        item = item if isinstance(item, dict) else {}
         di = item.get("intent", {}).get("dominant_intent", "understand")
         intent_counts[di] = intent_counts.get(di, 0) + 1
-    dominant_intent = max(intent_counts, key=intent_counts.get) if intent_counts else "understand"
+    dominant_intent = max(intent_counts, key=lambda k: intent_counts[k]) if intent_counts else "understand"
 
     personality_consensus = resolve_personality_by_consensus(resolved, consensus_vector)
     personality_consensus["consensus_vector"] = consensus_vector
@@ -683,7 +680,7 @@ def shotgun_expand(request_text: str = "", emotional_input: int | None = None) -
         "resolved": resolved,
         "personality_map": pers_map,           # runtime-built individual ternary identity map
         "personality_consensus": personality_consensus,
-        "personality_subsets_total": sum(len(item.get("personality_subsets", [])) for item in expanded),
+        "personality_subsets_total": sum(len((item if isinstance(item, dict) else {}).get("personality_subsets", [])) for item in expanded),
         "avg_hamiltonian_energy": sum(energies) / max(1, len(energies)),
         "min_hamiltonian_energy": min(energies) if energies else 0.0,
         "max_hamiltonian_energy": max(energies) if energies else 0.0,
@@ -740,6 +737,7 @@ def main() -> int:
     ]
     exp_rows = []
     for e in expanded:
+        e = e if isinstance(e, dict) else {}
         tp = e.get("table_personality", {})
         dv = e.get("domain_vector", {})
         sc = e.get("schauberger_metrics", {})
@@ -804,10 +802,11 @@ def main() -> int:
     ]
     res_rows = []
     for r in resolved:
+        r = r if isinstance(r, dict) else {}
         tp = r.get("table_personality", {})
-        dv = r.get("resolved_vector", {}) or {}
-        ev = r.get("expanded_vector", {}) or {}
-        lb = r.get("line_balance", {}) or {}
+        dv: Dict[str, Any] = r.get("resolved_vector", {}) or {}
+        ev: Dict[str, Any] = r.get("expanded_vector", {}) or {}
+        lb: Dict[str, Any] = r.get("line_balance", {}) or {}
         intent = r.get("intent", {})
         hname = r.get("hexagram_symbols", {}).get("name", "")
         yin_c = float(lb.get("yin_count", 0) or 0)
@@ -885,9 +884,9 @@ def main() -> int:
         "s6_bit", "s6_trigram", "s6_element",
     ]
     pers_rows = []
-    runtime_pers_map = payload.get("personality_map", {})
+    runtime_pers_map: Dict[str, Any] = payload.get("personality_map", {})
     for h_id in range(1, 65):
-        tp = runtime_pers_map.get(h_id, {})
+        tp: Dict[str, Any] = runtime_pers_map.get(h_id, {})
         slots = tp.get("slot_tags", [])
         row = {
             "hexagram_id": h_id,
