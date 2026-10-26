@@ -1,22 +1,42 @@
 """Targeted adjudication of unadjudicated Pix2Text candidates - 1907.04931.
 
-Reads the 158 harvested candidate records and assigns each UNADJUDICATED record
-an explicit adjudication path. The adjudication is deterministic: it is based
-on (a) raw-OCR inspection, (b) source-image presence and pixel statistics, and
-(c) parser association. It never promotes a candidate to semantically verified
-merely because its geometry or normalized text looks promising.
+------------------------------  LAYER CONTACT  ------------------------------
+LAYER 1 - Discovery
+  script:            scripts/pix2text_harvest.py
+  output:            DATASETS/PDF_FIDELITY_RENDERINGS/1907_04931/pix2text_candidates.jsonl
+  records:           158 raw-harvest candidates (immutable evidence; never modified)
 
-Status model (machine-readable):
-  ADJUDICATED      - reviewed; non-semantic determination recorded in
-                     `adjudication_detail` (e.g. VISUAL_INTEGRITY, FRAGMENT,
-                     DUPLICATE, AMBIGUOUS, MALFORMED_OCR)
-  UNVERIFIED       - could not be verified: malformed OCR page, no source image
-                     for the bbox, or no parser association
-  NO_MATCH         - no parser association AND no spatial/visual evidence;
+LAYER 2 - Adjudication (classification)
+  script:            scripts/adjudicate_candidates_v2.py
+  output:            adjudication_report.jsonl (authoritative 4-level model:
+                     SPATIAL_MATCH / TEXT_MATCH / VISUALLY_VERIFIED / ADJUDICATED /
+                     UNADJUDICATED), adjudication_summary.json, adjudication_report.md
+  contract:          exclusive statuses WITHIN this layer; carry-forward source
+                     for Layer 3.
+
+LAYER 3 - Targeted adjudication
+  script:            scripts/adjudicate_targets.py
+  output:            adjudication_targets.jsonl (+ summary + markdown)
+  contract:          carries forward Layer-2 explicit statuses (VISUALLY_VERIFIED /
+                     SPATIAL_MATCH / TEXT_MATCH); adjudicates UNADJUDICATED records.
+                     Statuses are exclusive WITHIN this layer.
+  AUTHORITATIVE:     adjudication_targets.jsonl holds the final adjudication status
+                     for this layer set. Layer-3 status derives as:
+                     - L2 explicit status carried forward unchanged, OR
+                     - ADJUDICATED for records that were UNADJUDICATED.
+  STATUSES ARE NOT
+  MUTUALLY EXCLUSIVE ACROSS LAYERS: an element classified ADJUDICATED in Layer 3
+  may be VISUALLY_VERIFIED in Layer 2 (and vice versa for different rows).
+
+STATUS MODEL (machine-readable):
+  ADJUDICATED      - newly adjudicated; non-semantic determination in
+                     `adjudication_detail`
+  UNVERIFIED       - could not be verified
+  NO_MATCH         - no parser association and no evidence
+  (VISUALLY_VERIFIED / SPATIAL_MATCH / TEXT_MATCH are carried forward)
 
 Preserves per record: raw_ocr, bbox_original, source-image SHA-256,
-parser_match_ids (unchanged), candidate_class, pix2text_element_id, and the
-explicit match_status from the adjudication layer.
+parser_match_ids (unchanged), candidate_class, pix2text_element_id.
 """
 
 import hashlib
@@ -38,6 +58,9 @@ MD_PATH = os.path.join(RENDER_DIR, "adjudication_targets_report.md")
 STATUS_ADJUDICATED = "ADJUDICATED"
 STATUS_UNVERIFIED = "UNVERIFIED"
 STATUS_NO_MATCH = "NO_MATCH"
+
+# Carry-forward statuses (Layer 2 explicit statuses)
+CARRY_FORWARD = ("VISUALLY_VERIFIED", "SPATIAL_MATCH", "TEXT_MATCH")
 
 # Breach of the no-semantic-promotion rule: a record whose match_status would
 # be upgraded >= ADJUDICATED by pixel/crop evidence alone is rejected here and
@@ -174,29 +197,42 @@ def write_reports(adjudicated):
     with open(TARGET_REPORT, "w", encoding="utf-8") as f:
         for r in adjudicated:
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
-        
 
-    # Aggregate (count only the records this TARGET layer produced, i.e. those
-    # that were UNADJUDICATED before carry-forward).
+    total = len(adjudicated)
+    carried = [r for r in adjudicated if r.get("match_status") in CARRY_FORWARD]
+    newly = [r for r in adjudicated if r.get("match_status") == STATUS_ADJUDICATED]
+
     status_counts = {}
-    detail_counts = {}
     for r in adjudicated:
-        st = r["match_status"]
+        st = r.get("match_status")
         status_counts[st] = status_counts.get(st, 0) + 1
-        d = r.get("adjudication_detail", "UNKNOWN")
-        detail_counts[d] = detail_counts.get(d, 0) + 1
+
+    newly_detail = {}
+    carried_detail = {}
+    for r in newly:
+        d = r.get("adjudication_detail") or "UNKNOWN"
+        newly_detail[d] = newly_detail.get(d, 0) + 1
+    for r in carried:
+        d = r.get("adjudication_detail") or "UNKNOWN"
+        carried_detail[d] = carried_detail.get(d, 0) + 1
 
     summary = {
         "paper_id": "1907.04931",
-        "total_records": len(adjudicated),
-        "adjudicated_count": status_counts.get(STATUS_ADJUDICATED, 0),
-        "unverified_count": status_counts.get(STATUS_UNVERIFIED, 0),
-        "no_match_count": status_counts.get(STATUS_NO_MATCH, 0),
+        "total_records": total,
+        "carried_forward_count": len(carried),
+        "carried_forward_detail_count": len(carried),
+        "newly_adjudicated_count": len(newly),
+        "newly_adjudicated_detail_count": len(newly),
         "status_distribution": status_counts,
-        "adjudication_detail_distribution": detail_counts,
+        "status_distribution_denominator": total,
+        "newly_adjudicated_detail_distribution": newly_detail,
+        "newly_adjudicated_detail_denominator": len(newly),
+        "carried_forward_detail_distribution": carried_detail,
+        "carried_forward_detail_denominator": len(carried),
         "target_report_path": TARGET_REPORT,
         "summary_path": SUMMARY_PATH,
         "generated_commit": _git_sha(),
+        "generated_commit_note": "Commit HEAD at generation time; this file is committed in the following commit.",
     }
     with open(SUMMARY_PATH, "w", encoding="utf-8") as f:
         json.dump(summary, f, indent=2, ensure_ascii=False)
@@ -204,14 +240,26 @@ def write_reports(adjudicated):
     # Markdown report.
     with open(MD_PATH, "w", encoding="utf-8") as f:
         f.write("# Targeted Adjudication Report - 1907.04931\n\n")
-        f.write("Adjudication layer: deterministic OCR inspection + source-image ")
-        f.write("presence + parser association. No semantic promotion from geometry.\n\n")
+        f.write("Layer 3 of the adjudication contract (see "
+                "docs/adjudication-layer-contract.md). Carries forward Layer-2 "
+                "explicit statuses; adjudicates UNADJUDICATED records.\n\n")
+        f.write("| Metric | Value |\n|---|---|\n")
+        f.write(f"| Total records | {total} |\n")
+        f.write(f"| Carried forward | {len(carried)} |\n")
+        f.write(f"| Newly adjudicated | {len(newly)} |\n")
+        f.write("\n## Status distribution (denominator = total records = %d)\n\n" % total)
         f.write("| Status | Count |\n|---|---|\n")
-        for st in (STATUS_ADJUDICATED, STATUS_UNVERIFIED, STATUS_NO_MATCH):
-            f.write(f"| {st} | {summary['status_distribution'].get(st, 0)} |\n")
-        f.write("\n## Adjudication detail distribution\n\n")
+        for st in (STATUS_ADJUDICATED, STATUS_UNVERIFIED, STATUS_NO_MATCH,
+                   "VISUALLY_VERIFIED", "SPATIAL_MATCH", "TEXT_MATCH"):
+            if st in status_counts:
+                f.write(f"| {st} | {status_counts[st]} |\n")
+        f.write("\n## Newly-adjudicated reasons (denominator = newly adjudicated = %d)\n\n" % len(newly))
         f.write("| Detail | Count |\n|---|---|\n")
-        for d, c in sorted(summary["adjudication_detail_distribution"].items()):
+        for d, c in sorted(newly_detail.items()):
+            f.write(f"| {d} | {c} |\n")
+        f.write("\n## Carried-forward detail (denominator = carried forward = %d)\n\n" % len(carried))
+        f.write("| Detail | Count |\n|---|---|\n")
+        for d, c in sorted(carried_detail.items()):
             f.write(f"| {d} | {c} |\n")
 # --------------------------------------------------------------------------
 if __name__ == "__main__":
@@ -232,3 +280,4 @@ if __name__ == "__main__":
     print(f"WROTE {len(adjudicated)} records")
     from collections import Counter
     print(json.dumps(dict(Counter(r["match_status"] for r in adjudicated)), indent=2))
+
