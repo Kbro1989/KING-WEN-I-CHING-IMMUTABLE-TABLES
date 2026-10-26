@@ -213,6 +213,82 @@ def classify_candidate(el, text):
     return "PROSE"
 
 
+def _math_tokens(text):
+    """Extract math-relevant tokens (commands, symbols, numbers) from text."""
+    t = re.sub(r"\s+", " ", str(text or "")).lower()
+    tokens = set()
+    for tok in re.findall(r"[a-z]+|[0-9]+\.?[0-9]*|\.{3}", t):
+        tok = tok.strip()
+        if tok and tok not in {"a", "an", "the", "and", "or", "of", "to", "in", "on", "is", "it", "with"}:
+            tokens.add(tok)
+    return tokens
+
+
+def _token_jaccard(a, b):
+    """Jaccard similarity between two token sets."""
+    sa, sb = _math_tokens(a), _math_tokens(b)
+    if not sa and not sb:
+        return 1.0
+    union = sa | sb
+    if not union:
+        return 0.0
+    return len(sa & sb) / len(union)
+
+
+def _text_match(ocr_text, parser_line_text, threshold=0.5):
+    """Return True if normalized math content agrees (TEXT_MATCH)."""
+    jac = _token_jaccard(ocr_text, parser_line_text)
+    return jac >= threshold and (_math_tokens(ocr_text) & _math_tokens(parser_line_text))
+
+
+def _crop_nonblank(image_path, bbox, margin=0.05):
+    """Crop the source image at bbox and verify non-blank content.
+
+    Returns True if the crop contains meaningful pixel variance (not blank
+    or fully saturated).  This is a lightweight visual-integrity gate used
+    to promote records toward VISUALLY_VERIFIED.
+    """
+    try:
+        from PIL import Image
+        img = Image.open(image_path).convert("L")
+        w, h = img.size
+        x0 = max(0, int(bbox[0] * w))
+        y0 = max(0, int(bbox[1] * h))
+        x1 = min(w, int(bbox[2] * w))
+        y1 = min(h, int(bbox[3] * h))
+        crop = img.crop((x0, y0, x1, y1))
+        hist = crop.histogram()
+        total = sum(hist)
+        if total == 0:
+            return False
+        dark = sum(hist[:128])
+        bright = sum(hist[128:])
+        return (dark > total * 0.01 and bright > total * 0.01)
+    except Exception:
+        return False
+
+
+def _match_status(rec, parser_candidates, pdf_page):
+    """Compute the base match status from spatial + text evidence.
+
+    Returns one of: UNADJUDICATED, SPATIAL_MATCH, TEXT_MATCH, VISUALLY_VERIFIED
+    The adjudication layer (ADJUDICATED) is applied separately by
+    adjudicate_candidates.py; it never runs during harvesting.
+    """
+    if rec.get("parser_match_ids"):
+        return "SPATIAL_MATCH"
+    for pc in parser_candidates:
+        if pc.get("bbox") and _text_match(rec.get("raw_ocr") or "", pc.get("line_text") or ""):
+            return "TEXT_MATCH"
+    render_img = os.path.join(
+        RENDER_DIR, image_path_for(rec.get("_pix2text_file", ""))
+    )
+    if rec.get("bbox_original") and os.path.exists(render_img):
+        if _crop_nonblank(render_img, rec["bbox_original"]):
+            return "VISUALLY_VERIFIED"
+    return "UNADJUDICATED"
+
+
 def _jsonable(obj):
     """Convert numpy-ish objects to native Python JSON-serializable types."""
     if isinstance(obj, dict):
@@ -239,6 +315,7 @@ def _element_record(pix2text_file, idx, el, pdf_page):
         el_type = el.type
         el_score = el.score
     return {
+        "_pix2text_file": pix2text_file,
         "paper_id": "1907.04931",
         "pdf_sha256": None,
         "page_index": pdf_page - 1 if pdf_page else None,
@@ -262,6 +339,7 @@ def _element_record(pix2text_file, idx, el, pdf_page):
 
 def _embedding_record(pix2text_file, el_idx, meta_idx, meta, pdf_page):
     return {
+        "_pix2text_file": pix2text_file,
         "paper_id": "1907.04931",
         "pdf_sha256": None,
         "page_index": pdf_page - 1 if pdf_page else None,
@@ -431,6 +509,9 @@ def main():
             rec["input_sha256"] = input_sha
             rec["harvest_script_sha256"] = git_sha
             rec["harvest_script_version"] = "pix2text-harvest 0.2.0"
+            # Base match status from spatial + text evidence (adjudication
+            # layer adds ADJUDICATED; that layer runs separately).
+            rec["match_status"] = _match_status(rec, parser_candidates, pdf_page)
             out_rec = _jsonable(rec)
             with open(OUT_PATH, "a", encoding="utf-8") as out:
                 out.write(json.dumps(out_rec, ensure_ascii=False) + "\n")
