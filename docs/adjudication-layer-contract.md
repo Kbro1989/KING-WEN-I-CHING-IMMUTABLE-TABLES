@@ -20,7 +20,7 @@ in**, never against a sibling file.
 - Script: `scripts/adjudicate_candidates_v2.py`
 - Output: `adjudication_report.jsonl`, `adjudication_summary.json`,
   `adjudication_report.md`
-- Status model (4-level, exclusive within this layer):
+- Status model (5-level, exclusive within this layer):
   `SPATIAL_MATCH`, `TEXT_MATCH`, `VISUALLY_VERIFIED`, `ADJUDICATED`, `UNADJUDICATED`
 - Canonical status source for the earlier classification step. Read status here
   only from `adjudication_report.jsonl`.
@@ -53,9 +53,9 @@ in**, never against a sibling file.
   `region_count` (158).
 - `adjudication_targets_summary.json` (Layer 3):
   - `status_distribution` denominator = `total_records` (158) — all records in the file.
-  - `newly_adjudicated_detail_distribution` denominator = `newly_adjudicated_count` (120).
-  - `carried_forward_detail_distribution` denominator = `carried_forward_count` (38).
-- The arithmetic `detail_counts` (18+17+48+37 = 120) divide only among records this
+  - `newly_adjudicated_detail_distribution` denominator = `newly_adjudicated_count` (126).
+  - `carried_forward_detail_distribution` denominator = `carried_forward_count` (32).
+- The arithmetic `detail_counts` (19+17+48+42 = 126) divide only among records this
   layer newly adjudicated; carried-forward records carry no detail.
 
 ## Cross-artifact consistency
