@@ -128,17 +128,16 @@ def load_page_object(md_path):
         if obj is None:
             raise ValueError("eval returned None")
         return obj
-    except (SyntaxError, ValueError, NameError, AttributeError) as e:
+    except (SyntaxError, ValueError, NameError, AttributeError):
         blocks = _scan_element_blocks(raw)
         if blocks:
             return Page(id=-1, number=-1, elements=blocks)
         return Page(id=-1, number=-1, elements=[])
 
 
-RENDER_DIR = os.path.join(
+RENDER_DIR = os.path.abspath(os.path.join(
     "DATASETS", "PDF_FIDELITY_RENDERINGS", "1907_04931"
-)
-RENDER_DIR = os.path.abspath(RENDER_DIR)
+))
 OUT_PATH = os.path.join(RENDER_DIR, "pix2text_candidates.jsonl")
 
 
@@ -417,10 +416,9 @@ def load_parser_candidates(pdf_page):
     return candidates
 
 
-CANDIDATE_JSON = os.path.join(
+CANDIDATE_JSON = os.path.abspath(os.path.join(
     "DATASETS", "candidates_1907.04931.json"
-)
-CANDIDATE_JSON = os.path.abspath(CANDIDATE_JSON)
+))
 
 
 def iou(a, b):
@@ -485,7 +483,10 @@ def main():
 
     written = 0
     for pf in pix2text_files:
-        pdf_page = int(re.search(r"^page_(\d+)_", os.path.basename(pf)).group(1))
+        _m = re.search(r"^page_(\d+)_", os.path.basename(pf))
+        if _m is None:
+            raise ValueError(f"cannot parse page number from {pf!r}")
+        pdf_page = int(_m.group(1))
         input_sha = sha256_file(pf)
         render_img = os.path.join(RENDER_DIR, image_path_for(pf))
         render_sha = sha256_file(render_img) if os.path.exists(render_img) else None
