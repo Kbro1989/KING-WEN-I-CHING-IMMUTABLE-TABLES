@@ -459,72 +459,73 @@ def match_parser_candidates(candidates, parser_list):
 
 def main():
     os.makedirs(RENDER_DIR, exist_ok=True)
+    with open(OUT_PATH, "w", encoding="utf-8") as out:
+        git_sha = git_rev_parse()
+        pix2text_version = "unknown"
+        try:
+            from pix2text import __version__ as _pv
+            # __version__ may be the module itself on some pix2text installs.
+            if isinstance(_pv, str):
+                pix2text_version = _pv
+            elif hasattr(_pv, "__version__"):
+                pix2text_version = _pv.__version__
+            else:
+                pix2text_version = str(_pv)
+        except Exception:
+            pass
 
-    git_sha = git_rev_parse()
-    pix2text_version = "unknown"
-    try:
-        from pix2text import __version__ as _pv
-        # __version__ may be the module itself on some pix2text installs.
-        if isinstance(_pv, str):
-            pix2text_version = _pv
-        elif hasattr(_pv, "__version__"):
-            pix2text_version = _pv.__version__
-        else:
-            pix2text_version = str(_pv)
-    except Exception:
-        pass
+        pix2text_files = []
+        for root, _dirs, names in os.walk(RENDER_DIR):
+            for name in names:
+                if name.endswith("_pix2text.md"):
+                    pix2text_files.append(os.path.join(root, name))
+        pix2text_files.sort()
 
-    pix2text_files = []
-    for root, _dirs, names in os.walk(RENDER_DIR):
-        for name in names:
-            if name.endswith("_pix2text.md"):
-                pix2text_files.append(os.path.join(root, name))
-    pix2text_files.sort()
+        written = 0
+        for pf in pix2text_files:
+            _m = re.search(r"^page_(\d+)_", os.path.basename(pf))
+            if _m is None:
+                raise ValueError(f"cannot parse page number from {pf!r}")
+            pdf_page = int(_m.group(1))
+            input_sha = sha256_file(pf)
+            render_img = os.path.join(RENDER_DIR, image_path_for(pf))
+            render_sha = sha256_file(render_img) if os.path.exists(render_img) else None
 
-    written = 0
-    for pf in pix2text_files:
-        _m = re.search(r"^page_(\d+)_", os.path.basename(pf))
-        if _m is None:
-            raise ValueError(f"cannot parse page number from {pf!r}")
-        pdf_page = int(_m.group(1))
-        input_sha = sha256_file(pf)
-        render_img = os.path.join(RENDER_DIR, image_path_for(pf))
-        render_sha = sha256_file(render_img) if os.path.exists(render_img) else None
+            page_obj = load_page_object(pf)
 
-        page_obj = load_page_object(pf)
+            candidates = []
+            if page_obj.elements:
+                candidates = make_candidate(pf, page_obj, pdf_page)
+            else:
+                raw = open(pf, encoding="utf-8", errors="replace").read()
+                candidates = make_candidate_from_text(pf, pdf_page, raw)
 
-        candidates = []
-        if page_obj.elements:
-            candidates = make_candidate(pf, page_obj, pdf_page)
-        else:
-            raw = open(pf, encoding="utf-8", errors="replace").read()
-            candidates = make_candidate_from_text(pf, pdf_page, raw)
+            parser_candidates = load_parser_candidates(pdf_page)
+            match_parser_candidates(candidates, parser_candidates)
 
-        parser_candidates = load_parser_candidates(pdf_page)
-        match_parser_candidates(candidates, parser_candidates)
-
-        for rec in candidates:
-            rec["render_sha256"] = render_sha
-            rec["source_image_sha256"] = render_sha
-            rec["pix2text_version"] = pix2text_version
-            rec["input_sha256"] = input_sha
-            rec["harvest_script_sha256"] = git_sha
-            rec["harvest_script_version"] = "pix2text-harvest 0.2.0"
-            # Base match status from spatial + text evidence (adjudication
-            # layer adds ADJUDICATED; that layer runs separately).
-            rec["match_status"] = _match_status(rec, parser_candidates, pdf_page)
-            out_rec = _jsonable(rec)
-            with open(OUT_PATH, "a", encoding="utf-8") as out:
+            for rec in candidates:
+                rec["render_sha256"] = render_sha
+                rec["source_image_sha256"] = render_sha
+                rec["pix2text_version"] = pix2text_version
+                rec["input_sha256"] = input_sha
+                rec["harvest_script_sha256"] = git_sha
+                rec["harvest_script_version"] = "pix2text-harvest 0.2.0"
+                # Base match status from spatial + text evidence (adjudication
+                # layer adds ADJUDICATED; that layer runs separately).
+                rec["match_status"] = _match_status(rec, parser_candidates, pdf_page)
+                out_rec = _jsonable(rec)
                 out.write(json.dumps(out_rec, ensure_ascii=False) + "\n")
                 written += 1
 
-        print(f"{os.path.basename(pf)}: "
-              f"{len(page_obj.elements)} elements, "
-              f"{len(candidates)} candidates, page {pdf_page}, "
-              f"parser candidates {len(parser_candidates)}")
+            print(f"{os.path.basename(pf)}: "
+                  f"{len(page_obj.elements)} elements, "
+                  f"{len(candidates)} candidates, page {pdf_page}, "
+                  f"parser candidates {len(parser_candidates)}")
 
-    print(f"WROTE {written} records to {OUT_PATH}")
+        print(f"WROTE {written} records to {OUT_PATH}")
 
 
+if __name__ == "__main__":
+    main()
 if __name__ == "__main__":
     main()

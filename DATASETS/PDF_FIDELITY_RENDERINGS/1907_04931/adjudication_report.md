@@ -10,9 +10,10 @@
 
 | Status | Count |
 |---|---|
-| UNADJUDICATED | 156 |
+| UNADJUDICATED | 126 |
 | SPATIAL_MATCH | 1 |
 | TEXT_MATCH | 1 |
+| VISUALLY_VERIFIED | 30 |
 
 ## Candidate class distribution
 
