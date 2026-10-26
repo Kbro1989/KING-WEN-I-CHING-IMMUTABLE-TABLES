@@ -2,7 +2,7 @@
 
 **Scope:** King Wen math PDF extraction → semantic parsing → equation solving
 **Governing rule:** *Do not define truth in code where it can be read from disk. Search before assuming.*
-**Current disk truth:** 245 papers processed, 4,218 math expressions, 1 solvable (SymPy).
+**Current disk truth:** 245 papers processed, 4,218 math expressions, 8 solvable (SymPy).
 
 ---
 
@@ -33,7 +33,7 @@
 | `math_notation_mapping.py` | Unicode → SymPy/Wolfram mapping | — | mapping dict | ✅ |
 | `semantic_math_extractor.py` | End-to-end PDF math extraction | PDF | JSON (245 papers, 4,218 eqns) | ✅ |
 | `prose_math_extractor.py` | Extract math from prose context | PDF | context | ✅ |
-| `solve_all.py` | SymPy equation solver | equation text | solved results | ✅ 1/4,218 solvable |
+| `solve_all.py` | SymPy equation solver | equation text | solved results | ✅ 8/4,218 solvable |
 | `mathml_parser_on_corpus.py` | Test MathML parser on corpus | corpus | results | ✅ |
 | `test_structural_survival.py` | Structural survival test | AST | pass/fail | ✅ |
 | `test_math_contract.py` | Math contract enforcement tests | — | pass/fail | ✅ |
@@ -137,7 +137,7 @@ artifact. You cannot recover source semantics from rendered pixels.
 | File | Defines truth | Should be finding from |
 |------|---------------|------------------------|
 | `semantic_math_extractor.py` | Claims 4,218 equations extracted | The arXiv HTML corpus (991 eqns for 2605.00155) |
-| `solve_all.py` | Claims "1 solvable" | The arXiv HTML code extraction (253 solvable) |
+| `solve_all.py` | Claims "8 solvable" | The arXiv HTML code extraction (253 solvable) |
 | `math_notation_mapping.py` | Unicode → SymPy mapping | The `x-tex` annotations |
 | `math_pdf_parser.py` | PyMuPDF extraction | The PDF text (rendered) |
 
@@ -275,7 +275,7 @@ grep -n "x-tex" scripts/arxiv_html_parser.py
 
 ---
 
-**Last verified (2026-10-17):** 245 papers processed, 4,218 math expressions, 1 solvable.
+**Last verified (2026-10-17):** 245 papers processed, 4,218 math expressions, 8 solvable.
 arXiv HTML source path (MathML + x-tex) verified live. PyMuPDF flat-text parsing 
 does NOT reconstruct structure. The blocker is the pipeline layer, not the individual 
 extractor scripts.

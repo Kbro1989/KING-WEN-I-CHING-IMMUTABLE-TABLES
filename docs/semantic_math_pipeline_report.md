@@ -15,9 +15,9 @@ Built a complete pipeline that:
 | Math expressions extracted | 4,218 |
 | Proof chain elements | 183,017 |
 | Math images detected | 8,598 |
-| Equations solved by SymPy | 1 |
-| Expressions skipped (prose/complex) | 2,677 |
-| Parse errors | 1,540 |
+| Equations solved by SymPy | 8 |
+| Expressions skipped (prose/complex) | 2,908 |
+| Parse errors | 1,302 |
 
 ## Key Files
 
@@ -49,9 +49,9 @@ The fundamental bottleneck is that PyMuPDF extracts **rendered glyphs**, not LaT
 
 | Type | Count | Example |
 |------|-------|---------|
-| function_call | 870 | `log(1 −D(G(z)))` |
-| unicode_equation | 3,138 | `αi = ϵ σ²` |
-| latex_inline | 33 | `2\cdot15\cdot n=30n` |
+| function_call | 865 | `log(1 −D(G(z)))` |
+| unicode_equation | 3,319 | `αi = ϵ σ²` |
+| latex_inline | 32 | `2\cdot15\cdot n=30n` |
 | latex_display | 2 | (complex display equations) |
 
 ### Why So Few Solvable

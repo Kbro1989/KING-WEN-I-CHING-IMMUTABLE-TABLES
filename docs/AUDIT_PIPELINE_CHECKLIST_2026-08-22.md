@@ -80,8 +80,8 @@ indexBuffers=[[]]  (structurally valid point cloud ✓)
 - Fix: import `mathml_parser` and use tree-walk parser.
 - **Status:** BLOCKER — see GAP-5.
 
-### GAP-7 — Only 1/4,218 equations solvable
-- PyMuPDF captures rendered text. The 1 solvable equation is `αi = ϵ σ²`.
+### GAP-7 — Only 8/4,218 equations solvable
+- PyMuPDF captures rendered text. The 8 solvable equations include `αi = ϵ σ²` and other linear forms.
 - Fix: (a) switch to arXiv HTML MathML source; (b) arXiv e-print tarball for native LaTeX.
 - **Status:** OPEN — same as GAP-5.
 
@@ -98,10 +98,10 @@ indexBuffers=[[]]  (structurally valid point cloud ✓)
 | No fabrication in compliance layer | ✅ | transform_object_rsmv.py:24 "No RNG. No placeholder verts." — PLY verts are real |
 | arXiv HTML MathML parsed | ✅ | 991/991 equations verified (2605.00155) |
 | arXiv HTML x-tex == parser stack | ✅ | 991 == 991 == 991 |
-| PyMuPDF extracts math | ✅ | 245 papers, 4,218 expr, but 1/4,218 solvable |
+| PyMuPDF extracts math | ✅ | 245 papers, 4,218 expr, but 8/4,218 solvable |
 | MathML tree walk in pipeline | ❌ | `semantic_math_extractor.py` uses flat regex, not MathML tree walk |
 | LaTeX source recovered from PDF | ❌ | PDF is rendered glyphs only; no LaTeX source |
-| End-to-end pipeline | ❌ | 1/4,218 solvable; relative error 0.0 for solved equation |
+| End-to-end pipeline | ❌ | 8/4,218 solvable; relative error 0.0 for solved equation |
 | Validator correct | ✅ | `test_structural_conservation.py` 21/21 |
 
 ### Numerical Extraction & Vision Pipeline Audit (2026-10-17)

@@ -52,9 +52,9 @@ from emotional_engine import (  # noqa: E402
     _yao_vocabulary_map,
     _line_yao_key,
 )
-from scripts.schauberger_parsing_layers import schauberger_parsing_layers  # noqa: E402
+from schauberger_parsing_layers import schauberger_parsing_layers  # noqa: E402
 from hexagram_personality import HEXAGRAM_PERSONALITY_MAP, resolve_personality_by_consensus, build_hexagram_personality_map  # noqa: E402
-from scripts.build_hexagram_skill_cards import PERSONALITIES, skill_cards_for_binary  # noqa: E402
+from build_hexagram_skill_cards import PERSONALITIES, skill_cards_for_binary  # noqa: E402
 import colorsys
 import itertools
 
