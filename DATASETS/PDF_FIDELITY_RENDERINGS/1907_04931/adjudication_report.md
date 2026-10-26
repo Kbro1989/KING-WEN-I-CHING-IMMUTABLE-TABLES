@@ -1,25 +1,15 @@
-# Pix2Text Adjudication Report — 1907.04931
+# Targeted Adjudication Report — 1907.04931
 
-| Metric | Value |
-|---|---|
-| Total records (region_count) | 158 |
-| Unique expression_count | 137 |
-| Equation occurrence_count | 95 |
-
-## Status distribution
+Adjudication layer: deterministic OCR inspection + source-image presence + parser association. No semantic promotion from geometry.
 
 | Status | Count |
 |---|---|
-| UNADJUDICATED | 126 |
-| SPATIAL_MATCH | 1 |
-| TEXT_MATCH | 1 |
-| VISUALLY_VERIFIED | 30 |
+| ADJUDICATED | 0 |
+| UNVERIFIED | 0 |
+| NO_MATCH | 0 |
 
-## Candidate class distribution
+## Adjudication detail distribution
 
-| Class | Count |
+| Detail | Count |
 |---|---|
-| DISPLAY_EQUATION | 5 |
-| INLINE_MATH | 90 |
-| PROSE | 58 |
-| TITLE | 5 |
+| UNKNOWN | 158 |
