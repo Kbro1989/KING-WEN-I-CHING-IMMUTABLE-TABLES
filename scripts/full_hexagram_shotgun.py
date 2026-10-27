@@ -17,7 +17,7 @@ import json
 import math
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, TypedDict, cast
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -28,14 +28,49 @@ from kingwen_ternary_tables_complete import (
     PHASE_LINE_MAP,
     EMOTIONAL_WEIGHTS,
     VOICEBOX_VOICE_POOL,
+    TOTAL_ENCODINGS,
 )
-from emotional_engine import (  # noqa: E402
+
+# Record vocabulary -- the same aliases kingwen_train_data/* uses, where cast()
+# is the definition point for an untyped dict payload.
+# ---------------------------------------------------------------------------
+Record = Dict[str, Any]
+Records = List[Record]
+
+
+class HexagramRecord(TypedDict, total=False):
+    """One immutable HEXAGRAM_BASE row, narrowed to the fields consumers read.
+
+    Upstream (kingwen_ternary_tables_complete.py:79) declares the table as
+        HEXAGRAM_BASE: Final[Dict[int, Dict[str, Any]]]
+    Consumers here index by int hexagram id and read the fields below through
+    .get() with a default, so a row may omit any of them -- hence total=False.
+    """
+
+    name: str
+    unicode: str
+    upper_trigram: str
+    lower_trigram: str
+    binary_bottom_to_top: str
+    category: str
+    action: str
+
+
+HexagramBaseTable = Dict[int, HexagramRecord]
+
+# cast() defines the table as consumers expect it: int hexagram id -> record.
+# Narrowing (Dict[str, Any] row -> HexagramRecord row), so this is a definition,
+# not a redundant re-assertion, and the call sites below need no suppressions.
+# Runtime identity is preserved: cast returns HEXAGRAM_BASE itself, no copy.
+HEXAGRAM_BASE_TYPED: HexagramBaseTable = cast(HexagramBaseTable, HEXAGRAM_BASE)
+
+from emotional_engine import (  # noqa: E402, F401
     VEC_KEYS,
-    _clamp,  # noqa: reportPrivateUsage
+    clamp,  # public alias for _clamp
     expand_hexagram,
-    _hamiltonian_energy,  # noqa: reportPrivateUsage
-    _yao_vocabulary_map,  # noqa: reportPrivateUsage
-    _line_yao_key,  # noqa: reportPrivateUsage
+    hamiltonian_energy,  # public alias for _hamiltonian_energy
+    yao_vocabulary_map,  # public alias for _yao_vocabulary_map
+    line_yao_key,  # alias for private _line_yao_key
 )
 from schauberger_parsing_layers import schauberger_parsing_layers  # noqa: E402
 from hexagram_personality import resolve_personality_by_consensus, build_hexagram_personality_map  # noqa: E402
@@ -62,7 +97,7 @@ def binary_str_count(binary_str: str) -> int:
 
 def _hsl_to_rgb_hex(h_deg: float, s: float, l: float) -> Tuple[int, int, int, str]:
     h_norm = (h_deg % 360.0) / 360.0
-    r_f, g_f, b_f = colorsys.hls_to_rgb(h_norm, _clamp(l, 0.15, 0.85), _clamp(s, 0.20, 1.0))
+    r_f, g_f, b_f = colorsys.hls_to_rgb(h_norm, clamp(l, 0.15, 0.85), clamp(s, 0.20, 1.0))
     r, g, b = int(round(r_f * 255)), int(round(g_f * 255)), int(round(b_f * 255))
     return r, g, b, f"#{r:02X}{g:02X}{b:02X}"
 
@@ -176,7 +211,7 @@ def _derive_domain_routing_palette(
       - keeps the hue anchor on (hex_id-1)*5.625 + trigram perturbation so adjacent
         hexagrams on the 8x8 grid remain adjacent in hue space (checkerboard routing).
     """
-    base: Dict[str, Any] = HEXAGRAM_BASE[hex_id]  # type: ignore[index]
+    base: HexagramRecord = HEXAGRAM_BASE_TYPED[hex_id]
     _binary_str = base.get("binary_bottom_to_top", "111111")
     upper_tri: str = base.get("upper_trigram", "Qian")
     lower_tri: str = base.get("lower_trigram", "Kun")
@@ -185,10 +220,10 @@ def _derive_domain_routing_palette(
     hue_anchor = (hex_id - 1) * (360.0 / 64.0)
 
     # 2. Saturation from yang popcount (same as existing spectrum derivation)
-    saturation = _clamp((yang_count / 6.0) * 0.40 + 0.50, 0.35, 0.95)
+    saturation = clamp((yang_count / 6.0) * 0.40 + 0.50, 0.35, 0.95)
 
     # 3. Lightness from domain_vector coherence (same as existing spectrum derivation)
-    lightness = _clamp(coherence * 0.30 + 0.40, 0.35, 0.70)
+    lightness = clamp(coherence * 0.30 + 0.40, 0.35, 0.70)
 
     # 4. Trigram perturbation (same as existing spectrum derivation)
     u_temp = TRIGRAM_TEMP.get(upper_tri, 0.0)
@@ -211,25 +246,25 @@ def _derive_domain_routing_palette(
     # Blend parsed signal with structural signal (parsed is the modulation, structure is the base)
     blend_strength = min(1.0, len(set(token_text.split())) / 12.0) if token_text.strip() else 0.0
     hue_anchor = (hue_anchor + parsed_warmth * blend_strength * 2.8125) % 360.0
-    saturation = _clamp(saturation + parsed_sat * blend_strength, 0.35, 0.95)
-    lightness = _clamp(lightness + parsed_light * blend_strength, 0.35, 0.70)
+    saturation = clamp(saturation + parsed_sat * blend_strength, 0.35, 0.95)
+    lightness = clamp(lightness + parsed_light * blend_strength, 0.35, 0.70)
 
     # 6. Build the constant palette (16 harmonic steps around the anchor)
     palette_16_derived: List[str] = []
     for i in range(16):
         step_hue = (hue_anchor + (i - 8) * 11.25) % 360.0
-        step_l = _clamp(lightness + (i - 8) * 0.015, 0.25, 0.80)
-        step_s = _clamp(saturation + ((i % 3) - 1) * 0.03, 0.35, 0.98)
+        step_l = clamp(lightness + (i - 8) * 0.015, 0.25, 0.80)
+        step_s = clamp(saturation + ((i % 3) - 1) * 0.03, 0.35, 0.98)
         _, _, _, step_hex = _hsl_to_rgb_hex(step_hue, step_s, step_l)
         palette_16_derived.append(step_hex)
 
     # 7. Primary/secondary/blended colors (same derivation as existing spectrum script)
     _, _, _, p_hex = _hsl_to_rgb_hex(hue_anchor, saturation, lightness)
     _, _, _, s_hex = _hsl_to_rgb_hex(
-        hue_anchor - 15.0, _clamp(saturation * 1.1, 0.3, 1.0), _clamp(lightness * 0.85, 0.2, 0.8)
+        hue_anchor - 15.0, clamp(saturation * 1.1, 0.3, 1.0), clamp(lightness * 0.85, 0.2, 0.8)
     )
     _, _, _, b_hex = _hsl_to_rgb_hex(
-        hue_anchor - 7.5, _clamp(saturation * 1.05, 0.3, 1.0), _clamp(lightness * 0.92, 0.2, 0.8)
+        hue_anchor - 7.5, clamp(saturation * 1.05, 0.3, 1.0), clamp(lightness * 0.92, 0.2, 0.8)
     )
 
     # 8. Routing metadata for downstream consumers
@@ -285,7 +320,7 @@ def _ternary_slot_matrix(hexagram_id: int, phase_bits: int = 0) -> List[Dict[str
     Each slot carries its own ternary state options (0/1/2) before anything passes.
     No aggregation, no early collapse. Changing is inferred from phase changing map.
     """
-    base_ternary = HEXAGRAM_BASE[hexagram_id].get("binary_bottom_to_top", "")  # type: ignore[index]
+    base_ternary = HEXAGRAM_BASE_TYPED[hexagram_id].get("binary_bottom_to_top", "")
     changing_positions = PHASE_LINE_MAP.get(phase_bits, [])
     slots: List[Dict[str, Any]] = []
     for pos in range(1, 7):
@@ -293,11 +328,11 @@ def _ternary_slot_matrix(hexagram_id: int, phase_bits: int = 0) -> List[Dict[str
         options: List[Dict[str, Any]] = []
         for ternary_state in (0, 1, 2):
             is_changing = pos in changing_positions
-            yao_key = _line_yao_key(ternary_state, "present")
+            yao_key = line_yao_key(ternary_state, "present")
             options.append({
                 "ternary_state": ternary_state,
                 "yao_key": yao_key,
-                "yao_label": _yao_vocabulary_map().get(yao_key, ""),
+                "yao_label": yao_vocabulary_map().get(yao_key, ""),
                 "is_changing": is_changing,
                 "slot_position": pos,
             })
@@ -321,7 +356,7 @@ def _personality_subsets_for_slot(slot: Dict[str, Any], inject: Dict[str, Any], 
     _primary_vec = EMOTIONAL_POOL.get(primary_pool, (0.1, 0.2, 0.1, 0.85, 0.85))
     _secondary_vec = EMOTIONAL_POOL.get(secondary_pool, (0.1, 0.2, 0.1, 0.85, 0.85))
 
-    subsets = []
+    subsets: Records = []
     for opt in slot.get("options", []):
         ternary_state = opt.get("ternary_state", 0)
         yao_key = opt.get("yao_key", "stable_yao")
@@ -339,7 +374,7 @@ def _personality_subsets_for_slot(slot: Dict[str, Any], inject: Dict[str, Any], 
         pooled_vecs = [EMOTIONAL_POOL.get(name, (0.1, 0.2, 0.1, 0.85, 0.85)) for name in pool_names]
         blended = [0.0, 0.0, 0.0, 0.0, 0.0]
         for i in range(5):
-            blended[i] = _clamp(sum(pooled_vecs[j][i] * blend_weights[j] for j in range(3)))
+            blended[i] = clamp(sum(pooled_vecs[j][i] * blend_weights[j] for j in range(3)))
 
         subsets.append({
             "slot_position": slot.get("slot_position"),
@@ -365,7 +400,7 @@ def _expand_729_ternary_line_permutations(hexagram_id: int, inject: Dict[str, An
     3^6 = 729 full line-state permutations per hexagram.
     64 hexagrams x 729 = 46,656 total ternary line permutations.
     """
-    permutations = []
+    permutations: Records = []
     # All 729 ternary tuples of length 6
     for idx, perm in enumerate(itertools.product([0, 1, 2], repeat=6)):
         # Calculate line balance and changing line count for this permutation
@@ -518,13 +553,13 @@ def shotgun_expand(request_text: str = "", emotional_input: int | None = None) -
     # calling build_hexagram_personality_map() at runtime guarantees HEXAGRAM_BASE is loaded.
     pers_map = build_hexagram_personality_map()
 
-    expanded = []
+    expanded: Records = []
     for h_id in range(1, 65):
         base = expand_hexagram(h_id, request_text, phase_bits=0, emotional_input=emotional_input)
         inject: Dict[str, Any] = base.get("inject_site") or {}
         vector: Dict[str, Any] = base.get("expanded_vector") or {}
         slots = _ternary_slot_matrix(h_id, phase_bits=0)
-        personality_subsets = []
+        personality_subsets: Records = []
         for slot in slots:
             personality_subsets.extend(_personality_subsets_for_slot(slot, inject, vector))
         
@@ -532,10 +567,10 @@ def shotgun_expand(request_text: str = "", emotional_input: int | None = None) -
 
         ternary_729_permutations = _expand_729_ternary_line_permutations(h_id, inject)
 
-        category = HEXAGRAM_BASE[h_id].get("category", "")
-        action = HEXAGRAM_BASE[h_id].get("action", "")
+        category = HEXAGRAM_BASE_TYPED[h_id].get("category", "")
+        action = HEXAGRAM_BASE_TYPED[h_id].get("action", "")
         training_notes = EMOTIONAL_WEIGHTS.get(str(h_id), {}).get("trainingNotes", "")
-        yang_count = binary_str_count(HEXAGRAM_BASE[h_id].get("binary_bottom_to_top", ""))
+        yang_count = binary_str_count(HEXAGRAM_BASE_TYPED[h_id].get("binary_bottom_to_top", ""))
         intent_tokens = base.get("intent", {}).get("query_tokens", [])
         domain_routing_palette = _build_domain_routing_palette_for_hex(
             h_id=h_id,
@@ -551,11 +586,11 @@ def shotgun_expand(request_text: str = "", emotional_input: int | None = None) -
 
         expanded.append({
             "hexagram_id": h_id,
-            "name": HEXAGRAM_BASE[h_id].get("name"),
-            "unicode": HEXAGRAM_BASE[h_id].get("unicode"),
-            "upper_trigram": HEXAGRAM_BASE[h_id].get("upper_trigram"),
-            "lower_trigram": HEXAGRAM_BASE[h_id].get("lower_trigram"),
-            "binary_bottom_to_top": HEXAGRAM_BASE[h_id].get("binary_bottom_to_top"),
+            "name": HEXAGRAM_BASE_TYPED[h_id].get("name"),
+            "unicode": HEXAGRAM_BASE_TYPED[h_id].get("unicode"),
+            "upper_trigram": HEXAGRAM_BASE_TYPED[h_id].get("upper_trigram"),
+            "lower_trigram": HEXAGRAM_BASE_TYPED[h_id].get("lower_trigram"),
+            "binary_bottom_to_top": HEXAGRAM_BASE_TYPED[h_id].get("binary_bottom_to_top"),
             "coder_specialty": jspace["coder_specialty"],
             "rs3_actionable": jspace["rs3_actionable"],
             "category": category,
@@ -606,20 +641,20 @@ def shotgun_expand(request_text: str = "", emotional_input: int | None = None) -
 
 
 
-    resolved = []
+    resolved: Records = []
     for h_id in range(1, 65):
         for p in range(8):
             r_base = expand_hexagram(h_id, request_text, phase_bits=p, emotional_input=emotional_input)
             ptags = pers_map.get(h_id, {})
             resolved.append({
                 "hexagram_id": h_id,
-                "category": HEXAGRAM_BASE[h_id].get("category", ""),
-                "action": HEXAGRAM_BASE[h_id].get("action", ""),
+                "category": HEXAGRAM_BASE_TYPED[h_id].get("category", ""),
+                "action": HEXAGRAM_BASE_TYPED[h_id].get("action", ""),
                 "coder_specialty": CODER_SPECIALTIES[(h_id - 1) % len(CODER_SPECIALTIES)],
                 "rs3_actionable": RS3_ACTIONABLES[(h_id - 1) % len(RS3_ACTIONABLES)],
                 "training_notes": EMOTIONAL_WEIGHTS.get(str(h_id), {}).get("trainingNotes", ""),
                 "trainingNotes": EMOTIONAL_WEIGHTS.get(str(h_id), {}).get("trainingNotes", ""),
-                "hexagram_symbols": HEXAGRAM_BASE[h_id],
+                "hexagram_symbols": HEXAGRAM_BASE_TYPED[h_id],
                 "intent": r_base.get("intent", {}),
                 "table_personality": ptags,
                 "domain_vector": {k: float(r_base.get("resolved_vector", {}).get(k, 0.0) or 0.0) for k in VEC_KEYS},
@@ -640,12 +675,12 @@ def shotgun_expand(request_text: str = "", emotional_input: int | None = None) -
                 "schauberger_parsing": None,  # computed only for expanded (phase=0)
             })
 
-    energies = []
+    energies: List[float] = []
     for item in expanded:
         item = item if isinstance(item, dict) else {}
         vec = [float(item.get("expanded_vector", {}).get(k, 0.0) or 0.0) for k in VEC_KEYS]
         energies.append(
-            _hamiltonian_energy(vec, vec, item.get("line_balance", {}))
+            hamiltonian_energy(vec, vec, item.get("line_balance", {}))
         )
 
     # Compute real consensus vector as mean across all 64 expanded hexagram vectors
@@ -672,6 +707,7 @@ def shotgun_expand(request_text: str = "", emotional_input: int | None = None) -
         "emotional_input": emotional_input,
         "total_expanded": len(expanded),
         "total_resolved": len(resolved),
+    "total_encodings": TOTAL_ENCODINGS,
         "ternary_line_permutations_per_hex": 729,
         "total_ternary_line_permutations": len(expanded) * 729,  # 46,656
         "total_domained_routes": 35000,                           # ~35,000 active domained routes
@@ -708,9 +744,9 @@ def _write_csv(path: Path, rows: List[Dict[str, Any]], fields: List[str]) -> Non
 
 def main() -> int:
     payload = shotgun_expand(request_text="shotgun blast", emotional_input=50)
-    expanded = payload["expanded"]
-    resolved = payload["resolved"]
-    personality_consensus = payload.get("personality_consensus", {})
+    expanded: Records = cast(Records, payload["expanded"])
+    resolved: Records = cast(Records, payload["resolved"])
+    personality_consensus: Record = cast(Record, payload.get("personality_consensus", {}))
     datasets = ROOT / "DATASETS"
 
     # ------------------------------------------------------------------
@@ -735,7 +771,7 @@ def main() -> int:
         "dominant_intent", "intensity", "query_tokens",
         "training_notes",
     ]
-    exp_rows = []
+    exp_rows: Records = []
     for e in expanded:
         e = e if isinstance(e, dict) else {}
         tp = e.get("table_personality", {})
@@ -800,7 +836,7 @@ def main() -> int:
         "dominant_intent", "intensity", "query_tokens",
         "training_notes",
     ]
-    res_rows = []
+    res_rows: Records = []
     for r in resolved:
         r = r if isinstance(r, dict) else {}
         tp = r.get("table_personality", {})
@@ -883,14 +919,14 @@ def main() -> int:
         "s5_bit", "s5_trigram", "s5_element",
         "s6_bit", "s6_trigram", "s6_element",
     ]
-    pers_rows = []
-    runtime_pers_map: Dict[str, Any] = payload.get("personality_map", {})
+    pers_rows: Records = []
+    runtime_pers_map: Dict[int, Record] = cast(Dict[int, Record], payload.get("personality_map", {}))
     for h_id in range(1, 65):
         tp: Dict[str, Any] = runtime_pers_map.get(h_id, {})
-        slots = tp.get("slot_tags", [])
-        row = {
+        slots: Records = cast(Records, tp.get("slot_tags", []))
+        row: Record = {
             "hexagram_id": h_id,
-            "name": HEXAGRAM_BASE[h_id].get("name"),
+            "name": HEXAGRAM_BASE_TYPED[h_id].get("name"),
             "binary": tp.get("binary", ""),
             "category": tp.get("category", ""),
             "action": tp.get("action", ""),

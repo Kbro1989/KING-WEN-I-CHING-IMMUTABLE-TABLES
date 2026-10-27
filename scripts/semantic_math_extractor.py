@@ -527,13 +527,17 @@ def extract_from_source(source_id: str, source_type: str = "arxiv", paper_label:
 def main():
     parser = argparse.ArgumentParser(description="Extract semantic math from PDFs or arXiv HTML")
     parser.add_argument("--pdf", help="Single PDF file")
-    parser.add_argument("--pdf-dir", help="Directory of PDFs")
+    parser.add_argument("--pdf-dir", help="Directory of PDFs (PDF path not yet ready — use --arxiv)")
     parser.add_argument("--recursive", action="store_true", help="Search subdirectories")
-    parser.add_argument("--arxiv", help="arXiv ID (e.g. 2605.30912) - preferred source for math extraction")
+    parser.add_argument("--arxiv", help="arXiv ID (e.g. 2605.30912) - canonical source for math extraction")
     parser.add_argument("--arxiv-dir", help="Directory of arXiv HTML files or e-print tarballs")
     parser.add_argument("--out", default="DATASETS/semantic_math_zotero_full.json", help="Output JSON path")
     args = parser.parse_args()
 
+    results = []
+    errors = []
+
+    # Default: arXiv HTML MathML + x-tex (canonical source). PDF path requires --pdf.
     if args.pdf:
         result = extract_pdf_math(args.pdf)
         output = {"extractor": "PyMuPDF semantic math extractor", "papers": [result],
@@ -544,30 +548,59 @@ def main():
         print(f"Extracted {result['total_math_expressions']} expressions from {args.pdf}")
         return
 
-    pdf_dir = args.pdf_dir or r'C:\Users\krist\Desktop\zotero\learning-corpus'
-    pdfs = []
-    if args.recursive:
-        for root, dirs, files in os.walk(pdf_dir):
+    # arXiv HTML MathML + x-tex (canonical source). PDF path requires --pdf.
+        raise ValueError("PDF extraction is not yet ready. Use --arxiv <id> for the canonical MathML+x-tex path, "
+                         "or provide specific PDF files with --pdf.")
+
+    if args.arxiv_dir:
+        # arxiv-dir: process local HTML/tarball files
+        items = []
+        for root, dirs, files in os.walk(args.arxiv_dir):
             for f in files:
-                if f.endswith('.pdf'):
-                    pdfs.append(os.path.join(root, f))
+                if f.endswith(('.html', '.tex', '.tar.gz', '.tgz')):
+                    items.append(os.path.join(root, f))
+        results = []
+        for item in items:
+            try:
+                if item.endswith('.html'):
+                    with open(item, 'r', encoding='utf-8') as hf:
+                        html = hf.read()
+                    from arxiv_html_parser import extract_mathml_x_tex
+                    eqs = extract_mathml_x_tex(html, os.path.basename(item))
+                    results.append({"source": "arxiv_html", "paper_label": os.path.basename(item),
+                                    "expressions": eqs, "mathml_parsed": len(eqs)})
+                else:
+                    # Try e-print tarball
+                    import zipfile
+                    from io import BytesIO
+                    with zipfile.ZipFile(item) as zf:
+                        tex_files = [n for n in zf.namelist() if n.endswith('.tex')]
+                        if tex_files:
+                            tex = zf.read(tex_files[0]).decode('utf-8', errors='replace')
+                            from extract_tex_macros import substitute_macros
+                            tex = substitute_macros(tex)
+                            eqs = extract_mathml_x_tex(tex, os.path.basename(item))
+                            results.append({"source": "arxiv_tex", "paper_label": os.path.basename(item),
+                                            "expressions": eqs, "mathml_parsed": len(eqs)})
+                        else:
+                            results.append({"source": "arxiv_tex", "paper_label": os.path.basename(item),
+                                            "error": "no tex", "expressions": [], "mathml_parsed": 0})
+            except Exception as e:
+                results.append({"source": "arxiv_tex", "paper_label": os.path.basename(item),
+                                "error": str(e), "expressions": [], "mathml_parsed": 0})
+
+        output = {"extractor": "arXiv HTML MathML + x-tex (canonical)", "papers": results,
+                  "summary": {"total_papers": len(results), "total_math_expressions": sum(len(r.get('expressions', [])) for r in results)}}
+
+    elif args.arxiv:
+        result = extract_from_arxiv_html(args.arxiv)
+        output = {"extractor": "arXiv HTML MathML + x-tex", "paper_label": result.get("paper_label"),
+                  "source": "arxiv_html", "arxiv_id": args.arxiv, "expressions": result.get("expressions", []),
+                  "mathml_parsed": result.get("mathml_parsed", 0), "solved": result.get("solved", 0),
+                  "summary": {"total_pages": result.get("total_pages", 0)}}
     else:
-        for f in os.listdir(pdf_dir):
-            if f.endswith('.pdf'):
-                pdfs.append(os.path.join(pdf_dir, f))
-
-    print(f"Found {len(pdfs)} PDFs")
-
-    results = []
-    errors = []
-    for i, pdf_path in enumerate(pdfs):
-        try:
-            result = extract_pdf_math(pdf_path)
-            results.append(result)
-            if (i + 1) % 25 == 0:
-                print(f"Processed {i + 1}/{len(pdfs)}... {len(results)} papers")
-        except Exception as e:
-            errors.append((pdf_path, str(e)))
+        raise ValueError("No input source: use --pdf for PDF, --arxiv for arXiv HTML (canonical), "
+                         "--arxiv-dir for local HTML/tarball directory.")
 
     output = {
         "extractor": "PyMuPDF semantic math extractor (block-level)",

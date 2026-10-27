@@ -20,8 +20,8 @@ from kingwen_ternary_tables_complete import (
     HEXAGRAM_BASE,
     PHASE_INFO,
     PHASE_LINE_MAP,
-    POROSITY_LEVELS,
     TOTAL_ENCODINGS,
+    POROSITY_LEVELS,
     YAO_VOCABULARY,
     EMOTIONAL_WEIGHTS,
     HEXAGRAM_INJECTION_SITE,
@@ -124,7 +124,7 @@ def extract_intent(request_text: str) -> Dict[str, Any]:
         if score > 0:
             matched[intent] = score
     
-    dominant = max(matched, key=matched.get) if matched else "understand"
+    dominant = max(matched, key=lambda k: matched[k]) if matched else "understand"
     total = sum(matched.values())
     normalized = {k: v / total for k, v in matched.items()} if total > 0 else {}
     intensity = _clamp(len(text.split()) / 50.0) if text.strip() else 0.0
@@ -140,7 +140,7 @@ def extract_intent(request_text: str) -> Dict[str, Any]:
     }
 
 
-def _intent_to_vector(intent_scores: Dict[str, float], word_set: set = None) -> List[float]:
+def _intent_to_vector(intent_scores: Dict[str, float], word_set: set[str] | None = None) -> List[float]:
     """Map intent distribution and semantic tokens to dynamic 5-axis vector seed."""
     base = [0.1, 0.1, 0.1, 0.8, 0.85]
     
@@ -393,6 +393,18 @@ def _compute_intent_match(hexagram_id: int, category: str, action: str, intent_d
 # =============================================================================
 
 
+HAMILTONIAN_PAIRED_DIFFERENTIALS: Dict[str, Any] = {
+    # Paired-differential audit — per docs/ternary-paired-differential-math-correction-2026-08-02.md (Section 2)
+    "old_yao_count": 0.0,
+    "old_dy": 0.0,
+    "stable_dy": 0.0,
+    "old_yang_count": 0.0,
+    "old_yin_count": 0.0,
+    "stable_yao_count": 0.0,
+    "stable_yin_count": 0.0,
+}
+
+
 def _hamiltonian_energy(
     resolved_vector: List[float],
     expanded_vector: List[float],
@@ -418,15 +430,22 @@ def _hamiltonian_energy(
     changing_count = float(line_balance.get("changing_count", 0) or 0)
     old_yang_count = float(line_balance.get("old_yang_count", 0) or 0)
     old_yin_count = float(line_balance.get("old_yin_count", 0) or 0)
-    old_yao_count = float(line_balance.get("old_yao_count", 0) or 0)
     stable_yao_count = float(line_balance.get("stable_yao_count", 0) or 0)
     stable_yin_count = float(line_balance.get("stable_yin_count", 0) or 0)
+
+    # Temporal paired differentials — no absolute ratios
+    old_yao_count = float(line_balance.get("old_yao_count", 0) or 0)
+    old_dy = old_yang_count - old_yin_count         # old_yang vs old_yin
+    stable_dy = stable_yao_count - stable_yin_count # stable ternary opposition
 
     dy = yang_count - yin_count                      # signed binary differential
     yao_dy = yao_count - 3.0                        # yao vs neutral midpoint (6/2)
     changing_dy = changing_count - (6.0 - changing_count)  # changing vs stable
-    old_dy = old_yang_count - old_yin_count         # old_yang vs old_yin
-    stable_dy = stable_yao_count - stable_yin_count # stable ternary opposition
+
+    # Temporal paired differentials (docs/ternary-paired-differential-math-correction-2026-08-02.md, Section 2)
+    HAMILTONIAN_PAIRED_DIFFERENTIALS["old_yao_count"] = old_yao_count
+    HAMILTONIAN_PAIRED_DIFFERENTIALS["old_dy"] = old_dy
+    HAMILTONIAN_PAIRED_DIFFERENTIALS["stable_dy"] = stable_dy
 
     lagrangian = (
         abs(dy) * 0.5
@@ -492,7 +511,7 @@ def _quantum_avatar_modulation(
 
     # Wavefunction: |psi> = a|canonical> + b|phase> + c|intent>
     # Real/imaginary components for each vector axis
-    wavefunction = {}
+    wavefunction: Dict[str, Dict[str, Any]] = {}
     for i, key in enumerate(VEC_KEYS):
         rv = float(resolved_vector[i]) if i < len(resolved_vector) else 0.0
         ev = float(expanded_vector[i]) if i < len(expanded_vector) else 0.0
@@ -540,7 +559,7 @@ def _quantum_avatar_modulation(
     }
 
     # NPC kit identity for 3D mesh selection
-    kit_identity = {
+    kit_identity: Dict[str, Any] = {
         "hexagram_id": hexagram_id,
         "phase_bits": phase_bits,
         "phase_temporal": phase_temporal,
@@ -659,7 +678,7 @@ def _pool_weights_for_hex(
     # Final clamp
     expanded = [_clamp(v) for v in expanded]
     
-    inject = {
+    inject: Dict[str, Any] = {
         "primary_pool": HEXAGRAM_INJECTION_SITE[int(hexagram_id)]["primary_pool"],
         "secondary_pool": HEXAGRAM_INJECTION_SITE[int(hexagram_id)]["secondary_pool"],
         "porosity": porosity_index,
@@ -849,7 +868,7 @@ def expand_hexagram(
     changing_ratio = changing_count / max(len(base_ternary), 1)
     
     hex_symbols = HEXAGRAM_BASE[hexagram_id]
-    symbols_first = {
+    symbols_first: Dict[str, Any] = {
         "hexagram_id": hexagram_id,
         "name": hex_symbols.get("name"),
         "unicode": hex_symbols.get("unicode"),
@@ -989,7 +1008,7 @@ def capture_pre_slider(request_text: str = "") -> Dict[str, Any]:
     Returns:
         dict with metadata plus full 64-hex expansion and 512 resolved states.
     """
-    from full_hexagram_shotgun import shotgun_expand as _se
+    from scripts.full_hexagram_shotgun import shotgun_expand as _se
     _shotgun_result = _se(request_text=request_text, emotional_input=0)
     resolved = _shotgun_result.get("resolved", [])
     _consensus = _compute_consensus_from_resolved(resolved, 0)
@@ -1432,3 +1451,12 @@ def _run_slider_checklist(resolved: Dict[str, float], phase_bits: int, temporal:
             "value": resolved.get(axis),
         })
     return results
+
+
+# Public aliases for consumers that depend on public-style names.
+# (The underscore-prefixed originals remain as private implementations --
+#  existing consumers importing the underscore names are unaffected.)
+clamp = _clamp
+yao_vocabulary_map = _yao_vocabulary_map
+line_yao_key = _line_yao_key
+hamiltonian_energy = _hamiltonian_energy

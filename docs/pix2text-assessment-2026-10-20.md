@@ -178,7 +178,7 @@ Structure the visual-recognition comparison into three independent layers. Keep 
 
 ## 9. Runtime Verification Results (2026-10-22)
 
-After fixing the path typo (krit \u2192 krist) and the diagnostic script's return-type handling, the following runtime verification was completed:
+After fixing the path typo and the diagnostic script's return-type handling, the following runtime verification was completed:
 
 ### Diagnostic Run Results (Image-Decoding Path)
 
