@@ -95,7 +95,11 @@ def _vortex_tension(hexagram_id: int, emotional_input: int = 50) -> Dict[str, An
     upper = HEXAGRAM_BASE[hexagram_id].get("upper_trigram", "")
     lower = HEXAGRAM_BASE[hexagram_id].get("lower_trigram", "")
     inject = HEXAGRAM_INJECTION_SITE.get(hexagram_id, {})
-    porosity = float(inject.get("porosity", 0.35) or 0.35)
+    raw_porosity = inject.get("porosity")
+    if raw_porosity is None:
+        porosity = 0.35  # documented default for missing key
+    else:
+        porosity = float(raw_porosity)  # preserve explicit 0.0
 
     # Spiral tension: difference in "spin" between trigrams creates rotational energy
     # Simplified: trigram length + character sum difference = angular momentum proxy
@@ -127,7 +131,11 @@ def _temperature_gradient(hexagram_id: int, emotional_input: int = 50) -> Dict[s
     Here: emotional_input modulates temperature; anomaly point is optimal resonance.
     """
     inject = HEXAGRAM_INJECTION_SITE.get(hexagram_id, {})
-    porosity = float(inject.get("porosity", 0.35) or 0.35)
+    raw_porosity = inject.get("porosity")
+    if raw_porosity is None:
+        porosity = 0.35  # documented default for missing key
+    else:
+        porosity = float(raw_porosity)  # preserve explicit 0.0
     weights = EMOTIONAL_WEIGHTS.get(str(hexagram_id), {})
 
     # Base temperature from inject site porosity + emotional_input
@@ -187,7 +195,11 @@ def _biological_vacuum(hexagram_id: int, porosity_norm: float) -> Dict[str, floa
     Here: porosity as suction coefficient; higher porosity = stronger vacuum effect.
     """
     inject = HEXAGRAM_INJECTION_SITE.get(hexagram_id, {})
-    porosity = float(inject.get("porosity", 0.35) or 0.35)
+    raw_porosity = inject.get("porosity")
+    if raw_porosity is None:
+        porosity = 0.35  # documented default for missing key
+    else:
+        porosity = float(raw_porosity)  # preserve explicit 0.0
 
     # Suction coefficient grows non-linearly with porosity
     suction = _clamp(porosity ** 1.5)
@@ -237,7 +249,11 @@ def schauberger_parsing_layers(hexagram_id: int, phase_bits: int = 0, emotional_
             line_states.append({"position": pos, "yao_key": yao_key})
 
     inject = HEXAGRAM_INJECTION_SITE.get(hexagram_id, {})
-    porosity_norm = float(inject.get("porosity", 0.35) or 0.35) / 4.0
+    raw_porosity = inject.get("porosity")
+    if raw_porosity is None:
+        porosity_norm = 0.35 / 4.0  # documented default for missing key, normalized
+    else:
+        porosity_norm = float(raw_porosity) / 4.0  # preserve explicit 0.0, normalized
 
     motion = _motion_type_coefficient(hexagram_id, phase_bits)
     vortex = _vortex_tension(hexagram_id, emotional_input)

@@ -131,7 +131,7 @@ def extract_intent(request_text: str) -> Dict[str, Any]:
     
     return {
         "request_text": request_text,
-        "query_tokens": list(word_set),
+        "query_tokens": sorted(word_set),
         "matched_intents": matched,
         "dominant_intent": dominant,
         "intensity": intensity,
@@ -1007,32 +1007,34 @@ def capture_pre_slider(request_text: str = "") -> Dict[str, Any]:
 
     Returns:
         dict with metadata plus full 64-hex expansion and 512 resolved states.
+        No consensus collapse — per-hexagram values are returned directly.
     """
-    from scripts.full_hexagram_shotgun import shotgun_expand as _se
+    from full_hexagram_shotgun import shotgun_expand as _se
     _shotgun_result = _se(request_text=request_text, emotional_input=0)
-    resolved = _shotgun_result.get("resolved", [])
-    _consensus = _compute_consensus_from_resolved(resolved, 0)
-    result = {"total_expanded": _shotgun_result.get("total_expanded", 0),
-              "total_resolved": _shotgun_result.get("total_resolved", 0),
-              "request_text": request_text,
-              "emotional_input": 0,
-              "capture_point": "pre_slider",
-              "expanded": _shotgun_result.get("expanded", []),
-              "resolved": resolved,
-              "consensus": _consensus,
-              "capture_metadata": {}}
-    result["capture_metadata"] = {
+    expanded_list = _shotgun_result.get("expanded", [])
+    resolved_list = _shotgun_result.get("resolved", [])
+
+    return {
+        "total_expanded": len(expanded_list),
+        "total_resolved": len(resolved_list),
         "request_text": request_text,
         "emotional_input": 0,
         "capture_point": "pre_slider",
-        "total_expanded": len(result.get("expanded", [])),
-        "total_resolved": len(result.get("resolved", [])),
-        "consensus_hexagram_id": result.get("consensus", {}).get("consensus_hexagram_id"),
-        "consensus_temporal": result.get("consensus", {}).get("consensus_temporal"),
-        "yao_primary_trigger": True,
-        "source": "local-python",
+        "expanded": expanded_list,
+        "resolved": resolved_list,
+        "consensus": None,
+        "capture_metadata": {
+            "request_text": request_text,
+            "emotional_input": 0,
+            "capture_point": "pre_slider",
+            "total_expanded": len(expanded_list),
+            "total_resolved": len(resolved_list),
+            "consensus_hexagram_id": None,
+            "consensus_temporal": None,
+            "yao_primary_trigger": True,
+            "source": "local-python",
+        },
     }
-    return result
 
 
 # =============================================================================
@@ -1043,7 +1045,7 @@ def _tau_for_resolved(item: Dict[str, Any], emotional_input: int = 50, hex_varia
     rv = item.get("resolved_vector") or {}
     base = sum(float(rv.get(k, 0.0) or 0.0) for k in VEC_KEYS)
     inject = item.get("inject_site") or {}
-    porosity = float(inject.get("porosity_norm", inject.get("porosity", 0.35) or 0.35))
+    porosity = float(inject.get("porosity_norm", inject.get("porosity", 0.35)))
     h_id = item.get("hexagram_id")
     try:
         hex_weight = float(EMOTIONAL_WEIGHTS[str(int(h_id))].get("voiceWeight", 0.5))
@@ -1105,7 +1107,7 @@ def _compute_consensus_from_resolved(
         temporal_counts[temporal] = temporal_counts.get(temporal, 0) + 1
     consensus_temporal = max(temporal_counts, key=temporal_counts.__getitem__) if temporal_counts else "present"
 
-    porosities = [float(item.get("inject_site", {}).get("porosity", 0.35) or 0.35) for item in resolved]
+    porosities = [float(item.get("inject_site", {}).get("porosity", 0.35)) for item in resolved]
     porosity_mean = sum(porosities) / len(porosities)
     porosity_mode = max(set(porosities), key=porosities.count)
     porosity_norms = [float(item.get("inject_site", {}).get("porosity_norm", porosity_mean / 4.0) or porosity_mean / 4.0) for item in resolved]

@@ -195,7 +195,7 @@ def score_resolved_state(
     h_id = int(resolved_item.get("hexagram_id") or 0)
 
     line_balance = _line_balance_score(lb)
-    porosity_norm = float(inject.get("porosity_norm", inject.get("porosity", 0.35) or 0.35))
+    porosity_norm = float(inject.get("porosity_norm", inject.get("porosity", 0.35)))
     porosity_window = _porosity_window_score(porosity_norm, emotional_input)
     neighbor = _neighbor_continuity_score(resolved_item, registry)
     hamiltonian = _hamiltonian_alignment_score(resolved_item)
@@ -275,7 +275,7 @@ def decision_matrix_consensus(
             "score": score,
             "phase_temporal": hex_temporals[h_id],
             "resolved_vector": {k: float(rv.get(k, 0.0) or 0.0) for k in VEC_KEYS},
-            "porosity_norm": float((item.get("inject_site") or {}).get("porosity_norm", 0.35) or 0.35),
+            "porosity_norm": float((item.get("inject_site") or {}).get("porosity_norm", 0.35)),
         })
 
     if not hex_scores:
@@ -309,7 +309,7 @@ def decision_matrix_consensus(
         )
 
     winner_porosities = [
-        float((item.get("inject_site") or {}).get("porosity", 0.35) or 0.35)
+        float((item.get("inject_site") or {}).get("porosity", 0.35))
         for item in resolved
         if int(item.get("hexagram_id") or 0) == consensus_hexagram_id
     ]

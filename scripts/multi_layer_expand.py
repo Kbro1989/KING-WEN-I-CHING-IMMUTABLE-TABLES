@@ -91,7 +91,7 @@ def _pool_descriptives_for_hex(hexagram_id: int, inject: Dict[str, Any], vector:
     """Layer 4: expand descriptive pool 3x minimum from EMOTIONAL_POOL options."""
     primary = inject.get("primary_pool", "")
     secondary = inject.get("secondary_pool", "")
-    porosity = float(inject.get("porosity_norm", inject.get("porosity", 0.35) or 0.35))
+    porosity = float(inject.get("porosity_norm", inject.get("porosity", 0.35)))
 
     # Seed options from pool names that match inject site pools
     matching = [name for name in EMOTIONAL_POOL if primary in name or secondary in name or name.startswith("voice_") or name.startswith("personality_")]
@@ -231,7 +231,7 @@ def open_pool_consensus(resolved: List[Dict[str, Any]], emotional_input: int) ->
     porosity_norms = []
     for item in resolved:
         temporal_counts[str(item.get("phase_temporal", "") or "")] = temporal_counts.get(str(item.get("phase_temporal", "") or ""), 0) + 1
-        porosities.append(float(item.get("inject_site", {}).get("porosity", 0.35) or 0.35))
+        porosities.append(float(item.get("inject_site", {}).get("porosity", 0.35)))
         porosity_norms.append(float(item.get("inject_site", {}).get("porosity_norm", 0.0875) or 0.0875))
     consensus_temporal = max(temporal_counts, key=temporal_counts.__getitem__) if temporal_counts else "present"
     porosity_mean = sum(porosities) / len(porosities)
@@ -245,7 +245,7 @@ def open_pool_consensus(resolved: List[Dict[str, Any]], emotional_input: int) ->
         h_id = int(item.get("hexagram_id") or 0)
 
         base = sum(float(rv.get(k, 0.0) or 0.0) for k in VEC_KEYS)
-        porosity = float(inject.get("porosity_norm", inject.get("porosity", 0.35) or 0.35))
+        porosity = float(inject.get("porosity_norm", inject.get("porosity", 0.35)))
 
         # Emotional weight from immutable table
         try:

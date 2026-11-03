@@ -50,7 +50,7 @@ from kingwen_ternary_tables_complete import (  # noqa: E402
     EMOTIONAL_WEIGHTS,
     VOICEBOX_VOICE_POOL,
 )
-from kingwen_train_data.kingwen_quantum_process import _hamiltonian_energy  # noqa: E402
+from emotional_engine import _hamiltonian_energy  # noqa: E402
 
 OUT_DIR = ROOT / "kingwen_train_data"
 OUT = OUT_DIR / "full_shotgun_expansion_all.jsonl"

@@ -1,0 +1,48 @@
+{
+  "source_of_truth": "kingwen_ternary_tables_complete.py",
+  "encoding_structure": "9-bit = 6 base ternary digits + 3 phase bits",
+  "bit_order": "bottom_to_top (line_0=bottom/right, line_5=top/left)",
+  "base_encoding": "6 ternary digits (0=yin, 1=yang) per hexagram",
+  "phase_encoding": "3 bits (0-7) indicating which lines are yao",
+  "round_trip": {
+    "formula": "binary_6bit = upper_trigram_binary + lower_trigram_binary",
+    "6bit_round_trip_pass": "64/64",
+    "phase_consistency_pass": "64/64"
+  },
+  "index_mismatch_count": 64,
+  "name_mismatch_count": 23,
+  "root_cause": {
+    "binary_field_orientation": "JSON binary field is distinct from source's binary_top_to_bottom field; generator uses wrong source field for hex 3",
+    "diagnosis": "JSON generator has TWO defects: (1) may use wrong source field for binary encoding, (2) maps upper/lower trigram names incorrectly for hex 3-64",
+    "correct_handling": "For hex 3, source binary_top_to_bottom=100010, source upper_trigram=Zhen(idx4), lower_trigram=Kan(idx2). JSON generator must use these values directly from source, not derive them incorrectly",
+    "classification": "JSON GENERATOR BUG. Source tables are authoritative and correct. No source-of-truth corruption.",
+    "distribution": "23 hexagrams have incorrect names due to JSON generator trigram extraction bug"
+  },
+  "verification_formula": {
+    "top_to_bottom_field": "upper_tri = binary[:3], lower_tri = binary[3:6]",
+    "bottom_to_top_field": "reverse full 6-char string, then upper = reversed[:3], lower = reversed[3:6]",
+    "canonical_source_identity": "binary_top_to_bottom = upper_trigram_binary + lower_trigram_binary for all 64 hexagrams",
+    "source_authoritative": "hexagon_3 binary_top_to_bottom=100010, upper=Zhen(idx4), lower=Kan(idx2)"
+  },
+  "fix_path": {
+    "location": "JSON generator (scripts/build_hexagram_skill_cards.py or equivalent)",
+    "action": "Read source's binary_top_to_bottom, upper_trigram_name, lower_trigram_name directly from kingwen_ternary_tables_complete.py. Do not derive names from incorrect binary parsing.",
+    "target_file": "scripts/build_hexagram_skill_cards.py"
+  },
+  "sample_failure_corrected": [
+    {"hex": 3, "source_binary_top_to_bottom": "100010", "field_is": "binary_top_to_bottom",
+     "upper_tri_correct": "100", "upper_name_correct": "Zhen (idx 4)",
+     "lower_tri_correct": "010", "lower_name_correct": "Kan (idx 2)",
+     "json_has": "binary=010001, upper_tri=010->'Zhen', lower_tri=001->'Kan'"},
+    {"hex": 4, "source_binary_top_to_bottom": "100010", "field_is": "binary_top_to_bottom",
+     "upper_tri_correct": "100", "upper_name_correct": "Zhen (idx 4)",
+     "lower_tri_correct": "010", "lower_name_correct": "Kan (idx 2)",
+     "json_has": "binary=100010, upper_tri=100->'Kan', lower_tri=010->'Gen'"}
+  ],
+  "phase_bits_discrepancy": {
+    "report_says": "3-bit paired-line selector (bitmask)",
+    "status": "PROVISIONAL - requires consumer code verification",
+    "reasoning": "PHASE_LINE_MAP encodes 3 selector bits controlling paired lines (1,4)(2,5)(3,6), allowing only 8 patterns out of 64 possible",
+    "concern": "If consumers treat phase_bits as arbitrary 6-bit mask, 56/58 patterns silently fail"
+  }
+}

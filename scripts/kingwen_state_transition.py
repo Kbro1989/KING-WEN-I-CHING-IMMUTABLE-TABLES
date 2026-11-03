@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import sys
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -54,16 +55,22 @@ def _ensure_loaded() -> None:
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     _HEX_REGISTRY = _load_json(os.path.join(repo_root, "data", "hexagram-registry.json"))
     _EMOTIONAL_WEIGHTS = _load_json(os.path.join(repo_root, "data", "emotional-weights.json"))
-    # inject_site comes from shotgun_expand() expanded[] or
-    # hexagram_full_expansion.json; fall back to empty dict if absent
-    inject_path = os.path.join(repo_root, "shotgun_expand_output.json")
-    if os.path.exists(inject_path):
-        raw = _load_json(inject_path)
-        expanded = raw.get("expanded", [])
+    # Load inject_site from live shotgun_expand() pipeline.
+    # Root-level shotgun_expand_output.json never existed in this repo;
+    # the canonical source is the live shotgun_expand() function.
+    try:
+        scripts_dir = os.path.join(repo_root, "scripts")
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        from full_hexagram_shotgun import shotgun_expand as _se
+        _shotgun_result = _se(request_text="", emotional_input=0)
+        expanded = _shotgun_result.get("expanded", [])
         for entry in expanded:
             hid = str(entry.get("hexagram_id", ""))
             if hid:
                 _INJECT_SITES[hid] = entry.get("inject_site", {})
+    except Exception:
+        pass
     # If still empty, seed from registry action/category
     if not _INJECT_SITES:
         for hid, entry in _HEX_REGISTRY.items():

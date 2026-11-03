@@ -122,8 +122,8 @@ Ingestion outputs and raw source text.
 | File | Purpose |
 |---|---|
 | `jkd_full_text.txt` | Tao of Jeet Kune Do — OCR raw source for batch ingestion |
-| `jkd_ingestion_binary.jsonl` | 470 binary-mode consult records |
-| `jkd_ingestion_ternary.jsonl` | 18 sampled ternary-mode consult records |
+| `jkd_ingestion_binary.jsonl` | 540 binary-mode consult records |
+| `jkd_ingestion_ternary.jsonl` | 21 sampled ternary-mode consult records |
 | `jkd_ingestion_summary.json` | Aggregate counts |
 | `kingwen_consultation_record.json` | Consultation record |
 | `depth_maps_16bit/` | 64 × 16-bit PNG depth displacement maps computed via Depth Anything V2 |
@@ -229,7 +229,7 @@ python scripts/verify_vhdl_resolver_parity.py
 ## Outputs & Artifacts
 
 - `scripts/ternary_full_expansion.json` — 27 trigrams, 729 hexagrams, 5,832 resolved states (2.9 MB)
-- `DATASETS/full_shotgun_expansion_all.jsonl` — Full 64-hexagram × 8-phase × 3-probe training dataset (1,536 lines, 32.2 MB)
+- `kingwen_train_data/full_shotgun_expansion_all.jsonl` — Full 64-hexagram × 8-phase × 3-probe training dataset (1,536 lines, 30 MiB)
 - `DATASETS/quantumlab_plots/` — 64/64 3D Quantum Wave Packet Space-Time surface plots
 - `DATASETS/depth_maps_16bit/` — 64/64 16-bit PNG depth displacement maps computed via Depth Anything V2
 - `DATASETS/depth_pointclouds/` — 64/64 Open3D PLY point clouds (122k–131k vertices each)

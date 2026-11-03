@@ -72,7 +72,10 @@ from emotional_engine import (  # noqa: E402, F401
     yao_vocabulary_map,  # public alias for _yao_vocabulary_map
     line_yao_key,  # alias for private _line_yao_key
 )
-from schauberger_parsing_layers import schauberger_parsing_layers  # noqa: E402
+try:
+    from scripts.schauberger_parsing_layers import schauberger_parsing_layers  # noqa: E402
+except ImportError:
+    from schauberger_parsing_layers import schauberger_parsing_layers  # noqa: E402
 from hexagram_personality import resolve_personality_by_consensus, build_hexagram_personality_map  # noqa: E402
 
 
@@ -633,7 +636,7 @@ def shotgun_expand(request_text: str = "", emotional_input: int | None = None) -
             "schauberger_parsing": schauberger_parsing_layers(
                 h_id,
                 phase_bits=0,
-                emotional_input=0,
+                emotional_input=emotional_input,
                 line_states=base.get("line_states", []),
             ),
             "domain_routing_palette": domain_routing_palette,
@@ -678,9 +681,10 @@ def shotgun_expand(request_text: str = "", emotional_input: int | None = None) -
     energies: List[float] = []
     for item in expanded:
         item = item if isinstance(item, dict) else {}
-        vec = [float(item.get("expanded_vector", {}).get(k, 0.0) or 0.0) for k in VEC_KEYS]
+        resolved_vec = [float(item.get("resolved_vector", {}).get(k, 0.0) or 0.0) for k in VEC_KEYS]
+        expanded_vec = [float(item.get("expanded_vector", {}).get(k, 0.0) or 0.0) for k in VEC_KEYS]
         energies.append(
-            hamiltonian_energy(vec, vec, item.get("line_balance", {}))
+            hamiltonian_energy(resolved_vec, expanded_vec, item.get("line_balance", {}))
         )
 
     # Compute real consensus vector as mean across all 64 expanded hexagram vectors

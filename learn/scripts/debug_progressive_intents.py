@@ -41,7 +41,7 @@ def capture(emotional_input: int) -> dict:
 
     tau_values = [_tau_for_resolved(item, emotional_input=emotional_input) for item in resolved]
     mu = _mode_of_tau(tau_values)
-    porosities = [float(item.get("inject_site", {}).get("porosity_norm", 0.35) or 0.35) for item in resolved]
+    porosities = [float(item.get("inject_site", {}).get("porosity_norm", 0.35)) for item in resolved]
     sigma = max(1e-9, (sum(porosities) / len(porosities)) / 2.0)
     raw_weights_list = [_gaussian_weight(t, mu, sigma) for t in tau_values]
     raw_weight_sum = sum(raw_weights_list)

@@ -21,6 +21,7 @@ import hashlib
 import json
 import math
 import os
+import sys
 from dataclasses import dataclass, field, asdict
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -47,13 +48,21 @@ def _ensure_loaded() -> None:
     repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     _REGISTRY = _load_json(os.path.join(repo_root, "data", "hexagram-registry.json"))
     _EMOTIONAL_WEIGHTS = _load_json(os.path.join(repo_root, "data", "emotional-weights.json"))
-    inject_path = os.path.join(repo_root, "shotgun_expand_output.json")
-    if os.path.exists(inject_path):
-        raw = _load_json(inject_path)
-        for entry in raw.get("expanded", []):
+    # Load inject_site data from live shotgun_expand() pipeline.
+    # Root-level shotgun_expand_output.json never existed in this repo;
+    # the canonical source is the live shotgun_expand() function.
+    try:
+        scripts_dir = os.path.join(repo_root, "scripts")
+        if scripts_dir not in sys.path:
+            sys.path.insert(0, scripts_dir)
+        from full_hexagram_shotgun import shotgun_expand as _se
+        _shotgun_result = _se(request_text="", emotional_input=0)
+        for entry in _shotgun_result.get("expanded", []):
             hid = str(entry.get("hexagram_id", ""))
             if hid:
                 _INJECT_SITES[hid] = entry.get("inject_site", {})
+    except Exception:
+        pass
     if not _INJECT_SITES:
         for hid, entry in _REGISTRY.items():
             _INJECT_SITES[hid] = {
@@ -372,7 +381,7 @@ class HexagramRiemannSphere:
         chaos: float = 0.5,
         whimsy: float = 0.5,
         dark_tone: float = 0.3,
-        porosity: float = 0.5,
+        porosity: Optional[float] = None,
         voice_weight: float = 1.0,
     ) -> HexagramNode:
         """
@@ -380,6 +389,10 @@ class HexagramRiemannSphere:
         Replaces ggwaveBridge.ts::binaryToSphereCoords().
         """
         is_void = hex_number in _VOID_HEXES
+        if porosity is None:
+            porosity = _INJECT_SITES.get(str(hex_number), {}).get('porosity', 0.5)
+            if isinstance(porosity, (int,)):
+                porosity = float(porosity)
         binary = _hex_binary(hex_number)
         if live_bits is None:
             live_bits = _live_bits_from_binary(binary)
@@ -630,11 +643,13 @@ class KingwenMobiusSphere:
         phase: str = "present",
         mask: str = "PASS",
         coherence: float = 0.5,
-        porosity: float = 0.5,
+        porosity: Optional[float] = None,
         voice_weight: float = 1.0,
         live_bits: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Single hexagram node, ready for AvatarPayload."""
+        if porosity is None:
+            porosity = self._resolve_porosity(hexagram_id, mask)
         node = self.sphere.hexagram_to_node(
             hex_number=hexagram_id,
             phase=phase,
@@ -831,16 +846,16 @@ if __name__ == "__main__":
     # Full 512-state sweep: all 64 hexagrams × 8 phases
     # Full 512-state sweep: all 64 hexagrams × 8 phases
     # Full 512-state sweep: all 64 hexagrams × 8 phases
-    n1 = backend.node(hexagram_id=1, phase="present", coherence=0.9, porosity=0.7)  # example node  # example node  # example node
+    n1 = backend.node(hexagram_id=1, phase="present", coherence=0.9)  # uses inject_site porosity
     print(f"Hex 1 node: ({n1['x']:+.3f}, {n1['y']:+.3f}, {n1['z']:+.3f}) "
           f"|Γ|={n1['mobius_gamma'].get('magnitude', 0):.3f} "
           f"hem={n1['hemisphere']} void={n1['void_mask']}")
 
-    n52 = backend.node(hexagram_id=52, phase="future", live_bits=4, coherence=0.8)
+    n52 = backend.node(hexagram_id=52, phase="future", live_bits=4, coherence=0.8)  # uses inject_site porosity
     print(f"Hex 52 node: ({n52['x']:+.3f}, {n52['y']:+.3f}, {n52['z']:+.3f}) "
           f"lat={n52['latitude']:+.1f}° lon={n52['longitude']:+.1f}°")
 
-    n15 = backend.node(hexagram_id=15, phase="present", mask="MEASURE", coherence=0.0, porosity=0.0)
+    n15 = backend.node(hexagram_id=15, phase="present", mask="MEASURE", coherence=0.0)  # void hex always 0.0
     print(f"Hex 15 void: ({n15['x']:+.3f}, {n15['y']:+.3f}, {n15['z']:+.3f}) "
           f"hem={n15['hemisphere']} void={n15['void_mask']}")
 
