@@ -35,16 +35,16 @@ def sha256_file(path):
 
 def crop_pdf_region(pdf_path, page_0based, bbox, output_path):
     """Crop a PDF region and save as PNG. Returns crop metadata."""
-    import fitz
-    doc = fitz.open(pdf_path)
+    import pymupdf
+    doc = pymupdf.open(pdf_path)
     page = doc[page_0based]
     if isinstance(bbox, (list, tuple)):
-        rect = fitz.Rect(bbox[0], bbox[1], bbox[2], bbox[3])
+        rect = pymupdf.Rect(bbox[0], bbox[1], bbox[2], bbox[3])
     else:
-        rect = fitz.Rect(bbox['x0'], bbox['y0'], bbox['x1'], bbox['y1'])
+        rect = pymupdf.Rect(bbox['x0'], bbox['y0'], bbox['x1'], bbox['y1'])
     # Add small padding
     rect = rect + (-2, -2, 2, 2)
-    pix = page.get_pixmap(matrix=fitz.Matrix(3, 3), clip=rect)
+    pix = page.get_pixmap(matrix=pymupdf.Matrix(3, 3), clip=rect)
     pix.save(output_path)
     doc.close()
 

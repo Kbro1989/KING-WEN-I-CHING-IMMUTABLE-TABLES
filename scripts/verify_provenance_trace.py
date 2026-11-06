@@ -98,8 +98,8 @@ def verify_pdf_pages(gold):
     pdf_path = pin['pdf_path']
 
     try:
-        import fitz
-        doc = fitz.open(pdf_path)
+        import pymupdf
+        doc = pymupdf.open(pdf_path)
         total_pages = len(doc)
 
         for gs in gold['gold_set']:

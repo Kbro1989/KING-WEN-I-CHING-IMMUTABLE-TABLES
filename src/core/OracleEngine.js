@@ -1,238 +1,188 @@
-import { createTemporalState, ensureHexagramState, emotionalDelta } from '../types/oracle.js';
+ function _nullishCoalesce(lhs, rhsFn) { if (lhs != null) { return lhs; } else { return rhsFn(); } }
 
-const DEFAULT_LOCAL_URL = 'http://127.0.0.1:8765/expand';
-const REQUEST_TIMEOUT_MS = 60_000;
 
-export class EmotionalParser {
-  parse(query = {}) {
-    const base = {
-      chaos: 0.5,
-      whimsy: 0.5,
-      darkTone: 0.5,
-      coherence: 0.5,
-      voiceWeight: 0.5,
+
+
+
+
+
+
+
+import reflectionsJson from '../../data/temporal-reflections.json' with { type: 'json' };
+
+// =============================================================================
+// OracleEngine — TRANSPARENT RELAY to Python expand server.
+//
+// Laws enforced:
+//   - NO 1-hex collapse. Consensus comes from Python _compute_consensus_from_resolved()
+//     across ALL 512 resolved states (64 hexagrams × 8 phases). Never collapse early.
+//   - NO pseudo-RNG, no Math.random(), no deterministicHexagramSelect roll.
+//     The Python Hamiltonian + Gaussian accumulator selects the consensus hexagram.
+//   - NO template-generated text for sovereign_assertion / boundary_condition /
+//     dissipator_warning / unified_weave. These are Python-computed corpus lookups.
+//   - expanded_state and resolved_state are relayed intact. Never strip.
+// =============================================================================
+
+export class LocalOracleClient {
+  
+
+  constructor(options = {}) {
+    this.url = options.url || 'http://127.0.0.1:8765/expand';
+  }
+
+  async consult(query) {
+    const body = {
+      emotional_input: _nullishCoalesce(query.emotional_input, () => ( 50)),
+      session_id: query.session_id || 'anon',
+      text: query.text || '',
     };
 
-    const normalized = (query.emotional_input ?? 50) / 100;
-    return {
-      ...base,
-      whimsy: normalized,
-      darkTone: 1 - normalized,
-    };
-  }
-}
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000);
 
-export class NarrativeEngine {
-  constructor(reflections = {}, weights = {}) {
-    this.reflections = reflections;
-    this.weights = weights;
+    let response;
+    try {
+      response = await fetch(this.url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+    } catch (error) {
+      throw new Error(`Oracle engine unreachable at ${this.url}: ${error}`);
+    } finally {
+      clearTimeout(timeout);
+    }
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Oracle engine error ${response.status}: ${text}`);
+    }
+
+    const payload = await response.json();
+    return mapExpandResponse(payload, query);
   }
 
-  generateReflections(hexagram, temporal, emotional) {
-    const data = this.reflections[String(hexagram.id)] || {};
-    const past = data.past || `Past echo from ${hexagram.name}`;
-    const present = data.present || `Present voice of ${hexagram.name}`;
-    const future = data.future || `Future signal from ${hexagram.name}`;
-    const dominant = ['past','present','future'][temporal.dominantPhase];
-    const unified_weave = `[${dominant.toUpperCase()} VOICE LEADS]\n\n${present}\n\n[Echoes:]\nFrom what was: ${past.slice(0,120)}...\nFrom what could be: ${future.slice(0,120)}...`;
-    return { past, present, future, unified_weave };
-  }
-
-  weightFor(hexagram) {
-    return this.weights[String(hexagram.id)] || { chaos:0, whimsy:0, darkTone:0, coherence:0, voiceWeight:0 };
-  }
+  loadRegistry() { /* no-op: owned by Python engine */ }
+  loadReflections() { /* no-op: owned by Python engine */ }
 }
 
 export class OracleEngine {
+  
+
   constructor(config = {}) {
-    this.config = {
-      tick_interval_ms: 640,
-      deterministic: true,
-      emotional_smoothing: 0.1,
-      ...config,
-    };
-    this.tick = 0;
-    this.parser = new EmotionalParser();
-    this.narrative = new NarrativeEngine();
-    this.registry = new Map();
-    this.localUrl = config.localUrl || DEFAULT_LOCAL_URL;
+    this.client = new LocalOracleClient({ url: config.localUrl });
   }
 
-  loadRegistry(registryJson) {
-    for (const [id, record] of Object.entries(registryJson)) {
-      this.registry.set(Number(id), ensureHexagramState(id, record));
-    }
-  }
+  loadRegistry() { this.client.loadRegistry(); }
+  loadReflections() { this.client.loadReflections(); }
 
-  loadReflections(reflectionsJson, weightsJson) {
-    this.narrative = new NarrativeEngine(reflectionsJson || {}, weightsJson || {});
-  }
-
-  async consult(query = {}) {
-    if (typeof fetch === 'function') {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-        const response = await fetch(this.localUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            emotional_input: query.emotional_input ?? 50,
-            session_id: query.session_id || 'anon',
-            text: query.text || '',
-          }),
-          signal: controller.signal,
-        });
-        clearTimeout(timeout);
-        if (response?.ok) {
-          const payload = await response.json();
-          if (payload && Array.isArray(payload.resolved)) {
-            return mapExpandResponse(payload, query);
-          }
-        }
-      } catch {
-        // Fall back to the local registry-based path when the runtime server is unavailable.
-      }
-    }
-
-    const emotional = this.parser.parse(query);
-    const temporal = createTemporalState(this.tick++, query.emotional_input ?? 50);
-    const selector = 'sovereign';
-    const id = await this.selectHexagramId(query, selector);
-    const hexagram = this.registry.get(id);
-    if (!hexagram) throw new Error(`Invalid hexagram ID: ${id}`);
-    const reflections = this.narrative.generateReflections(hexagram, temporal, emotional);
-    const target = this.narrative.weightFor(hexagram);
-    const emotionalDeltas = emotionalDelta(emotional, target);
-    const action = hexagram.action || 'WAIT';
-    const category = hexagram.category || 'transformer';
-    return {
-      hexagram_id: hexagram.id,
-      hexagram_name: hexagram.name,
-      hexagram_unicode: hexagram.unicode,
-      temporal_phase: temporal.dominantPhase,
-      temporal_substate: temporal.substate,
-      past_reflection: reflections.past,
-      present_reflection: reflections.present,
-      future_reflection: reflections.future,
-      unified_weave: reflections.unified_weave,
-      sovereign_assertion: `[${action}] ${hexagram.name} — temporal phase ${temporal.dominantPhase}`,
-      boundary_condition: `Boundary: ${category} | Action: ${action} | Phase: ${temporal.substate}`,
-      dissipator_warning: category === 'dissipator' ? `Energy drain risk in phase ${temporal.dominantPhase}` : 'Stable energy profile',
-      action,
-      category,
-      emotional_deltas: emotionalDeltas,
-      state_str: query.state_str,
-    };
-  }
-
-  async selectHexagramId(query, selector) {
-    if (this.config.deterministic) {
-      const previousHex = 1;
-      const hash = await import('../utils/DeterministicHash.js');
-      return await hash.deterministicHexagramSelect(this.tick, query.session_id || 'default', previousHex, selector);
-    }
-    throw new Error('Weighted selection not yet implemented');
+  async consult(query = { text: '', session_id: 'anon' }) {
+    return this.client.consult(query);
   }
 }
 
-function mapExpandResponse(payload, query = {}) {
-  if (!payload || !Array.isArray(payload.resolved)) {
-    throw new Error('Invalid local oracle response: missing resolved[]');
+// =============================================================================
+// mapExpandResponse — transparent relay.
+// Python runs shotgun_expand(): 64 hexagrams × 8 phases = 512 resolved states
+// with Hamiltonian energy, Gaussian accumulator, and open-pool vector blending.
+// This function RELAYS. It does not fabricate, template-concatenate, or collapse.
+// =============================================================================
+
+function mapExpandResponse(rawPayload, query) {
+  if (typeof rawPayload !== 'object' || rawPayload === null) {
+    throw new Error('Oracle: invalid expand response — payload must be an object');
+  }
+  const payload = rawPayload ;
+
+  if (!Array.isArray(payload.resolved)) {
+    throw new Error('Oracle: missing resolved[] — engine must return full 512-state expansion');
+  }
+  if (payload.resolved.length === 0) {
+    throw new Error('Oracle: expand server returned 0 resolved states — engine fault');
+  }
+  if (!payload.consensus || typeof payload.consensus !== 'object') {
+    throw new Error('Oracle: missing consensus block — cannot relay without computed field');
   }
 
-  const resolved = payload.resolved;
-  if (resolved.length === 0) {
-    throw new Error('Local oracle response resolved[] is empty');
+  const consensus = payload.consensus ;
+
+  const hexagram_id = Number(consensus.consensus_hexagram_id);
+  if (!Number.isFinite(hexagram_id) || hexagram_id < 1 || hexagram_id > 64) {
+    throw new Error(`Oracle: consensus_hexagram_id=${hexagram_id} out of range [1,64]`);
   }
 
-  const index = deterministicIndex(query.session_id || 'anon', resolved.length);
-  const entry = resolved[index];
-  const symbols = entry.hexagram_symbols || {};
-  const resolvedVector = entry.resolved_vector || {};
-  const lineStates = Array.isArray(entry.line_states) ? entry.line_states : [];
+  const hexagram_name   = String(_nullishCoalesce(consensus.consensus_hexagram_name, () => ( '')));
+  const temporal_phase  = String(_nullishCoalesce(consensus.consensus_temporal, () => ( 'present')));
+  const consensus_yao   = String(_nullishCoalesce(consensus.consensus_yao, () => ( 'stable_yao')));
+  const consensus_vec   = (_nullishCoalesce(consensus.consensus_vector, () => ( {}))) ;
+  const consensus_intent = String(_nullishCoalesce(consensus.consensus_intent, () => ( '')));
 
-  const hexagram_id = Number(symbols.hexagram_id || entry.hexagram_id || index + 1);
-  if (hexagram_id < 1 || hexagram_id > 64) {
-    throw new Error(`Local oracle returned invalid hexagram_id=${hexagram_id}`);
+  const resolved = payload.resolved ;
+  const representative = _nullishCoalesce(_nullishCoalesce(resolved.find(
+    (e) => Number(e.hexagram_id) === hexagram_id && e.phase_temporal === temporal_phase,
+  ), () => ( resolved.find((e) => Number(e.hexagram_id) === hexagram_id))), () => ( resolved[0]));
+
+  const symbols    = (_nullishCoalesce(representative.hexagram_symbols, () => ( {}))) ;
+  const hexUnicode = String(_nullishCoalesce(symbols.unicode, () => ( '')));
+
+  const rawAction = String(_nullishCoalesce(symbols.action, () => ( 'WAIT'))).toUpperCase();
+  const action = (['ASSERT', 'YIELD', 'ADAPT', 'WAIT'] ).includes(rawAction )
+    ? rawAction 
+    : 'WAIT';
+
+  const rawCat   = String(_nullishCoalesce(symbols.category, () => ( 'transformer'))).toLowerCase();
+  const category = (['sovereign', 'boundary', 'transformer', 'dissipator'] ).includes(rawCat )
+    ? rawCat 
+    : 'transformer';
+
+  // Reflections: corpus lookup by hexagram_id — no fortune-cookie fallbacks.
+  // Uses the statically-imported JSON (import attributes above). The previous
+  // require()/readFileSync path could never work here: package.json sets
+  // "type": "module", so `require` is undefined in the emitted ESM and the
+  // bare `catch {}` swallowed the ReferenceError on every consult.
+  const corpus = reflectionsJson ;
+  const corpusEntry = corpus[String(hexagram_id)];
+
+  if (!corpusEntry || !corpusEntry.past || !corpusEntry.present || !corpusEntry.future) {
+    throw new Error(`Oracle: no corpus entry for hexagram_id=${hexagram_id} in data/temporal-reflections.json`);
   }
 
-  const action = String(symbols.action || 'WAIT').toUpperCase();
-  const resolvedAction = ['ASSERT', 'YIELD', 'ADAPT', 'WAIT'].includes(action) ? action : 'WAIT';
-  const category = String(symbols.category || 'transformer').toLowerCase();
-  const resolvedCategory = ['sovereign', 'boundary', 'transformer', 'dissipator'].includes(category) ? category : 'transformer';
-  const temporal_phase = Number(entry.phase_bits ?? 0);
-  const temporal_substate = String(entry.phase_polarity || 'transition');
-  const reflections = entry.reflections || {};
-  const past_reflection = String(reflections.past || `Past echo from ${symbols.name || 'hexagram #' + hexagram_id}`);
-  const present_reflection = String(reflections.present || `Present voice of ${symbols.name || 'hexagram #' + hexagram_id}`);
-  const future_reflection = String(reflections.future || `Future signal from ${symbols.name || 'hexagram #' + hexagram_id}`);
-  const dominantPhaseLabel = phaseLabel(temporal_phase);
-  const dominantLine = lineStates.find((line) => Number(line.ternary_state) === 2) || lineStates[lineStates.length - 1];
-  const unified_weave = [
-    `[${dominantPhaseLabel.toUpperCase()} VOICE LEADS]`,
-    '',
-    present_reflection,
-    '',
-    '[Echoes:]',
-    `From what was: ${past_reflection.slice(0, 120)}`,
-    `From what could be: ${future_reflection.slice(0, 120)}`,
-    '',
-    `Phase: ${entry.phase_temporal || dominantPhaseLabel}`,
-    `Emotional bleed: ${Number(entry.bleed ?? 0).toFixed(3)}`,
-    'Resolved vector: ' + `chaos=${resolvedVector.chaos ?? 0}, ` + `whimsy=${resolvedVector.whimsy ?? 0}, ` + `darkTone=${resolvedVector.darkTone ?? 0}, ` + `coherence=${resolvedVector.coherence ?? 0}, ` + `voiceWeight=${resolvedVector.voiceWeight ?? 0}`,
-    lineSummary(lineStates, dominantLine),
-  ].filter(Boolean).join('\n');
+  const phaseToCorpus = {
+    past: corpusEntry.past, present: corpusEntry.present, future: corpusEntry.future,
+    transition: corpusEntry.present, resolution: corpusEntry.past,
+    dissolution: corpusEntry.future, crystallization: corpusEntry.present, void: corpusEntry.present,
+  };
+
+  const emotional_deltas = {
+    chaos:       Number(_nullishCoalesce(consensus_vec.chaos, () => ( 0))),
+    whimsy:      Number(_nullishCoalesce(consensus_vec.whimsy, () => ( 0))),
+    darkTone:    Number(_nullishCoalesce(consensus_vec.darkTone, () => ( 0))),
+    coherence:   Number(_nullishCoalesce(consensus_vec.coherence, () => ( 0))),
+    voiceWeight: Number(_nullishCoalesce(consensus_vec.voiceWeight, () => ( 0))),
+  };
 
   return {
     hexagram_id,
-    hexagram_name: String(symbols.name || ''),
-    hexagram_unicode: String(symbols.unicode || ''),
-    temporal_phase,
-    temporal_substate,
-    past_reflection,
-    present_reflection,
-    future_reflection,
-    unified_weave,
-    sovereign_assertion: `[${resolvedAction}] ${symbols.name || 'Hexagram #' + hexagram_id} — ${dominantPhaseLabel} phase`,
-    boundary_condition: `Boundary: ${resolvedCategory} | Action: ${resolvedAction} | Phase: ${entry.phase_description || dominantPhaseLabel}`,
-    dissipator_warning: resolvedCategory === 'dissipator' ? `Energy drain risk in ${dominantPhaseLabel} phase` : 'Stable energy profile',
-    action: resolvedAction,
-    category: resolvedCategory,
-    emotional_deltas: {
-      chaos: Number(resolvedVector.chaos ?? 0),
-      whimsy: Number(resolvedVector.whimsy ?? 0),
-      darkTone: Number(resolvedVector.darkTone ?? 0),
-      coherence: Number(resolvedVector.coherence ?? 0),
-      voiceWeight: Number(resolvedVector.voiceWeight ?? 0),
-    },
+    hexagram_name,
+    hexagram_unicode: hexUnicode,
+    temporal_phase: _nullishCoalesce(({ past: 0, present: 1, future: 2 } )[temporal_phase] , () => ( 1)),
+    temporal_substate: (consensus_yao.includes('old') ? 'old' : consensus_yao.includes('young') ? 'young' : 'transition') ,
+    past_reflection:    corpusEntry.past,
+    present_reflection: corpusEntry.present,
+    future_reflection:  corpusEntry.future,
+    unified_weave: _nullishCoalesce(phaseToCorpus[temporal_phase], () => ( corpusEntry.present)),
+    sovereign_assertion: String(_nullishCoalesce(representative.sovereign_assertion, () => ( consensus_intent))),
+    boundary_condition:  String(_nullishCoalesce(representative.boundary_condition, () => ( ''))),
+    dissipator_warning:  String(_nullishCoalesce(representative.dissipator_warning, () => ( ''))),
+    action,
+    category,
+    emotional_deltas,
     state_str: query.state_str,
-    expanded_state: Array.isArray(payload.expanded) ? payload.expanded : [],
-    resolved_state: Array.isArray(payload.resolved) ? payload.resolved : [],
-    runtime_consensus: payload.consensus ?? {},
-    runtime_source: payload.source ?? 'local-python',
+    // Full expansion relay — intact, never stripped.
+    expanded_state:    Array.isArray(payload.expanded) ? payload.expanded : [],
+    resolved_state:    payload.resolved,
+    runtime_consensus: consensus,
+    runtime_source:    String(_nullishCoalesce(payload.source, () => ( 'local-python'))),
   };
-}
-
-function phaseLabel(phase) {
-  return ['past', 'present', 'future'][phase] || 'present';
-}
-
-function lineSummary(lineStates, dominantLine) {
-  if (!lineStates.length) return '';
-  return 'Lines:\n' + lineStates.map((line) => {
-    const pos = Number(line.position);
-    const yao = line.yao_label || line.yao_key || `ternary=${line.ternary_state}`;
-    const mark = dominantLine && line.position === dominantLine.position ? ' ◀' : '';
-    return `L${pos}: ${yao}${mark}`;
-  }).join('\n');
-}
-
-function deterministicIndex(input, maxExclusive) {
-  let hash = 0;
-  for (let i = 0; i < input.length; i++) {
-    const code = input.charCodeAt(i);
-    hash = ((hash << 5) - hash + code) | 0;
-  }
-  return ((hash % maxExclusive) + maxExclusive) % maxExclusive;
 }
