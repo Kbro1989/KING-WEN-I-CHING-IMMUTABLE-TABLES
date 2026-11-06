@@ -1,0 +1,75 @@
+{
+  "schema": "layer_ab_frozen_boundary_manifest_v1",
+  "frozen_at": "2026-11-05T18:57:00-06:00",
+  "milestone": "layer_ab_representation_recovery_frozen_boundary",
+  "frozen_components": {
+    "font_aware_classifier": {
+      "path": "scripts/font_aware_math_classifier.py",
+      "sha256": "514c24fb714bd58db78f1cf54f9601c32cc02019e68eae514efab623d510a137",
+      "version": "1.0_font_aware"
+    },
+    "hierarchical_proposals_generator": {
+      "path": "scripts/hierarchical_region_proposals.py",
+      "sha256": "fb05434991c0667e06eb86b5106c614dec04d0abeb9482490994aa92b75f9f49",
+      "version": "2.0_hierarchical"
+    },
+    "three_fidelity_evaluator": {
+      "path": "scripts/evaluate_three_fidelity_dimensions.py",
+      "sha256": "8abee50bb27cfc6b13debff65c305575409b2fc7b2c4033f93126a7be2315ffe",
+      "version": "1.0_three_dimension"
+    }
+  },
+  "population_governance": {
+    "1505.05770_development_population": {
+      "manifest_path": "DATASETS/structural_preservation/1505.05770_positive_control_manifest.json",
+      "manifest_sha256": "69d0e6225055618b8833e0a93d4ef879199f29e570a025b0257f4b6d11c9efb6",
+      "evaluation_artifact": "DATASETS/structural_preservation/1505.05770_three_fidelity_evaluation.json",
+      "evaluation_sha256": "09a0ee96e0825ae5a08fb42cc6b662a0d607e02a569aa4ac97ae28674101b1a7",
+      "classification": "DEVELOPMENT_AND_CALIBRATION_POPULATION",
+      "gold_informed_status": "EXPLORATORY_GOLD_INFORMED",
+      "remaining_qualifications": {
+        "GS-003": "0.6956 IoU, 7/7 structural checks, but 31.1% math glyph ratio due to adjacent prose clause 'where the mean function...'",
+        "GS-004": "0.5170 IoU, 5/6 structural checks; integral operator CMEX10 'Z' resides on adjacent line 87 immediately above line 88",
+        "generalization": "Five equations on one paper cannot establish independent generalization across the literature."
+      }
+    },
+    "2009.00031_negative_control_population": {
+      "manifest_path": "DATASETS/structural_preservation/2009.00031_p005_region_assessments.json",
+      "classification": "FROZEN_NEGATIVE_CONTROL",
+      "total_regions": 15,
+      "ineligible_count": 15,
+      "rejection_rate": 1.0,
+      "invariant_status": "UPHELD"
+    }
+  },
+  "prior_tools_assessment": {
+    "summary": "Assessment of repository tools for mathematical extraction, region detection, and spatial preservation before and after the representation recovery milestone.",
+    "tools_evaluated": [
+      {
+        "tool": "targeted_depth_ocr.py",
+        "methods_used": "OpenCV morphological dilation (3x3 kernel) + connectedComponentsWithStats; fixed aspect ratio thresholds (h >= 60 px, w >= 10 px for tall symbols; w >= 10*lh for wide regions)",
+        "failure_mode": "Produced 0 candidates on typeset text-layer math equations (GS-001..005) because glyphs lack extreme aspect ratios; produced 15 false-positive candidates on astrophysics plot panels (2009.00031 p5) leading to OCR hallucinations",
+        "verdict": "Obsolete for text-layer math; retained strictly as negative-control test fixture generator"
+      },
+      {
+        "tool": "math_pdf_parser.py",
+        "methods_used": "PyMuPDF page.get_text('blocks') and get_text('words') + K-Means color quantization + Tesseract OCR",
+        "failure_mode": "get_text('words') discards font names, font sizes, and character origins; get_text('blocks') clumps prose and equations together; Tesseract destroys subscript/superscript relationships",
+        "verdict": "Lossy at Level 1; replaced by rawdict character extraction"
+      },
+      {
+        "tool": "span_region_proposals.py (v1-v3)",
+        "methods_used": "Flat union-find clustering over baseline and multiline gaps + single-level prose rejection (span_count > 25)",
+        "failure_mode": "Multiline gap tolerance bridged equations (1), (2), and (3) into a single 47-span mega-cluster, which was then rejected en bloc by the prose filter, causing 0.0 coverage on GS-005",
+        "verdict": "Superceded by 5-level hierarchical clustering (scripts/hierarchical_region_proposals.py v2.0)"
+      },
+      {
+        "tool": "targeted_math_detector.py (v1.1)",
+        "methods_used": "Unicode-only character regex (GREEK, MATH, MATH_PUNCT) on rawdict spans",
+        "failure_mode": "Font-blind: discarded TeX CMEX10 'Z' (integral operator), MSBM10 'E' (blackboard bold expectation), and CMMI variables because ASCII letters were not in Unicode math tables",
+        "verdict": "Font-aware classification integrated into scripts/font_aware_math_classifier.py"
+      }
+    ]
+  }
+}
+

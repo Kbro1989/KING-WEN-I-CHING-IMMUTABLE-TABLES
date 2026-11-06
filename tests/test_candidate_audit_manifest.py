@@ -272,9 +272,15 @@ def test_adversarial_truncated_bound_detected():
         from evaluate_output_reference import detect_truncation  # type: ignore[import-not-found]
 
     try:
-        import fitz  # type: ignore[import-not-found]
+        import pymupdf
+        fitz = pymupdf
     except ImportError:
-        fitz = None  # type: ignore[assignment]
+        try:
+            import fitz  # type: ignore[import-not-found]
+            pymupdf = fitz
+        except ImportError:
+            fitz = None  # type: ignore[assignment]
+            pymupdf = None  # type: ignore[assignment]
 
     orig_bbox = {'x0': 360.382, 'y0': 369.665, 'x1': 389.194, 'y1': 383.371}
 
@@ -285,9 +291,9 @@ def test_adversarial_truncated_bound_detected():
             from experiments_multi_paper_generalization import PDF_MAP  # type: ignore[import-not-found]
         pdf_path = PDF_MAP.get('2605.27315')
         if pdf_path and pdf_path.exists():
-            doc = fitz.open(str(pdf_path))
+            doc = pymupdf.open(str(pdf_path))
             page = doc[12]  # page 13 is index 12
-            clip_text = page.get_text('text', clip=fitz.Rect(orig_bbox['x0'], orig_bbox['y0'], orig_bbox['x1'], orig_bbox['y1'])).strip()
+            clip_text = page.get_text('text', clip=pymupdf.Rect(orig_bbox['x0'], orig_bbox['y0'], orig_bbox['x1'], orig_bbox['y1'])).strip()
             doc.close()
             assert clip_text.endswith('k='), f"Expected truncated 'k=', got {clip_text!r}"
             assert '1' not in clip_text.split('k=')[-1], "Digit '1' should be cut off by bounding box"
@@ -402,9 +408,15 @@ def test_corrected_crop_provenance_and_validation():
     3. Corrected crop maintains provenance link to candidate_id, paper_id, and page.
     """
     try:
-        import fitz  # type: ignore[import-not-found]
+        import pymupdf
+        fitz = pymupdf
     except ImportError:
-        fitz = None  # type: ignore[assignment]
+        try:
+            import fitz  # type: ignore[import-not-found]
+            pymupdf = fitz
+        except ImportError:
+            fitz = None  # type: ignore[assignment]
+            pymupdf = None  # type: ignore[assignment]
 
     original_fixture = {
         'candidate_id': '2605_27315_cand0_parameter_set',
@@ -437,17 +449,17 @@ def test_corrected_crop_provenance_and_validation():
             from experiments_multi_paper_generalization import PDF_MAP  # type: ignore[import-not-found]
         pdf_path = PDF_MAP.get('2605.27315')
         if pdf_path and pdf_path.exists():
-            doc = fitz.open(str(pdf_path))
+            doc = pymupdf.open(str(pdf_path))
             page = doc[12]
 
             # Original: truncated
-            orig_rect = fitz.Rect(original_fixture['bbox']['x0'], original_fixture['bbox']['y0'],
+            orig_rect = pymupdf.Rect(original_fixture['bbox']['x0'], original_fixture['bbox']['y0'],
                                   original_fixture['bbox']['x1'], original_fixture['bbox']['y1'])
             orig_text = page.get_text('text', clip=orig_rect).strip().replace('\n', '')
             assert orig_text == '{ρk}Kk=', f"Original fixture should be truncated, got: {orig_text!r}"
 
             # Corrected: complete expression including digit 1
-            corr_rect = fitz.Rect(corrected_fixture['bbox']['x0'], corrected_fixture['bbox']['y0'],
+            corr_rect = pymupdf.Rect(corrected_fixture['bbox']['x0'], corrected_fixture['bbox']['y0'],
                                   corrected_fixture['bbox']['x1'], corrected_fixture['bbox']['y1'])
             corr_text = page.get_text('text', clip=corr_rect).strip().replace('\n', '')
             assert corr_text == '{ρk}Kk=1', f"Corrected fixture should have '1', got: {corr_text!r}"

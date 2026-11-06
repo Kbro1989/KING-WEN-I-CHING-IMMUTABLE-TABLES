@@ -30,7 +30,7 @@ if sys.platform == 'win32':
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / 'scripts'))
 
-import fitz
+import pymupdf as fitz
 import cv2
 import numpy as np
 from pix2text import Pix2Text

@@ -286,17 +286,35 @@ def hash_bytes(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def source_hash(mathml: str) -> str:
+def source_hash(mathml: str | None) -> str:
     """
     Hash of the complete serialized <math> element from source HTML.
 
-    Input is the MathML string as extracted from the HTML document.
-    The string is encoded as UTF-8 before hashing.
+    Input is the MathML string as extracted from the HTML document, or None
+    if MathML was unavailable in the source.
+
+    Representation contract (MPRD-001):
+      - None  → MathML was unavailable (type-tagged sentinel hash)
+      - ""   → MathML was present but empty (type-tagged sentinel hash)
+      - nonempty str → MathML was present (hash of UTF-8 encoded content)
+
+    These three states produce distinct hashes. None and "" are NOT
+    interchangeable — collapsing them would merge occurrences with genuinely
+    absent MathML into occurrences with empty MathML.
 
     IMPORTANT: this hashes the DOM-serialized element, not necessarily the
     original byte sequence from the HTML file. A DOM parser may normalize
     whitespace and attribute ordering. This is documented behavior.
+
+    Note: source_hash is a content-change-detection hash, NOT the occurrence
+    identity. Occurrence identity is derived from paper_id + paper_version +
+    source_locator + occurrence_index via occurrence_key(). MathML content
+    must not silently determine occurrence identity.
     """
+    if mathml is None:
+        return hash_bytes(b"\\x00MATHML_UNAVAILABLE")
+    if mathml == "":
+        return hash_bytes(b"\\x00MATHML_EMPTY")
     return hash_bytes(mathml.encode("utf-8"))
 
 

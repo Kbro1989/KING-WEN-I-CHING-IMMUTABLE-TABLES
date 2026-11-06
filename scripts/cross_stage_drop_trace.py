@@ -78,8 +78,8 @@ def build_source_equations(data: dict, paper_id: str, pins: dict[str, str]) -> l
         occ = SourceOccurrence(
             paper_id=paper_id, paper_version=version,
             source_locator=f"math[{i}]", occurrence_index=i,
-            source_hash=source_hash(eq.get("mathml", "")),
-            latex=eq.get("latex", ""), mathml=eq.get("mathml", ""),
+            source_hash=source_hash(eq.get("mathml")),
+            latex=eq.get("latex", ""), mathml=eq.get("mathml"),
         )
         equations.append({
             "occ": occ, "eq": eq,
