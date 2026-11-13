@@ -75,11 +75,11 @@ def load_source(pins: dict[str, str]) -> tuple[Counter, dict[str, int], dict[str
         paper_id = data.get("arxiv_id", jf.stem)
         version = pins.get(paper_id, "unpinned")
         for i, eq in enumerate(data.get("equations", [])):
-            mathml = eq.get("mathml") or ""
+            mathml = eq.get("mathml")
             occ = SourceOccurrence(
                 paper_id=paper_id, paper_version=version,
                 source_locator=f"math[{i}]", occurrence_index=i,
-                source_hash=source_hash(mathml) if mathml else "",
+                source_hash=source_hash(mathml),
                 latex=eq.get("latex"), mathml=mathml or None,
             )
             k = occurrence_key(occ)

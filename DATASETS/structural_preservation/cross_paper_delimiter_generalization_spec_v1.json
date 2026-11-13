@@ -1,0 +1,163 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "spec_identifier": "CROSS-PAPER-DELIMITER-GENERALIZATION-SPEC-V1",
+  "schema_version": "1.0",
+  "title": "Cross-Paper Delimiter Generalization Benchmark Specification v1",
+  "created_at": "2026-11-05T23:30:00Z",
+  "immutable_engine_baseline": {
+    "engine_script": "scripts/delimiter_aware_structural_recovery.py",
+    "engine_sha256": "8211592af549c29233b4c19f49b95694ecfcd9df1ab43c276ebdb1d3e2c142a1",
+    "engine_sha_prefix": "8211592af549c292",
+    "policy": "IMMUTABLE_DURING_BASELINE_EVALUATION"
+  },
+  "benchmark_architecture": {
+    "target_independent_papers_count_min": 3,
+    "font_diversity_requirement": "Must test fonts beyond CMEX10 (e.g. TeX Gyre, STIX, Nimbus, Times-Math, Type 1/TrueType math fonts)",
+    "precondition": "Acceptance contract and schema validation must be frozen before paper selection and candidate ingestion",
+    "structural_layout_convention_note": "A sparse or truncated matrix with continuation markers possesses a structural layout dimension (e.g., 7x6 layout with 40 recovered tokens), not an assumed conventional grid of 42 populated cells. Downstream evaluators must strictly distinguish structural layout geometry from populated numeric cell count."
+  },
+  "acceptance_dimensions": {
+    "evaluation_policy": "CONJUNCTIVE_STRICT_FIVE_AXIS",
+    "rule": "A test case passes if and only if all 5 mandatory dimensions achieve PASS. Missing evidence strictly evaluates to NOT_VERIFIED, never an inferred PASS. No composite score overrides a dimension failure.",
+    "dimensions": {
+      "dim_1_geometric_localization": {
+        "name": "Geometric Localization",
+        "description": "Bounding box encompasses complete mathematical enclosure with certified gutter clearance.",
+        "failure_verdict": "FAIL_GEOMETRIC_LOCALIZATION"
+      },
+      "dim_2_glyph_completeness": {
+        "name": "Glyph Completeness",
+        "description": "Every constituent glyph (including top, extension, bottom delimiter pieces and interior components) is accounted for.",
+        "failure_verdict": "FAIL_GLYPH_COMPLETENESS"
+      },
+      "dim_3_structural_recovery": {
+        "name": "Structural Recovery Completeness",
+        "description": "Row/column topology, parent-child delimiter hierarchies, and alignment conventions are preserved without collapse.",
+        "failure_verdict": "FAIL_STRUCTURAL_RECOVERY"
+      },
+      "dim_4_semantic_fidelity": {
+        "name": "Mathematical Semantic Fidelity",
+        "description": "Zero cell value residual, exact negative sign preservation, and accurate operator/continuation semantics.",
+        "failure_verdict": "FAIL_SEMANTIC_FIDELITY"
+      },
+      "dim_5_boundary_isolation": {
+        "name": "Boundary Isolation",
+        "description": "Zero absorbed external tokens; prose, equation labels, and adjacent expressions remain strictly outside.",
+        "failure_verdict": "FAIL_BOUNDARY_ISOLATION"
+      }
+    }
+  },
+  "test_families": [
+    {
+      "family_id": "FAM_001_DELIMITER_IDENTITY",
+      "name": "Delimiter Identity & Environment Mapping",
+      "required_evidence": "Verification of bmatrix ([...]), Bmatrix ({...}), pmatrix ((...)), and vmatrix (|...|) environments.",
+      "primary_failure_mode": "Wrong enclosure type or inline punctuation flattening.",
+      "mandatory_guards": [
+        "Rejection of inline flattening (e.g., converting tall delimiters to single-line '(' or ')')",
+        "Accurate classification of delimiter family, kind, and orientation from font lineage."
+      ]
+    },
+    {
+      "family_id": "FAM_002_NESTED_STRUCTURES",
+      "name": "Nested Delimiter Hierarchy",
+      "required_evidence": "Parent-child delimiter hierarchy preservation (e.g. matrix inside parenthesis, bracket inside norm, determinant inside matrix).",
+      "primary_failure_mode": "Flattened nesting or boundary collision.",
+      "mandatory_guards": [
+        "Inner delimiter pairing must resolve prior to or distinct from outer delimiter enclosing band",
+        "Outer enclosure bounding box must strictly encompass inner enclosures without cross-pairing."
+      ]
+    },
+    {
+      "family_id": "FAM_003_ADJACENT_MATRICES",
+      "name": "Adjacent Matrix Association",
+      "required_evidence": "Horizontally or vertically adjacent mathematical enclosures associate to distinct independent candidate pairs.",
+      "primary_failure_mode": "Cross-pairing across intervening delimiters.",
+      "mandatory_guards": [
+        "Intervening delimiter guard must reject pairing when another delimiter candidate lies along the ray",
+        "Each matrix candidate must emit an independent structural region proposal."
+      ]
+    },
+    {
+      "family_id": "FAM_004_EMBEDDED_MATHEMATICS",
+      "name": "Embedded Fractions & Multiline Cells",
+      "required_evidence": "Internal matrix cells containing fractions, superscripts, subscripts, or multiline expressions maintain vertical separation.",
+      "primary_failure_mode": "Internal cell structure collapse or row boundary corruption.",
+      "mandatory_guards": [
+        "Fraction numerator and denominator must not split into artificial extra matrix rows",
+        "Dynamic vertical clustering threshold adapted to cell interior height."
+      ]
+    },
+    {
+      "family_id": "FAM_005_EXTENSIBLE_GLYPHS",
+      "name": "Multi-Piece Extensible Delimiter Assembly",
+      "required_evidence": "Delimiters constructed from multiple glyph pieces (top, extension, bottom, center bracket hinge) assembled into unified delimiter objects.",
+      "primary_failure_mode": "Missing extension pieces or partial height detection.",
+      "mandatory_guards": [
+        "Continuous vertical bounding box spanning from top piece to bottom piece",
+        "Relative glyph extent invariant H_crop >= H_glyph satisfied without hardcoded thresholds."
+      ]
+    },
+    {
+      "family_id": "FAM_006_CONTINUATION_SYMBOLS",
+      "name": "Continuation Symbol Semantics & Topology",
+      "required_evidence": "Accurate extraction, positional attribution, and semantic typing for horizontal (\\cdots), vertical (\\vdots), and diagonal (\\ddots) ellipses.",
+      "primary_failure_mode": "Semantic substitution, dropped dots, or conflation with ordinary period punctuation.",
+      "mandatory_guards": [
+        "Ellipsis tokens mapped to topological grid coordinates rather than lost in text tokenization",
+        "Distinction between series truncation (row-level) and matrix row truncation (column-level)."
+      ]
+    },
+    {
+      "family_id": "FAM_007_PROSE_ADJACENCY",
+      "name": "Prose & Inline Equation Boundary Isolation",
+      "required_evidence": "Tight vertical whitespace gutter verification against immediately adjacent prose and following display/inline equations.",
+      "primary_failure_mode": "Text contamination or equation absorption.",
+      "mandatory_guards": [
+        "Gutter clamping algorithm crop_y1 < y_max_bound verified with zero token leakage",
+        "Perturbation stability testing up to coordinate tolerance margin."
+      ]
+    }
+  ],
+  "case_record_schema": {
+    "required_case_fields": [
+      "case_id",
+      "test_family_id",
+      "source_document",
+      "gold_reference",
+      "experimental_controls",
+      "five_dimension_results",
+      "negative_control_results",
+      "certification_status"
+    ],
+    "source_document_fields": [
+      "paper_id",
+      "pdf_rel_path",
+      "pdf_sha256",
+      "page_1based",
+      "math_font_family"
+    ],
+    "experimental_controls_fields": [
+      "gold_annotation_sha256",
+      "engine_sha256",
+      "candidate_hash",
+      "reconstruction_hash",
+      "exact_test_command",
+      "test_exit_code"
+    ],
+    "certification_status_enum": [
+      "PASSED_CERTIFIED",
+      "FAILED",
+      "NOT_VERIFIED"
+    ]
+  },
+  "negative_control_requirements": {
+    "required_negative_cases": [
+      "NEG_MISMATCHED_DELIMITER_TYPES",
+      "NEG_MISSING_CLOSING_PARTNER",
+      "NEG_INTERVENING_DELIMITER_COLLISION",
+      "NEG_TALL_NON_MATH_GRAPHIC"
+    ]
+  }
+}
+

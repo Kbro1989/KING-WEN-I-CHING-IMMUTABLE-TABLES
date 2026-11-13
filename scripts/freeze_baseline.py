@@ -141,7 +141,7 @@ def build_manifest() -> tuple[dict[str, Any], list[dict[str, Any]]]:
                 paper_version=paper_version,
                 source_locator=locator,
                 occurrence_index=i,
-                source_hash=source_hash(mathml) if mathml else "",
+                source_hash=source_hash(mathml),
                 latex=latex,
                 mathml=mathml,
             )

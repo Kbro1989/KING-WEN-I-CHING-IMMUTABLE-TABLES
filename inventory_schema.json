@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "King Wen Repository Inventory Schema",
+  "description": "Schema for machine-readable repository inventory, lineage, and artifacts",
+  "type": "object",
+  "required": ["manifest_version", "generated_at", "repo_root", "artifacts"],
+  "properties": {
+    "manifest_version": {
+      "type": "string",
+      "pattern": "^v\\d+\\.\\d+(\\.\\d+)?$"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "repo_root": {
+      "type": "string",
+      "format": "uri"
+    },
+    "inventories": {
+      "type": "array",
+      "description": "List of inventory snapshots; use for incremental diffs",
+      "items": {
+        "type": "object",
+        "properties": {
+          "snapshot_id": {"type": "string", "description": "Date-stamped baseline ID, e.g. '2026-11-10'"},
+          "snapshot_time": {"type": "string", "format": "date-time"},
+          "file_count": {"type": "integer", "minimum": 0},
+          "authority_counts": {"type": "object", "additionalProperties": {"type": "integer"}},
+          "sha256": {"type": "string", "description": "For reproducible validation, hash the snapshot file"}
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "description": "Artifact records (DATASETS/manifest.json only; file_inventory.jsonl is separate JSONL format)",
+      "items": {
+        "$ref": "#/$defs/artifact"
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["total_artifacts", "categories", "counting_rules"],
+      "properties": {
+        "total_artifacts": {"type": "integer", "minimum": 0},
+        "categories": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "counting_rules": {
+          "type": "object",
+          "required": ["counting_semantics", "unique_id_rules", "wildcard_resolution", "corrupting_counts"],
+          "properties": {
+            "counting_semantics": {
+              "type": "string",
+              "enum": ["unique_files_only", "glob_expanded_files", "concept_groups"]
+            },
+            "unique_id_rules": {"type": "string"},
+            "wildcard_resolution": {"type": "string"},
+            "corrupting_counts": {
+              "type": "object",
+              "required": ["TOTAL_EXPANDED", "TOTAL_UNIQUE", "glob_expanded_file_count", "one_per_file_count"],
+              "properties": {
+                "TOTAL_EXPANDED": {"type": "integer"},
+                "TOTAL_UNIQUE": {"type": "integer"},
+                "glob_expanded_file_count": {"type": "integer"},
+                "one_per_file_count": {"type": "integer"}
+              }
+            }
+          }
+        },
+        "glob_expanded_file_count": {"type": "integer"},
+        "one_per_file_count": {"type": "integer"}
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "required": [
+        "dataset_id", "relative_path", "category", "purpose", "producer",
+        "schema", "frozen", "regeneration_policy"
+      ],
+      "properties": {
+        "dataset_id": {"type": "string"},
+        "relative_path": {"type": "string"},
+        "category": {"type": "string"},
+        "purpose": {"type": "string"},
+        "producer": {"type": "string"},
+        "consumers": {"type": "array", "items": {"type": "string"}},
+        "schema": {"type": "string"},
+        "version": {"type": "string"},
+        "frozen": {"type": "boolean"},
+        "regeneration_policy": {"type": "string"},
+        "sha256": {"type": ["string", "null"]},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "created_at": {"type": ["string", "null"], "format": "date-time"},
+        "updated_at": {"type": ["string", "null"], "format": "date-time"},
+        "provenance": {
+          "type": "object",
+          "required": ["classification_rule", "evidence_source", "classification_timestamp", "manual_asserted"],
+          "properties": {
+            "classification_rule": {"type": "string"},
+            "evidence_source": {"type": "string"},
+            "classification_timestamp": {"type": "string", "format": "date-time"},
+            "freeze_reference": {"type": ["string", "null"]},
+            "manual_asserted": {"type": "boolean"}
+          }
+        }
+      }
+    },
+    "inventory_record": {
+      "type": "object",
+      "required": ["path", "size_bytes", "modified", "extension", "directory", "authority"],
+      "properties": {
+        "path": {"type": "string"},
+        "size_bytes": {"type": "integer", "minimum": 0},
+        "modified": {"type": "string", "format": "date-time"},
+        "extension": {"type": "string"},
+        "directory": {"type": "string"},
+        "git_status": {"type": "string"},
+        "sha256": {"type": ["string", "null"]},
+        "authority": {"type": "string", "enum": ["ACTIVE", "FROZEN", "DEPRECATED", "HISTORICAL", "UNVERIFIED"]},
+        "scan_timestamp": {"type": "string", "format": "date-time"},
+        "classification_rule": {"type": "string"},
+        "evidence_source": {"type": "string"},
+        "classification_timestamp": {"type": "string", "format": "date-time"},
+        "freeze_reference": {"type": ["string", "null"]},
+        "manual_asserted": {"type": "boolean"}
+      }
+    }
+  }
+}

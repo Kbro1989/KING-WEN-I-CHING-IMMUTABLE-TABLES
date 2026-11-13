@@ -21,7 +21,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger('one_candidate_diagnostic')
 
-import fitz  # PyMuPDF 1.28.2
+import pymupdf
 import cv2  # OpenCV 5.0.0
 import numpy as np
 from PIL import Image as PILImage
@@ -110,12 +110,12 @@ class OneCandidateDiagnostic:
         return self.result
 
     def crop_pdf_region_debug(self, pdf_path, bbox, padding=15, page_num=0, zoom=4):
-        doc = fitz.open(str(pdf_path))
+        doc = pymupdf.open(str(pdf_path))
         page = doc[page_num]
-        rect = fitz.Rect(bbox['x0'] - padding, bbox['y0'] - padding,
+        rect = pymupdf.Rect(bbox['x0'] - padding, bbox['y0'] - padding,
                         bbox['x1'] + padding, bbox['y1'] + padding)
         try:
-            pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), clip=rect)
+            pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), clip=rect)
             trace_boundary("PyMuPDF pixmap", pix, {
                 'width': pix.width, 'height': pix.height, 'n': pix.n,
                 'stride': pix.stride, 'samples_len': len(pix.samples),

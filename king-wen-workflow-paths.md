@@ -154,6 +154,22 @@ No guessing. Paths are exact. Consumers are exact.
 - Outputs: generated files
 - Reactive dependents: table updates
 
+### `scripts/full_hexagram_shotgun.py` / `shotgun_expand()`
+- Artifact id: `expansion-engine`
+- Role: canonical expansion entry point (64 hexagrams × 8 phases = 512 states; 729 ternary per hex = 46,656 total; 35,000 domained routes; 1,152 personality_subsets_total)
+- Inputs: `request_text` (optional), `emotional_input` (default 50)
+- Outputs: `expanded` (64), `resolved` (512), `ternary_line_permutations_per_hex` (729), `total_ternary_line_permutations` (46,656), `total_domained_routes` (35,000), `personality_subsets_total` (1,152), `personality_consensus`, `capture_point`
+- Active consumers: `emotional_engine.py` (capture_pre_slider), `expand_server.py` (/expand endpoint), OpenJarvis `emotion/kingwen.py` (JSON data consumption only), training corpus (`kingwen_train_data/full_shotgun_expansion_all.jsonl`)
+- Reactive dependents: `docs/`, `emotional_engine.py`, `expand_server.py`
+
+### `AGENTS.md`
+- Artifact id: `engineering-anchor`
+- Role: pipeline invariants & engineering rules
+- Inputs: none
+- Outputs: engineering rules document
+- Active dependents: all agents entering the workspace
+- Reactive dependents: code changes
+
 ### `README.md`
 - Artifact id: `workspace-readme`
 - Role: documentation
@@ -231,3 +247,4 @@ No guessing. Paths are exact. Consumers are exact.
 - All usages must pass the live King Wen prompt/tables expected by the workspace API.
 - Zero mock/stub/fabrication allowed in King Wen integration paths.
 - Plugin artifacts must not duplicate tables; they must consume the source-of-truth JSON files.
+- Documentation synchronization: `AGENTS.md` (P0 anchor, preserve), `KINGWEN_AGENT_ONBOARDING.md`, `lua-math-tool.md`, `docs/immutable-table-math-decoded.md` (P1), `king-wen-workflow-paths.md`, `codebasemap.md` (P2). Keep canonical expansion entry point (`shotgun_expand`) in sync across all docs.

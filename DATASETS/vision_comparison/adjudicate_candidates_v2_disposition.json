@@ -1,0 +1,66 @@
+{
+  "component": "adjudicate_candidates_v2.py",
+  "file_path": "scripts/adjudicate_candidates_v2.py",
+  "line_count": 269,
+  "file_size_bytes": 9569,
+  "disposition": "PARTIALLY IMPLEMENTED",
+  "disposition_reason": "Some required behaviors are directly implemented (candidate ingestion, preservation, unresolved handling, output schema). Others are NOT implemented (multi-label support, routing to different destinations, six-class visual taxonomy).",
+  "behavior_audit": {
+    "Candidate ingestion": {
+      "status": "IMPLEMENTED",
+      "evidence": "load_records() reads pix2text_candidates.jsonl via REPORT_PATH.replace(). Each record carries: raw_ocr, parser_match_ids, adjudication, match_status, bbox_original, _pix2text_file, candidate_class, element_type, parse_error.",
+      "lines": "41-47"
+    },
+    "Visual classification": {
+      "status": "PARTIALLY IMPLEMENTED",
+      "evidence": "classify() assigns match_status: UNADJUDICATED, SPATIAL_MATCH, TEXT_MATCH, VISUALLY_VERIFIED, ADJUDICATED. candidate_class field (DISPLAY_EQUATION, INLINE_MATH, PROSE) is carried through unchanged.",
+      "lines": "80-110",
+      "note": "Maps to match_status taxonomy, not the six-class visual taxonomy (equation_structure, extensible_delimiters, individual_symbols, plot_geometry, plot_annotations, image_regions). Six-class visual classification NOT implemented."
+    },
+    "Multi-label support": {
+      "status": "NOT IMPLEMENTED",
+      "evidence": "Each row receives exactly one match_status value. No secondary_classes or multiple classification retention. classify() returns row after first match; no branching to retain multiple classes.",
+      "lines": "86-98, 102-110"
+    },
+    "Routing": {
+      "status": "NOT IMPLEMENTED",
+      "evidence": "All records written to single output file adjudication_report.jsonl. No routing logic to different destinations based on class.",
+      "lines": "189-193"
+    },
+    "Preservation": {
+      "status": "IMPLEMENTED",
+      "evidence": "Original crops, coordinates, _pix2text_file, bbox_original, raw_ocr, parse_error all preserved in output records. Read-only on harvest output.",
+      "lines": "82-89, 171-177"
+    },
+    "Unresolved handling": {
+      "status": "IMPLEMENTED",
+      "evidence": "Records with no spatial match fall through to text and visual checks; unknown candidates remain VISUALLY_VERIFIED or UNADJUDICATED but are never discarded.",
+      "lines": "100-110"
+    },
+    "Output": {
+      "status": "IMPLEMENTED",
+      "evidence": "Writes adjudication_report.jsonl (per-record), adjudication_summary.json (aggregate), adjudication_report.md (human-readable). Serialized schema: match_status, candidate_class, _morphology, _derivation.",
+      "lines": "189-252"
+    }
+  },
+  "six_class_visual_taxonomy": {
+    "implemented": false,
+    "classes_required": [
+      "equation_structure",
+      "extensible_delimiters",
+      "individual_symbols",
+      "plot_geometry",
+      "plot_annotations",
+      "image_regions"
+    ],
+    "actual_output_schema": [
+      "UNADJUDICATED",
+      "SPATIAL_MATCH",
+      "TEXT_MATCH",
+      "VISUALLY_VERIFIED",
+      "ADJUDICATED"
+    ],
+    "note": "Match_status taxonomy (5 values) is distinct from six-class visual taxonomy. The script does not distinguish plot vs equation vs symbol; it distinguishes spatial/text/visual adjudication."
+  },
+  "conclusion": "adjudicate_candidates_v2.py is a VISUAL-INTEGRITY ADJUDICATION LAYER, not a SIX-CLASS VISUAL CLASSIFICATION ROUTER. It preserves evidence and adjudicates candidate status for the Pix2Text pipeline but does NOT implement the six-class visual routing."
+}

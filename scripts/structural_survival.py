@@ -84,7 +84,7 @@ def main() -> int:
             occ = SourceOccurrence(
                 paper_id=paper_id, paper_version=version,
                 source_locator=f"math[{i}]", occurrence_index=i,
-                source_hash=source_hash(mathml) if mathml else "",
+                source_hash=source_hash(mathml),
                 latex=latex, mathml=mathml,
             )
             okey = occurrence_key(occ)

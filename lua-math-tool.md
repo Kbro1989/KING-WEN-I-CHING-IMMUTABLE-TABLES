@@ -21,6 +21,7 @@ preservation. Block-based PyMuPDF extraction. Outputs semantic_math_zotero_full.
 (159MB, 4218 expressions, 183017 proof chain elements).
 
 **Key needs:**
+- **Delimiter detection & preservation (PRIORITY):** paired delimiters ((), [], {}, ⟨⟩, ‖‖, ⌊⌋, ⌈⌉), fraction bars/vinculums, cases braces — must preserve pairing through block-level extraction
 - Block-level text extraction preserving spatial layout
 - Unicode math symbol preservation (φ, √, ∫, ≡, ≤)
 - Proof chain element collection
@@ -58,11 +59,9 @@ Structural conservation invariant: no MathML structural child may disappear
 merely because its node type is unsupported.
 
 **Key needs:**
+- **Delimiter identity preservation (PRIORITY):** langle/rangle, lVert/rVert, lfloor/rfloor, lceil/rceil, conditional bar (∣), differential (ⅆ) — paired identity must be maintained through tree walk
 - MathML tree walk (bottom-up)
 - Structural conservation: munder/mover/munderover must preserve under/over children
-- Delimiter identity: langle/rangle, lVert/rVert, lfloor/rfloor, lceil/rceil
-- Conditional bar (∣) preservation
-- Differential (ⅆ) preservation
 - Integral limits + differential preservation
 - Big operator limit handling (sum/prod/int with braced limits)
 
@@ -101,6 +100,7 @@ end
 form. Handles nested arguments, accents, big operators, escaped literals.
 
 **Key needs:**
+- **Delimiter detection & normalization (PRIORITY):** Position-based NORM_OPEN/NORM_CLOSE pairing for |, \|, langle/rangle, lVert/rVert, lfloor/rfloor, lceil/rceil — must resolve before token stream emission
 - Balancing-brace scanner (_brace_scan)
 - Zero-arg command rules (rm, bf, it, sf, tt, etc.)
 - Accent fusion (\bar{\alpha} → alphabar, not alpha_bar)
@@ -142,6 +142,7 @@ end
 cases braces) from 2D PDF geometry into canonical form.
 
 **Key needs:**
+- **Delimiter detection & classification (PRIORITY):** paired enclosing delimiters ((), [], {}, ⟨⟩, ‖‖, ⌊⌋, ⌈⌉), cases braces, fraction bars/vinculums — must detect and classify before structure assembly
 - K-Means color quantization (scipy.cluster.vq.kmeans2)
 - Connected component analysis (scipy.ndimage.label)
 - Region classification (fraction_bar, cases_brace, large_bracket, etc.)
@@ -232,12 +233,12 @@ end
 6. Equation Structure Assembly
 
 **Key needs:**
+- **Delimiter detection & spatial pairing (PRIORITY):** fraction bars, paired delimiters ((), [], {}, ⟨⟩, ‖‖, ⌊⌋, ⌈⌉), cases braces — must detect and pair before equation assembly
 - PyMuPDF page rendering and text extraction
 - K-Means color quantization
 - Flood fill connected component analysis
 - Tesseract OCR integration
 - Math symbol lookup table (Greek, operators, brackets)
-- Spatial relationship extraction (fraction bars, delimiters)
 - Equation structure assembly
 
 **Lua mapping:**
@@ -321,6 +322,7 @@ braces, paired enclosing delimiters, stacked limit operators, scaled script
 tokens. Prevents 1D text readers from flattening 2D structures.
 
 **Key needs:**
+- **Delimiter detection & classification (PRIORITY):** fraction bars/vinculums, tall delimiters/cases braces, paired enclosing delimiters, stacked limit operators — must classify by aspect ratio/fill ratio before assembly
 - VisualRegion dataclass (bbox, centroid, aspect_ratio, fill_ratio, region_type)
 - VisualMathStructure dataclass (structure_type, components, confidence)
 - K-Means quantization
@@ -630,6 +632,129 @@ end
 
 ---
 
+---
+
+## Capability Discovery: C1-C11 Mapping (2026-11-11)
+
+This section maps every Lua mapping entry in this document to the capability
+categories C1-C11 defined in the audit package capability map. Each tool is
+tagged with its current status: CONFIRMED (verified on disk), PARTIAL (import
+exists, contracts not fully traced), NOT_TESTED (no callers found), or n/a
+(document only, no runtime script).
+
+| #, Capability | Primary Lua mapping | Tool(s) | Status | Independently Validated? |
+|-------------|-----------|---------------------|---------|--------|-----------|
+| C1 | MathML extraction | Section 2 mathml_parser | mathml_parser.py | CONFIRMED | Not separately validated |
+| C2 | LaTeX reconstruction | Section 3 math_recovery_tool | math_recovery_tool.py | CONFIRMED | Not separately validated |
+| C3 | Structural recovery V1 | Sections 4-9, 16 visual_math/alttext/chroma | visual_math_translator.py, chroma_visual_reader.py, alttext_cross_checker.py | CONFIRMED caller | Not separately validated |
+| C4 | Structural recovery V2 | Section 18 structure_extractor | v2_delimiter_aware_structural_recovery.py | DECLARATION | Not verified - no caller |
+| C5 | AST extraction | Section 20 structural_ast | structural_ast_extractor.py | NOT_TESTED | Not tested |
+| C6 | Visual detection | Sections 5-7 pdf/math/vision | targeted_math_detector.py, vision_math_extractor.py | CONFIRMED CLI | Executable verified |
+| C7 | OCR | Sections 6, 7 | Pix2Text, Tesseract (Lua doc only) | n/a - Lua doc | Not integrated |
+| C8 | Semantic validation | Section 5 math_contract | math_contract.py, semantic_honesty_scoreboard.py | PARTIAL | Assertions not read |
+| C9 | Equation solving | Section 17 notation_mapping, 19 prose_math | solve_all.py, solve_dual_path.py | PARTIAL | Solver exists, coverage not audited |
+| C10 | Geometric validation | Section 8 chroma_visual | test_geometry_generalization.py | NOT_TESTED | Assertions not read |
+| C11 | Provenance tracing | Section 15 occurrence | verify_provenance_trace.py | n/a - not executed | No execution trace |
+
+### Independent Validation Status (new dimension)
+
+| Capability | Independently Validated? | Evidence |
+|-----------|------------------------|----------|
+| C1 | No | Import verified, output correctness not adjudicated |
+| C2 | No | Recovery tool works, math correctness not independently checked |
+| C3 | No | V1 pairing confirmed, structural identity not adjudicated |
+| C4 | No | No caller confirmed anywhere |
+| C5 | No | Not tested at all |
+| C6 | Partially | CLI executes, visual output not independently verified |
+| C7 | No | Not implemented (Lua doc only) |
+| C8 | No | Status enums defined, no assertion tests |
+| C9 | No | Solver exists, no independent correctness checker |
+| C10 | No | Test script exists, assertions not read |
+| C11 | No | Not executed |
+
+### Dependency Edge Classification
+
+Dependency edges are labeled by evidence type:
+
+| Edge | Label | Evidence |
+|------|-------|----------|
+| C1 -> C2 | declared_dependency | mathml_parser imports delimiter_identity |
+| C2 -> C3 | verified_runtime_dependency | V1 pairing called by evaluation scripts; C3 confirmed consumer |
+| C6 -> C4 | declared_dependency | V2 detector interface documented; no caller found |
+| C4 -> C5 | proposed_integration | AST extraction may consume V2 output (hypothetical) |
+| C1 -> C5 | proposed_integration | AST extraction may use MathML tree (hypothetical) |
+
+
+|---|-----------|---------------------|--------------------------|--------|
+| C1 | MathML extraction | Section 2 mathml_parser | mathml_parser.py | CONFIRMED - imported by math_recovery_tool.py |
+| C2 | LaTeX reconstruction | Section 3 math_recovery_tool | math_recovery_tool.py | CONFIRMED - imported by mathml_parser.py, math_recovery_tool.py |
+| C3 | Structural recovery V1 | Sections 4-9, 16 visual_math/alttext/chroma | visual_math_translator.py, chroma_visual_reader.py, alttext_cross_checker.py | CONFIRMED caller - evaluation scripts call it |
+| C4 | Structural recovery V2 | Section 18 structure_extractor | v2_delimiter_aware_structural_recovery.py | DECLARATION - no confirmed caller |
+| C5 | AST extraction | Section 20 structural_ast | structural_ast_extractor.py | NOT_TESTED - import not confirmed |
+| C6 | Visual detection | Sections 5-7 pdf/math/vision | targeted_math_detector.py, vision_math_extractor.py | CONFIRMED - executable CLI |
+| C7 | OCR | Sections 6, 7 | Pix2Text, Tesseract integrations | n/a - Lua doc only; no integration scripts found |
+| C8 | Semantic validation | Section 5 math_contract | math_contract.py, semantic_honesty_scoreboard.py | PARTIAL - status enums defined, no assertion tests |
+| C9 | Equation solving | Section 17 notation_mapping, 19 prose_math | solve_all.py, solve_dual_path.py | PARTIAL - solver available but not exercised |
+| C10 | Geometric validation | Section 8 chroma_visual | test_geometry_generalization.py | NOT_TESTED - assertions not read |
+| C11 | Provenance tracing | Section 15 occurrence | verify_provenance_trace.py | n/a - Lua doc only, not executed |
+
+### Tool Call / Parameter / Variable Reference (Before to After)
+
+The following table records the original tool call, its actual parameters, and
+the corrected parameter contract where the original had issues.
+
+| # | Tool | Original call / parameters | Corrected / verified parameters | Before to After change |
+|---|------|---------------------------|--------------------------------|----------------------|
+| C1-A | mathml_parser.parse(mathml_string) | Returns ExprNode tree with MOTHER structure | parse(mathml_string) -> (tree_expr, unsupported) (2-tuple per spec) | Original: single return. After: 2-tuple. |
+| C1-B | mathml_parser.conserve_structure(node) | Ensures no structural child disappears | Explicit munder/mover/munderover/ mtable handling | Spec section 2: confirmed on disk |
+| C2-A | math_recovery.normalize_norms(latex) | Position-based NORM_OPEN/NORM_CLOSE pairing | Position-based pairing via _brace_scan | Recurring bug fixed: escaped literals |
+| C2-B | math_recovery.apply_command(s, cmd, nargs, fn) | Parse command with nargs arguments | apply_command(s, cmd, nargs, fn) -> (cleaned, consumed) | Function-argument joining implemented |
+| C3-A | associate_delimiter_pairs(candidates, page_width, page_height) | Pairing + pagination | associate_delimiter_pairs(candidates, pw, ph) -> (paired, unpaired) | V1 confirmed caller: evaluate_cross_paper_v2_strict.py:55 |
+| C4-A | run_v2_recovery_on_page(page, y_band) | V2 pipeline | V2 pipeline, no confirmed caller | DECLARATION - no caller in current code |
+| C6-A | targeted_math_detector.render_visual_candidates(page, idx, zoom, out_dir) | Render candidates | render_visual_candidates(page, idx, zoom, out_dir) -> dict | Confirmed signature on disk |
+| C6-B | extract_raw_observations(page, idx) | Per-character observation | (spans, chars) tuple | Confirmed on disk |
+| C8-A | math_contract.ParseStatus enum | complete/partial/unsupported/failed | Defined but no assertion tests | PARTIAL - status defined, no test coverage |
+| C9-A | solve_all.py.solve_equation(expr) | SymPy solver | Solver policy: not_attempted/solved/evaluated/no_solution | PARTIAL - solver exists but coverage not audited |
+| C10-A | chroma_visual.assemble_structure(regions) | Fraction/cases assembly | assemble_structure(regions) -> VisualMathStructure | Confirmed on disk |
+| C11-A | verify_provenance_trace.py.trace(artifact, trace) | Provenance verification | trace(artifact, trace) -> result | n/a - Lua doc only, not executed |
+
+### JSON / PNG / PDF / HTML Usage Pointers for Tagged Items
+
+| Tagged item (from docs/math-*.md) | Related .json/.png/.pdf/.html artifact | Capability | Current status | Next step |
+|-----------------------------------|------------------------------------------|------------|----------------|-----------|
+| math_reconstruction_evidence.jsonl | DATASETS/math_reconstruction_evidence.jsonl (8.1 MB) | C2 | OPEN - crash on None mathml | Fix null-check in math_contract.source_hash() |
+| structural_survival.jsonl | DATASETS/structural_survival.jsonl (6.5 MB) | C4 | OPEN - baseline staleness | Identify baseline revision, compare hashes |
+| cross_stage_drop_trace.jsonl | DATASETS/cross_stage_drop_trace.jsonl (2.2 MB) | C11 | OPEN - 2 consumers crash | Fix math_contract.source_hash() null check |
+| arxiv_html_corpus/ (240 files, 51.6 MB) | DATASETS/arxiv_html_corpus/*.json | C1 | OPEN - network dependency | Re-download from arXiv; no offline regeneration |
+| pdf_depth_runs/ (4 files, 329 KB) | DATASETS/pdf_depth_runs/*.json | C6 | Verified | No changes needed |
+| structural_preservation/ (83 files, 9.2 MB) | DATASETS/structural_preservation/*.json | C4 | OPEN - 370/370 empty consumers in manifest | Confirm manifest is current, not stale |
+| vision_comparison/ (113 files, 11.5 MB) | DATASETS/vision_comparison/*.jsonl | C6, C10 | Verified | No changes needed |
+
+### Test Candidate Qualification (from capability map C1-C11)
+
+The following test scripts contain capabilities that could become independent
+golden-standard oracles. Each requires inspection of assertions, fixtures,
+independence, and actual execution results before promotion:
+
+| Test script | Capability | Barriers to certification |
+|-------------|-----------|---------------------------|
+| test_structural_conservation.py | C1, C4 | Assertion inspection needed |
+| test_semantic_fidelity.py | C8 | Assertion inspection needed |
+| test_provenance_corruption.py | C11 | Assertion inspection needed |
+| test_geometry_generalization.py | C10 | Assertion inspection needed |
+| test_adversarial_clearance_gate.py | C10 | Assertion inspection needed |
+| test_mathml_parser_on_corpus.py | C1 | Assertion inspection needed |
+| test_nested_args.py | C2 | Assertion inspection needed |
+| test_mbox_dollar_recovery.py | C2 | Assertion inspection needed |
+| test_relation_identity.py | C2 | Assertion inspection needed |
+| test_structural_survival.py | C4 | Assertion inspection needed |
+
+Certification rule: A test script may become an evaluation oracle only after
+(1) its assertions are read and classified, (2) its input independence is
+verified (not importing the implementation under test), and (3) it has
+executed against the frozen baseline with a recorded pass/fail count. Before
+that, it remains a candidate.
+
 ## Cross-File Dependencies
 
 ```
@@ -738,6 +863,25 @@ lua lua-math-tool/tests/test_occurrence.lua
 5. **Alttext ground truth:** When MathML and alttext disagree, alttext wins.
 6. **Delimiter identity:** langle/rangle, lVert/rVert, lfloor/rfloor, lceil/rceil
    must preserve paired identity.
+
+---
+
+### Rahmani 1212.0957 — Visual Delimiter Recovery Reference Pipeline
+
+This pipeline establishes the provenance chain for visual delimiter detection, high-resolution OCR, and structural recovery on a 6×6 multi-column matrix (Rahmani, *Generalized Stirling Transform*, arXiv:1212.0957, Page 8).
+
+| Stage | Artifact | Purpose |
+|---|---|---|
+| **Source** | `DATASETS/benchmark_pdfs/1212.0957.pdf` (SHA-256: `1c734a4e0a29c8eae4b94d8033351b62bf8411a78e5d9798b904dcd4e86c14d1`) | Pinned input document |
+| **Detection** | `scripts/targeted_depth_ocr.py` → `DATASETS/PDF_FIDELITY_RENDERINGS/targeted_ocr/1212.0957/` | Connected-component detection (zoom 4), tall/narrow crops (zoom 8) |
+| **OCR** | `targeted_ocr_results.json` | Pix2Text `recognize_formula` on 2 delimiter crops + detection visualization |
+| **Structural Recovery** | `scripts/evaluate_rahmani_generalization.py` → `rahmani_1212.0957_generalization_evaluation.json` | Delimiter-aware recovery of 6×6 matrix; Criteria 1–7, NEG_001–NEG_004 |
+| **Frozen Target** | `rahmani_1212.0957_generalization_target.json` + `freeze_manifest.json` | SHA-256 sealed baseline; 3,644 rendered images cryptographically locked |
+| **Tests** | `tests/test_rahmani_generalization.py`, `tests/test_delimiter_structural_recovery.py`, `tests/test_visual_review_and_atomic_recompute.py` | Regression validation |
+
+**Key distinction:** The two zoom-8 tall/narrow crops represent the two sides of a tall mathematical enclosure. They are a paired visual test fixture for delimiter-pairing regression with: original source coordinates, individual crop coordinates, opening/closing identity, pair association, reconstructed enclosing geometry, and structural recovery result.
+
+**G0–G5 relevance:** This pipeline provides development evidence but does not automatically certify independent delimiter detection. G0 requires prediction independence; G1 requires independent geometric scoring; G2 requires correct opening/closing classification; G3 requires structural preservation; G4 requires crop fidelity; G5 requires generalization beyond the registered example.
 
 ---
 
@@ -877,6 +1021,7 @@ Preserves operator identity, limits as children, differentials, relations,
 decorations, fractions/roots, unsupported nodes.
 
 **Key needs:**
+- **Structural conservation of under/over attachments (PRIORITY):** `munder`/`mover`/`munderover` must preserve under/over children as MathML positioning/operator-structure constructs (not inherently delimiter pairs). Delimiter identity (langle/rangle, lVert/rVert, lfloor/rfloor, lceil/rceil, conditional bar ∣, differential ⅆ) is a separate invariant.
 - MathML tag → contract node kind mapping (_TAG_KIND)
 - Big operator handling (sum/prod/integral with limits as children)
 - Limit word handling (lim/limsup/liminf)

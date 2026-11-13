@@ -1,0 +1,114 @@
+{
+  "schema": "layer_c_io_contract_v1",
+  "created_at": "2026-11-05T19:48:00-06:00",
+  "contract_purpose": "Defines the exact inputs Layer C consumes, the exact outputs it produces, and the traceability invariants every structural assertion must satisfy.",
+
+  "inputs": {
+    "layer_a_observations": {
+      "description": "Font-aware glyph classifications from font_aware_math_classifier.py (frozen v1.0). Layer C does NOT re-classify glyphs.",
+      "entry_point": "extract_hierarchical_observations(page, page_index_0based) from hierarchical_region_proposals.py",
+      "returns": ["level1_glyphs: list[dict]", "level2_spans: list[dict]"],
+      "frozen_sha256": "514c24fb714bd58db78f1cf54f9601c32cc02019e68eae514efab623d510a137"
+    },
+    "source_pdf": {
+      "description": "MuPDF document handle for rawdict extraction. The same doc handle is passed to both v2 and v3.",
+      "verified_by": "SHA-256 hash in positive_control_manifest.json"
+    },
+    "page_width_pt": {
+      "description": "Page width in PDF points from page.rect.width, used for equation-number position thresholds."
+    }
+  },
+
+  "outputs": {
+    "schema_version": "3.0_structural_reconstruction",
+    "output_format": "JSON file per page, identical top-level schema to v2.0_hierarchical for direct comparison",
+    "required_top_level_keys": [
+      "schema_version",
+      "document_id",
+      "source_pdf_sha256",
+      "page_number_1_based",
+      "page_index_0_based",
+      "page_size_pdf_pt",
+      "coordinate_space",
+      "hierarchy_summary",
+      "level4_level5_proposals",
+      "level3_line_groups"
+    ],
+    "proposal_record_schema": {
+      "proposal_id": "string (L4_line_NNN or L5_multiline_N_M)",
+      "hierarchy_level": "int (4 or 5)",
+      "proposal_type": "string (single_line_equation | multiline_equation_structure)",
+      "merged_bbox": "[x0, y0, x1, y1] in mupdf_page_points",
+      "text": "string (concatenated span text)",
+      "line_group_ids": "list[int]",
+      "span_count": "int",
+      "total_glyph_count": "int",
+      "math_glyph_ratio": "float",
+      "candidate_reasons": "list[string]",
+      "has_equation_number": "bool",
+      "is_citation_filtered": "bool",
+
+      "v3_extensions": {
+        "equation_number_metadata": {
+          "description": "Decoupled equation-number record (AC-4). Present only when has_equation_number is true.",
+          "schema": {
+            "label_text": "string (e.g. '(1)')",
+            "label_bbox": "[x0, y0, x1, y1]",
+            "gap_to_expression_pt": "float"
+          }
+        },
+        "math_expression_bbox": {
+          "description": "Tight bounding box around the mathematical expression only, excluding equation-number label and inter-label whitespace.",
+          "schema": "[x0, y0, x1, y1]"
+        },
+        "structural_provenance": {
+          "description": "Traceability record linking every structural assertion to its contributing evidence (AC-traceability).",
+          "schema": {
+            "contributing_span_ids": "list[int]",
+            "contributing_glyph_indices": "list[int]",
+            "baseline_tolerance_applied_pt": "float",
+            "merge_reason": "string (e.g. 'adaptive_baseline', 'shared_relation_alignment', 'indented_continuation')",
+            "source_coordinates": {
+              "min_x": "float",
+              "min_y": "float",
+              "max_x": "float",
+              "max_y": "float"
+            }
+          }
+        }
+      }
+    }
+  },
+
+  "v3_structural_improvements": {
+    "improvement_1_adaptive_baseline": {
+      "addresses": "REC-01 from structural completeness audit",
+      "v2_defect": "Rigid 3.0 pt centre-y tolerance splits subscripts/superscripts at |Δy| = 3.1–3.3 pt",
+      "v3_rule": "tolerance = max(3.0, 0.45 * max_font_size_in_pair)",
+      "acceptance_criterion": "AC-1 (subscript/superscript recovery)",
+      "anti_regression": "AC-2 (adjacent equation boundary preservation)"
+    },
+    "improvement_2_equation_number_decoupling": {
+      "addresses": "REC-02 from structural completeness audit",
+      "v2_defect": "Equation numbers merged into single monolithic merged_bbox, penalizing expression IoU by up to 130 pt of whitespace",
+      "v3_rule": "Detect trailing '(N)' patterns on right margin; emit as equation_number_metadata with separate label_bbox; compute math_expression_bbox excluding the label",
+      "acceptance_criterion": "AC-4 (explicit equation-number metadata)"
+    },
+    "improvement_3_multiline_guardrails": {
+      "addresses": "REC-03 from structural completeness audit",
+      "v2_defect": "Level 5 merges any two vertically adjacent equation lines within 16 pt, regardless of semantic continuity",
+      "v3_rule": "Require at least one of: (a) shared relation symbol (=, ≤, etc.) alignment within 5 pt horizontal, (b) indented continuation (second line x0 > first line x0 + 20 pt), (c) explicit punctuation continuation (first line ends with +, -, =, comma). Do NOT merge lines that both begin with independent relation symbols at similar indentation.",
+      "acceptance_criterion": "AC-3 (multiline without cross-equation contamination)"
+    }
+  },
+
+  "comparison_protocol": {
+    "step_1": "Run frozen v2 (hierarchical_region_proposals.py) on each page. Record v2 proposals.",
+    "step_2": "Run candidate v3 (hierarchical_region_proposals_v3.py) on each page, consuming the SAME Layer A observations. Record v3 proposals.",
+    "step_3": "For each gold equation, find best-matching proposal from v2 and v3 independently.",
+    "step_4": "Compute per-equation delta: IoU_v3 - IoU_v2, structural_checks_v3 - structural_checks_v2.",
+    "step_5": "Report per-equation verdicts: IMPROVED, UNCHANGED, REGRESSED.",
+    "step_6": "Accept only if: zero REGRESSED on any equation, zero negative-control escapes, and at least one IMPROVED equation across the ViLT population (where v2 scored 0/6 PRESERVED)."
+  }
+}
+

@@ -1,0 +1,198 @@
+{
+  "version": "1.0.0",
+  "created": "2026-11-11T12:00:00Z",
+  "description": "Transformation registry — inputs, outputs, reversibility, information loss, determinism, validation",
+  "transformation_contracts": [
+    {
+      "name": "text_to_intent",
+      "input_representation": "Natural language request text",
+      "output_representation": "Intent vector (5-axis: voiceWeight, coherence, chaos, whimsy, darkTone) + dominant_intent + query_tokens",
+      "pipeline_stage": "EMOTIONAL_ENGINE",
+      "implementations": [
+        "scripts/emotional_engine.py::extract_intent()"
+      ],
+      "reversibility": "LOSSY",
+      "information_loss_classification": "HIGH — semantic content compressed to 5-axis vector + token set",
+      "determinism": "PARTIAL — query_tokens ordering depends on PYTHONHASHSEED (fixed in v15: sorted word_set)",
+      "validation_evidence": [
+        "Deterministic replay verified: intent_vector, dominant_intent, token COUNT stable across hash seeds",
+        "Only query_tokens ordering varies (PYTHONHASHSEED-dependent)",
+        "scripts/test_deterministic_replay.py passes"
+      ],
+      "lossy_details": "Natural language semantics → 5-axis vector + token membership (not order/structure)"
+    },
+    {
+      "name": "intent_to_hexagram_expansion",
+      "input_representation": "Intent vector (5-axis) + emotional_input slider (0-100) + query_tokens",
+      "output_representation": "64 expanded hexagrams with personality_subsets, domain_vectors, training_notes, projections, line_states, yao_vocabulary, inject_site, sample_paths, expanded_vector, resolved_vector",
+      "pipeline_stage": "STATE_EXPANSION",
+      "implementations": [
+        "scripts/full_hexagram_shotgun.py::shotgun_expand()"
+      ],
+      "reversibility": "NON_REVERSIBLE",
+      "information_loss_classification": "EXPANSION — single input → 64×8×N output space",
+      "determinism": "FULL — SHA-256 deterministic, no randomness",
+      "validation_evidence": [
+        "scripts/test_deterministic_replay.py: deterministic replay across hash seeds",
+        "scripts/test_collapse_full_512.py: 512 resolved states verified",
+        "scripts/test_porosity_sweep.py: porosity sweep verified"
+      ],
+      "note": "Full expansion before any collapse — 64 hexagrams exist simultaneously"
+    },
+    {
+      "name": "binary_to_ternary",
+      "input_representation": "Binary line states (64 hexagrams × 6 lines = 384 bits)",
+      "output_representation": "Ternary line states (yin=0, yang=1, yao=2) per line — 3^6 = 729 per hexagram",
+      "pipeline_stage": "TERNARY_EXPANSION",
+      "implementations": [
+        "scripts/full_hexagram_shotgun.py",
+        "kingwen_ternary_tables_complete.py",
+        "kingwen_quantum_process.py"
+      ],
+      "reversibility": "LOSSLESS_MODELED",
+      "information_loss_classification": "MODELED_AS_LOSSLESS — but see ternary_paired_differential_math_correction",
+      "determinism": "FULL",
+      "validation_evidence": [
+        "docs/immutable-table-math-decoded.md: 3^6 = 729 ternary line-state permutations",
+        "docs/ternary-paired-differential-math-correction-2026-08-02.md: paired differentials required",
+        "scripts/verify_math_jacobian_hamiltonian.py passes"
+      ],
+      "note": "Yin=IS (affirms), Yang=IS NOT (negates), Yao=MAYBE (changing/ambiguous). Forward derivation works, pure inverse fails (lossy for inverse recovery)."
+    },
+    {
+      "name": "ternary_to_resolved",
+      "input_representation": "Ternary line states (729 per hexagram) + phase bits (8 phases)",
+      "output_representation": "Resolved states (5832 = 729 × 8) with emotional vectors, line_balance, phase_temporal",
+      "pipeline_stage": "TERNARY_EXPANSION",
+      "implementations": [
+        "kingwen_quantum_process.py::kingwen_quantum_expand()",
+        "scripts/multi_layer_expand.py"
+      ],
+      "reversibility": "PARTIAL",
+      "information_loss_classification": "MANY_TO_ONE — 512 emotional vectors from 5832 resolved states",
+      "determinism": "FULL",
+      "validation_evidence": [
+        "scripts/ternary_full_expansion.json: 27 trigrams, 729 hexagrams, 5832 resolved",
+        "emotional_engine.py: _compute_consensus_from_resolved() — arithmetic mean across all 64 expanded",
+        "kingwen_quantum_process.py: Hamiltonian energy, Gaussian kernel, J-lens mapping"
+      ]
+    },
+    {
+      "name": "hexagram_to_emotional_vector",
+      "input_representation": "Hexagram ID + line_states + phase_temporal + porosity",
+      "output_representation": "5-axis emotional vector (voiceWeight, coherence, chaos, whimsy, darkTone) + line_balance + porosity",
+      "pipeline_stage": "EMOTIONAL_ENGINE",
+      "implementations": [
+        "emotional_engine.py::_pool_weights_for_hex()",
+        "emotional_engine.py::_compute_consensus_from_resolved()"
+      ],
+      "reversibility": "LOSSY",
+      "information_loss_classification": "HIGH — many resolved states → single 5-axis vector; porosity has 3 independent computations",
+      "determinism": "FULL",
+      "validation_evidence": [
+        "emotional_engine.py: 64 expanded → 512 resolved → consensus = arithmetic mean across all 64 expanded",
+        "Porosity: 3 independent computations (injection site 0-4 int, kit QWP 0.15-0.71 float, line balance)",
+        "Hamiltonian energy: 727 distinct raw values (-5.09 to -0.56), all clamped to 0.0 (scale mismatch)"
+      ]
+    },
+    {
+      "name": "expansion_to_jarvis",
+      "input_representation": "King Wen consensus/expansion output (512-state weighted wave)",
+      "output_representation": "Jarvis tool selection, voice parameters, routing decisions",
+      "pipeline_stage": "RUNTIME_INTERFACE",
+      "implementations": [
+        "OpenJarvis/src/openjarvis/emotion/kingwen.py::consult()",
+        "OpenJarvis/src/openjarvis/tools/kingwen_top_k_router.py",
+        "OpenJarvis/src/openjarvis/tools/kingwen_oracle_consult_tool.py"
+      ],
+      "reversibility": "NON_REVERSIBLE",
+      "information_loss_classification": "STOCHASTIC — Jarvis tool selection has stochastic elements",
+      "determinism": "PARTIAL — King Wen side deterministic, Jarvis side may have model randomness",
+      "validation_evidence": [
+        "kingwen_oracle_consult_tool.py: wraps consult(), returns director_payload + playback_instructions",
+        "kingwen_top_k_router.py: binds execution to current King Wen skill cards",
+        "PIAA→King Wen mapping: alpha fusion across 64 hex scores (paper 2605.25821)"
+      ]
+    },
+    {
+      "name": "pdf_to_mathml",
+      "input_representation": "ArXiv HTML / PDF pages",
+      "output_representation": "MathML tree + x-tex annotations + Unicode math symbols",
+      "pipeline_stage": "PDF_MATH_EXTRACTION",
+      "implementations": [
+        "scripts/arxiv_html_parser.py",
+        "scripts/mathml_parser.py",
+        "scripts/math_recovery_tool.py"
+      ],
+      "reversibility": "PARTIAL — MathML preserves structure, LaTeX source not always available",
+      "information_loss_classification": "MODERATE — rendered glyphs vs LaTeX source; fractions/hats/large ops lost in PDF text",
+      "determinism": "FULL — HTML MathML parsing deterministic",
+      "validation_evidence": [
+        "ArXiv HTML MathML + x-tex canonical: 991/991 on 2605.00155",
+        "scripts/mathml_parser.py: MathML tree walk with delimiter identity",
+        "scripts/math_recovery_tool.py: balancing-brace scanner, escaped literals, big-op limits",
+        "Semantic honesty scoreboard: FALSE_RECOVERY = 0 (tree path)"
+      ]
+    },
+    {
+      "name": "mathml_to_formal_ir",
+      "input_representation": "MathML tree + x-tex annotations",
+      "output_representation": "Formal IR (ExprNode, Integral, typed relations, bounds, differentials)",
+      "pipeline_stage": "PDF_MATH_EXTRACTION",
+      "implementations": [
+        "scripts/mathml_parser.py",
+        "scripts/math_recovery_tool.py",
+        "scripts/math_contract.py"
+      ],
+      "reversibility": "PARTIAL — IR preserves structure, not all presentation",
+      "information_loss_classification": "LOW — structural preservation with typed nodes",
+      "determinism": "FULL",
+      "validation_evidence": [
+        "math_contract.py: ExprNode, Integral IR with typed relations",
+        "test_structural_conservation.py: 21/21 pass (munder/mover/munderover children preserved)",
+        "Semantic honesty scoreboard: EXACT 2517, STRUCTURAL_EQUIV 347, LOSSY 544, UNRECOVERED 1, FALSE_RECOVERY 0"
+      ]
+    },
+    {
+      "name": "formal_ir_to_sympy",
+      "input_representation": "Formal IR (ExprNode, Integral)",
+      "output_representation": "SymPy expressions + solutions",
+      "pipeline_stage": "PDF_MATH_EXTRACTION",
+      "implementations": [
+        "scripts/solve_all.py",
+        "scripts/solve_provenance.py",
+        "scripts/test_preservation.py"
+      ],
+      "reversibility": "NON_REVERSIBLE — solving is forward computation",
+      "information_loss_classification": "SOLUTION_SPACE — solving reduces to solutions, not equivalent transformation",
+      "determinism": "FULL",
+      "validation_evidence": [
+        "SymPy solver: 331/3409 solvable (9.7%)",
+        "parse_latex corruptions documented: multi-char subscripts, relation→product, accent fusion",
+        "scripts/test_corruption_test.py: verifies parse_latex silent corruption"
+      ]
+    }
+  ],
+  "information_loss_summary": {
+    "HIGH_LOSS": [
+      "text_to_intent",
+      "hexagram_to_emotional_vector",
+      "expansion_to_jarvis"
+    ],
+    "MODERATE_LOSS": [
+      "pdf_to_mathml"
+    ],
+    "LOW_LOSS": [
+      "binary_to_ternary",
+      "mathml_to_formal_ir"
+    ],
+    "EXPANSION": [
+      "intent_to_hexagram_expansion"
+    ],
+    "NON_REVERSIBLE": [
+      "intent_to_hexagram_expansion",
+      "expansion_to_jarvis",
+      "formal_ir_to_sympy"
+    ]
+  }
+}

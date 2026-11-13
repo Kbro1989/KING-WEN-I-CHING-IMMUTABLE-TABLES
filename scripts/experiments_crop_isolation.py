@@ -26,7 +26,7 @@ if sys.platform == 'win32':
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / 'scripts'))
 
-import fitz  # PyMuPDF
+import pymupdf
 import cv2
 import numpy as np
 from pix2text import Pix2Text
@@ -107,7 +107,7 @@ def run_experiment():
     logger.info(f"Loaded {len(candidates)} candidates for 1907.04931")
 
     p2t = Pix2Text()
-    doc = fitz.open(str(PDF_CANDIDATE_PATH))
+    doc = pymupdf.open(str(PDF_CANDIDATE_PATH))
 
     # Geometries to test
     configurations = [
@@ -133,7 +133,7 @@ def run_experiment():
             py = cfg['padding_y']
             zoom = cfg['zoom']
 
-            exp_rect = fitz.Rect(
+            exp_rect = pymupdf.Rect(
                 orig_bbox['x0'] - px,
                 orig_bbox['y0'] - py,
                 orig_bbox['x1'] + px,
@@ -141,9 +141,9 @@ def run_experiment():
             )
 
             pix = page.get_pixmap(
-                matrix=fitz.Matrix(zoom, zoom),
+                matrix=pymupdf.Matrix(zoom, zoom),
                 clip=exp_rect,
-                colorspace=fitz.csRGB,
+                colorspace=pymupdf.csRGB,
                 alpha=False,
             )
 

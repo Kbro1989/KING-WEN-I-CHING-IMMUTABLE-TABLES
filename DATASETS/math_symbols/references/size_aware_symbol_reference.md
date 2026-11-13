@@ -130,3 +130,90 @@ result = analyze_symbol(detected_w, detected_h)
 **Baseline:** 19px height = 12pt browser font (per Metamath documentation)  
 **Dependencies:** None (pure Python)  
 **File:** `size_tool.py` in this directory
+
+---
+
+### Delimiter, big-operator, and variant glyphs (append section)
+
+#### A. Delimiter pair detection (tall delimiters at multiple scale sizes)
+
+The size classifier (`size_tool.py`) returns a `size_category` by absolute
+height and a `role` by aspect. This section adds the delimiter semantics
+that are missing from the base classifier.
+
+| Scale (height vs 19px baseline) | Delimiter pair observed | Required role |
+|---------------------------------|--------------------------|---------------|
+| 0.5–0.8× (tiny open/close) | `(` `)` `¥` `¦` | `delimiter_pair` only when paired with matching family |
+| 0.8–1.2× | `⌊` `⌋` `⌈` `⌉` `⟨` `⟩` | `delimiter_pair` |
+| 1.2–1.5× | `⌊` `⌋` `⌈` `⌉` `⟨` `⟩` with content inside | `delimiter_pair` (raised) |
+| 1.5–2.0× | `⌊` `⌋` `⌈` `⌉` `⟨` `⟩` | `delimiter_pair` |
+| >2.0× | `\left( ... \right)` stretched | `delimiter_pair` (stretch) |
+
+A delimiter **pair** is two adjacent glyphs of the same family: `(`+`)`,
+`[`+`]`, `{`+`}`, `⌊`+`⌋`, `⌈`+`⌉`, `⟨`+`⟩`, `∥`+`∥`, `∣`+`∣`. The size
+layer classifies the pair as `delimiter_pair`; the AST layer (via
+`delimiter_identity.py` and `delimiter_inference.py`) turns that token
+pair into a typed node (`Floor`, `Ceil`, `Norm`, `AngleBracket`,
+`Conditional`), so a 30 px glyph is never confused with a 30 px `sum`.
+
+#### B. Larger delimiters acceptable as delimiters in "list" context
+
+A list item rendered with a big delimiter (e.g. a numbered list where the
+marker contains `∑` or a `\left[` group) is **inside a container**,
+not a math big-operator. The extraction layer must not re-attribute it as
+an equation operator simply because it is large:
+
+- `sum`/`prod`/`int`/`oint`/`bigvee`/`bigcap`/`bigcup`/`bigsqcup`/`bigoplus`/`bigotimes`/`bigoplus`/`bigwedge` are big operators (labeled `big_operator` in the Metamath manifest).
+- Delimiter glyphs (`lfloor`/`rfloor`, `lceil`/`rceil`, `langle`/`rangle`, `llangle`/`rrangle`, `sphericalangle`, `varangle`, `vert`, `lVert`/`rVert`) carry `kind: delimiter`.
+- When a tall delimiter appears inside a list marker (low ink density,
+  container context), tag the crop as `in_list` and route to the list
+  normalizer, not the equation resolver. Use the existing `size_tool.py`
+  classifier for height, plus a `container` flag from the layout pass.
+
+Verification: `python -c` with a 45×30 px tall delimiter crop returns
+`size_category: equation_level`, `role: delimiter_pair` after the add.
+
+#### C. Rotated delimiters
+
+Rotation is not a glyph identity, it is a **transform** of a glyph
+family. The vision layer carries the glyph identity (which token family
+the crop belongs to) and the layout pass carries the rotation flag.
+
+| Glyph family | Identity tokens (delimiter_identity.py) | Rotation variants in manifest | Notes |
+|--------------|------------------------------------------|-------------------------------|-------|
+| Angle brackets | `LANGLE="langle"`, `RANGLE="rangle"` | `llangle`, `rrangle`, `sphericalangle`, `varangle` | `langle`/`rangle` are **not** parentheses |
+| Norm (double bar) | `LNORM="lVert"`, `RNORM="rVert"` | `vert`, `lVert`, `rVert`, `brokenvert`, `aplvertdown` | `brokenvert` and `aplvertdown` are rotated/variant bars |
+| Floor/ceiling | `LFLOOR="lfloor"`, `RFLOOR="rfloor"`, `LCEIL="lceil"`, `RCEIL="rceil"` | (none rotated in manifest) | Standalone, no rotation variants |
+
+Rule: the vision classifier sets a `glyph_family` field from the manifest
+`name` (`lfloor` → `floor`, `lfloor`+`rfloor` → `floor_pair`,
+`lVert`+`rVert` → `norm_pair`). The layout pass sets `rotated: true` when
+the crop's principal axis is >45° from the page horizontal. Rotation and
+family are orthogonal fields; a 90°-rotated `lfloor` is still a `floor`
+glyph and is resolved to `Floor(...)` in the AST layer.
+
+#### D. Symbol sizes, fonts, and Greek caps/lowercase versioned
+
+The size classifier (`size_tool.py`) returns a `size_category` by
+absolute height. It does **not** return font/serif/bold or Greek-case.
+The existing wolfram reference (`wolfram_notation_reference.md`, 143
+entries) and the Metamath manifest supply those as variant metadata:
+
+| Variant category | Example glyphs (wolfram doc / Metamath manifest) | Vision classifier tag |
+|-----------------------------|---------------------------------------------------|----------------------|
+| Greek lowercase | α β γ δ ε ζ η θ ι κ λ μ ν ξ ο π ρ σ τ υ φ χ ψ ω | `greek_case: lower` |
+| Greek uppercase | Α Β Γ Δ Ε Ζ Η Θ Ι Κ Λ Μ Ν Ξ Ο Π Ρ Σ Τ Υ Φ Χ Ψ Ω | `greek_case: upper` |
+| Script | ℒ ℳ ℛ 𝒞 𝒢 𝒥 𝒦 𝒩 𝒪 𝒫 𝒬 ℛ 𝒮 𝒯 𝒰 𝒱 𝒲 𝒳 𝒴 𝒵 | `font_style: script` |
+| Double-struck | ℂ ℍ ℕ ℙ ℚ ℝ ℤ | `font_style: double_struck` |
+| Fraktur | 𝔄 𝔅 𝔉 𝔊 𝔍 𝔎 𝔏 𝔐 𝔑 𝔒 𝔓 𝔘 𝔙 𝔚 𝔛 𝔜 | `font_style: fraktur` |
+| Bold/italic | `\mathbf{x}`, `\mathit{x}` | `font_style: bold` / `italic` |
+
+Rule: size classification and font/glyph-variant classification are
+separate. A 19 px `σ` (sigma lowercase) and a 19 px `Σ` (sigma upper) are
+**both** `normal_inline` by size; the case tag differs (`lower` vs
+`upper`). The AST layer (mathematical engine) uses the tag to place the
+symbol: `σ` (greek_case=lower) is a variable symbol; `Sum` is a big
+operator and must carry `big_operator: true` with limits from the
+msubsup/MathML tree, not from the size tag.
+
+

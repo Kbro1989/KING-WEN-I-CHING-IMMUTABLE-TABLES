@@ -1,0 +1,201 @@
+{
+  "version": "1.0",
+  "created": "2026-11-11",
+  "title": "Evidence Inventory to Reusable Component Map",
+  "source": "KING-WEN-I-CHING-IMMUTABLE-TABLES/scripts + DATASETS/math_recovery/*.json",
+  "architecture_layers": [
+    "L1 Full-page visual capture (PDF pages, text, figures, graphs, equations, symbols)",
+    "L2 Detection and localization (bounding boxes, coordinates, page geometry, crops, overlays)",
+    "L3 Visual classification (math, graphs/plots, symbols, figures/diagrams, text/tables, unresolved)",
+    "L4 Mathematical recovery (OCR, glyph identity, delimiters, spatial structure, canonical AST)",
+    "L5 Visual data recovery (axes, curves, points, legends, units, error bars, figure structure)",
+    "L6 Provenance-preserving evidence registry (image + coordinates + classification + extraction + confidence)"
+  ],
+  "component_map": {
+    "arxiv_html_parser.py": {
+      "layer": "L1",
+      "type": "full-page capture",
+      "purpose": "Walks MathML tree, extracts <math> tags + <annotation x-tex> LaTeX source (991/991 on 2605.00155)",
+      "evidence_entry": "tocr-1212.0957_p8 (page-level capture)",
+      "source_json": "DATASETS/math_recovery/2605.00155_recovery.json -> stats.total_equations: 991",
+      "reusable": "Yes - walk the <math> tree, extract annotation for LaTeX, preserve delimiter identity"
+    },
+    "targeted_math_detector.py": {
+      "layer": "L2",
+      "type": "detection and localization",
+      "purpose": "Targeted crops (z4 detection, z8 crops), bounding boxes, coordinate mapping",
+      "evidence_entry": "tocr-1212.0957_p8 (7-line tall delimiter visible in tall_narrow crops)",
+      "source_json": "DATASETS/PDF_FIDELITY_RENDERINGS/targeted_ocr/1212.0957/*.png",
+      "reusable": "Yes - detection pipeline for visual inclusion of non-math regions"
+    },
+    "vision_math_extractor.py": {
+      "layer": "L3",
+      "type": "visual classification",
+      "purpose": "Classifies visual regions: math vs graph vs symbol vs figure vs text",
+      "evidence_entry": "xref-0806.2366 (classification of detected regions)",
+      "source_json": "DATASETS/math_recovery/*.json -> per-equation classes",
+      "reusable": "Yes - classification layer that routes regions instead of discarding them"
+    },
+    "math_recovery_tool.py": {
+      "layer": "L4",
+      "type": "mathematical recovery",
+      "purpose": "Full pipeline: fetch -> extract -> learn -> recover -> solve -> report",
+      "evidence_entry": "tocr-1212.0957_p8 and xref-0806.2366 (equation-level recovery)",
+      "source_json": "2605.00155_recovery.json: 991 total, 183 recoverable, 65 solvable",
+      "reusable": "Yes - canonical math recovery path; use AST + delimiter identity modules"
+    },
+    "delimiter_identity.py": {
+      "layer": "L4",
+      "type": "mathematical recovery",
+      "purpose": "Preserve bracket family identity: curly, round, square, double_bar, auto_left, etc.",
+      "evidence_entry": "tocr-1212.0957_p8 (7-line tall delimiter)",
+      "source_json": "2605.00155_recovery.json -> stats.bracket_families: 11 families",
+      "reusable": "Yes - normalization and preservation of delimiter identity across parsers"
+    },
+    "structural_ast_extractor.py": {
+      "layer": "L4",
+      "type": "mathematical recovery",
+      "purpose": "Extracts canonical AST from MathML tree, preserving structure; fallback when complex",
+      "evidence_entry": "xref-0806.2366 (AST validation)",
+      "source_json": "2605.00155_recovery.json -> results[].expr (tree-derived solver expr)",
+      "reusable": "Yes - parse LaTeX to AST for canonical representation before SymPy"
+    },
+    "bracket_analyzer.py": {
+      "layer": "L5",
+      "type": "visual data recovery",
+      "purpose": "Analyzes bracket patterns: curly, round, square, extended, auto_left/right, accent_ext",
+      "evidence_entry": "tocr-1212.0957_p8 (tall delimiters)",
+      "source_json": "2605.00155_recovery.json -> stats.bracket_families",
+      "reusable": "Yes - delimiter family classification for visual data recovery layer"
+    },
+    "adjudicate_candidates_v2.py": {
+      "layer": "L6",
+      "type": "provenance-preserving registry",
+      "purpose": "Adjudicates candidates to papers with classification, confidence, coordinates",
+      "evidence_entry": "all evidence_inventory.json entries",
+      "source_json": "2605.00155_recovery.json -> results[] (per-equation adjudication)",
+      "reusable": "Yes - adjudication layer for evidence registry; does NOT discard non-math",
+      "six_class_routing": {
+        "implemented": false,
+        "disposition": "PARTIALLY IMPLEMENTED",
+        "reason": "Match_status taxonomy (5 values) is distinct from six-class visual taxonomy. Script does not distinguish plot vs equation vs symbol; it distinguishes spatial/text/visual adjudication.",
+        "evidence_file": "DATASETS/vision_comparison/adjudicate_candidates_v2_disposition.json",
+        "lines": "80-110, 189-193"
+      }
+    },
+    "add_provenance.py": {
+      "layer": "L6",
+      "type": "provenance-preserving registry",
+      "purpose": "Adds provenance metadata to extracted artifacts (source PDF, version, SHA-256)",
+      "evidence_entry": "evidence_inventory.json -> source_pdf.sha256",
+      "source_json": "DATASETS/math_recovery/2605.00155_recovery.json",
+      "reusable": "Yes - provenance layer for audit trail"
+    },
+    "arxiv_provenance.py": {
+      "layer": "L6",
+      "type": "provenance-preserving registry",
+      "purpose": "Tracks paper version, arXiv URL, HTML URL, e-print source",
+      "evidence_entry": "all evidence_inventory.json entries",
+      "source_json": "2605.00155_recovery.json -> stats.arxiv_id",
+      "reusable": "Yes - paper-level provenance"
+    }
+  },
+  "gaps_to_fill": [
+    {
+      "gap": "Visual classification routing",
+      "description": "Currently regions classified as plot/figure/annotation are not routed to visual data recovery. Need to add routing in evidence_inventory.json so non-math regions are NOT discarded but classified and preserved.",
+      "component": "vision_math_extractor.py (L3)",
+      "action": "Wire evidence_inventory.json so each entry gets a classification (math/plot/symbol/figure/text/unresolved) and retains its crop, coordinates, and provenance"
+    },
+    {
+      "gap": "Math data recovery for delimiter-heavy regions",
+      "description": "7-line tall delimiters on 1212.0957_p8 need dedicated extraction path. Current math_recovery_tool.py treats them as inline text.",
+      "component": "bracket_analyzer.py + delimiter_identity.py (L5)",
+      "action": "Add a delimiter-classification branch that routes tall delimiters to bracket_analyzer.py for separate extraction"
+    },
+    {
+      "gap": "Training-data preparation for non-math",
+      "description": "Non-math detections (plots, figures, graph annotations) are discarded. Need to route them to separate data stores.",
+      "component": "adjudicate_candidates_v2.py (L3, L6)",
+      "action": "Add a classification field to evidence_inventory.json. Non-math regions get 'separate_data' flag and are written to auxiliary JSONL, not discarded."
+    }
+  ],
+  "py_json_pairs": [
+    {
+      "script": "arxiv_html_parser.py",
+      "json_output": "DATASETS/math_recovery/2605.00155_recovery.json",
+      "stats": {
+        "total_equations": 991,
+        "recoverable": 183,
+        "solvable": 65
+      },
+      "pass": "PDF page -> MathML tree walk -> <math> + annotation extraction"
+    },
+    {
+      "script": "math_recovery_tool.py",
+      "json_output": "DATASETS/math_recovery/2605.00155_recovery.json",
+      "stats": {
+        "recoverable_pct": 18.47,
+        "solvable_pct": 6.56,
+        "bracket_families": 11
+      },
+      "pass": "Pipeline: fetch -> extract -> recover -> solve -> report"
+    },
+    {
+      "script": "bracket_analyzer.py",
+      "json_output": "DATASETS/math_recovery/2605.00155_recovery.json",
+      "stats": {
+        "bracket_families": 11
+      },
+      "pass": "Bracket pattern analysis per paper"
+    },
+    {
+      "script": "targeted_math_detector.py",
+      "json_output": "DATASETS/PDF_FIDELITY_RENDERINGS/targeted_ocr/1212.0957/*.png",
+      "stats": {
+        "detection_zoom": 4,
+        "crop_zoom": 8,
+        "min_height_px": 40
+      },
+      "pass": "Full-page -> targeted crops -> coordinate mapping"
+    }
+  ],
+  "adjudicate_candidates_v2_disposition": {
+    "summary": "PARTIALLY IMPLEMENTED \u2014 preservation and adjudication implemented; six-class routing NOT implemented",
+    "behaviors": {
+      "ingestion": "IMPLEMENTED (lines 41-47)",
+      "classification": "PARTIALLY IMPLEMENTED (lines 80-110)",
+      "multi_label": "NOT IMPLEMENTED (lines 86-98, 102-110)",
+      "routing": "NOT IMPLEMENTED (lines 189-193)",
+      "preservation": "IMPLEMENTED (lines 82-89, 171-177)",
+      "unresolved": "IMPLEMENTED (lines 100-110)",
+      "output": "IMPLEMENTED (lines 189-252)"
+    },
+    "reference": "DATASETS/vision_comparison/adjudicate_candidates_v2_disposition.json"
+  },
+  "routing_gap": {
+    "status": "MISSING",
+    "disposition": "NOT IMPLEMENTED - identified as architectural requirement",
+    "rationale": "math_symbol_classifier.py provides multi-label classification but no class-to-destination routing mechanism exists",
+    "design_direction": "Multi-destination routing with one canonical evidence record",
+    "derived_targets": [
+      "Mathematical recovery dataset",
+      "Graph and plot dataset",
+      "Symbol and glyph dataset",
+      "Figure and diagram dataset",
+      "Text and table dataset",
+      "Unresolved review dataset"
+    ],
+    "evidence_file": "DATASETS/vision_comparison/routing_coverage_audit.json"
+  },
+  "evidence_phase": {
+    "complete": true,
+    "items": [
+      "16-folder / 48-image classification audit",
+      "Adjudication disposition",
+      "Multi-label coverage audit",
+      "Routing coverage audit",
+      "Component map reconciliation"
+    ]
+  }
+}

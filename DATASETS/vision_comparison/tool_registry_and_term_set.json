@@ -1,0 +1,95 @@
+{
+  "version": "1.0",
+  "created": "2026-11-11",
+  "description": "Tool registration and term set for King Wen evidence processing.",
+  "architecture_principle": "Multi-destination routing with one canonical evidence record.",
+  "term_set": {
+    "canonical_evidence_record": {
+      "definition": "The original source record. Carries provenance from producer to consumption.",
+      "fields": [
+        "source_file",
+        "page_id",
+        "crop",
+        "coordinates",
+        "producer_lineage",
+        "adjudication"
+      ],
+      "semantic": "Single identity, single provenance chain. Never duplicated."
+    },
+    "classification_collection": {
+      "definition": "Multiple classifications with confidence and evidence, retained per canonical evidence record.",
+      "fields": [
+        "classifications[]",
+        "confidence[]",
+        "evidence[]"
+      ],
+      "semantic": "Retain all classifications. Rank by confidence. Do not discard alternatives."
+    },
+    "routing_decision": {
+      "definition": "Zero or more destinations derived from classifications. Does not delete the canonical record.",
+      "fields": [
+        "destination[]",
+        "derivation_method",
+        "excluded_classifications[]"
+      ],
+      "semantic": "Non-destructive. Records what was routed and why."
+    },
+    "derived_dataset": {
+      "definition": "One output file per derived dataset type. Same evidence record appears in multiple derived datasets.",
+      "fields": [
+        "dataset_name",
+        "path",
+        "included_record_ids[]"
+      ],
+      "semantic": "Each dataset is a subset of canonical evidence, shaped by classification routing."
+    },
+    "best_classification": {
+      "definition": "The highest-confidence classification. Used for selection, not sole routing criterion.",
+      "fields": [
+        "category",
+        "confidence",
+        "method"
+      ],
+      "semantic": "Ranking aid, not exclusive routing token."
+    }
+  },
+  "tool_registration": {
+    "adjudicate_candidates_v2": {
+      "script": "scripts/adjudicate_candidates_v2.py",
+      "purpose": "Visual-integrity adjudication. Preserves evidence.",
+      "input": "pix2text_candidates.jsonl + parser reference JSON",
+      "output": "adjudication_report.jsonl + adjudication_summary.json",
+      "routing_role": "NONE - evidence preservation only",
+      "multi_label_support": false,
+      "registered": true
+    },
+    "math_symbol_classifier": {
+      "script": "scripts/math_symbol_classifier.py",
+      "purpose": "Symbol classification with multi-label retention.",
+      "input": "image region + OCR text + shape features",
+      "output": "classifications[] + best_classification",
+      "routing_role": "CLASSIFICATION ONLY - does not route",
+      "multi_label_support": true,
+      "registered": true
+    },
+    "build_benchmark_representativeness": {
+      "script": "scripts/build_benchmark_representativeness.py",
+      "purpose": "Multi-label benchmark attribution with attribution rule.",
+      "input": "benchmark matrix",
+      "output": "benchmark report JSON with category_attribution",
+      "routing_role": "ATTRIBUTION ONLY - multi-label paper assignment",
+      "multi_label_support": true,
+      "registered": true
+    },
+    "routing_orchestrator": {
+      "script": "scripts/routing_orchestrator.py (not yet implemented)",
+      "purpose": "Class-to-destination routing. Non-destructive. Reads canonical evidence + classifications, writes to multiple destinations.",
+      "input": "canonical evidence record + classification collection",
+      "output": "one or more derived dataset files",
+      "routing_role": "ORCHESTRATION - class-to-destination routing",
+      "multi_label_support": true,
+      "registered": false,
+      "status": "ARCHITECTURAL_REQUIREMENT - NOT IMPLEMENTED"
+    }
+  }
+}

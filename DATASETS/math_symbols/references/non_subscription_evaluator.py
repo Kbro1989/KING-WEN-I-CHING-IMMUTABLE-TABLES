@@ -63,7 +63,7 @@ def find_tesseract() -> str:
 
 # ── PyMuPDF (fitz) ──────────────────────────────────────────────────────────
 try:
-    import fitz  # pymupdf
+    import pymupdf  # pymupdf
     FITZ_AVAILABLE = True
 except ImportError:
     FITZ_AVAILABLE = False
@@ -155,11 +155,11 @@ def render_pdf_page(pdf_path: str, page_num: int,
         return None
 
     try:
-        doc = fitz.open(pdf_path)
+        doc = pymupdf.open(pdf_path)
         page = doc[page_num - 1]  # 0-indexed
 
         # Render at specified DPI
-        mat = fitz.Matrix(dpi / 72, dpi / 72)
+        mat = pymupdf.Matrix(dpi / 72, dpi / 72)
         pix = page.get_pixmap(matrix=mat, alpha=False)
         img = Image.frombytes('RGB', (pix.width, pix.height), pix.samples)
         doc.close()
@@ -250,7 +250,7 @@ def ocr_page(pdf_path: str, page_num: int = 1) -> Tuple[str, float]:
         return "", 0.0
 
     try:
-        doc = fitz.open(pdf_path)
+        doc = pymupdf.open(pdf_path)
         page = doc[page_num - 1]
         img = page.get_pixmap(dpi=150, alpha=False)
         doc.close()

@@ -1,32 +1,180 @@
-import { EmotionalVector, OracleQuery, UserContext } from '../types/oracle.js';
+ function _nullishCoalesce(lhs, rhsFn) { if (lhs != null) { return lhs; } else { return rhsFn(); } }
+import { computeTokenSum, extractCoprimePrimeVector } from '../utils/DeterministicHash.js';
+
+// =============================================================================
+// Intent keyword vocabulary — exact match of _INTENT_KEYWORDS in emotional_engine.py
+// =============================================================================
+
+const INTENT_KEYWORDS = {
+  create:     ['create', 'build', 'make', 'generate', 'new', 'start', 'begin', 'initiate'],
+  destroy:    ['destroy', 'end', 'kill', 'stop', 'break', 'collapse', 'remove', 'delete'],
+  transform:  ['transform', 'change', 'evolve', 'morph', 'shift', 'transition', 'become'],
+  explore:    ['explore', 'discover', 'find', 'search', 'wander', 'journey', 'seek'],
+  understand: ['understand', 'learn', 'see', 'clarity', 'know', 'comprehend', 'insight'],
+  feel:       ['feel', 'emotion', 'love', 'fear', 'joy', 'pain', 'heart', 'soul'],
+  speak:      ['speak', 'voice', 'say', 'tell', 'express', 'communicate', 'utter'],
+  listen:     ['listen', 'hear', 'silence', 'quiet', 'still', 'pause', 'receive'],
+  connect:    ['connect', 'join', 'unite', 'bond', 'link', 'bridge', 'weave'],
+  protect:    ['protect', 'defend', 'guard', 'secure', 'shelter', 'preserve', 'safe'],
+  conflict:   ['conflict', 'fight', 'oppose', 'clash', 'battle', 'resist', 'challenge'],
+  heal:       ['heal', 'repair', 'restore', 'renew', 'mend', 'fix', 'revive'],
+  grow:       ['grow', 'expand', 'increase', 'amplify', 'scale', 'rise', 'flourish'],
+  release:    ['release', 'free', 'surrender', 'yield', 'open', 'flow'],
+  focus:      ['focus', 'concentrate', 'center', 'aim', 'direct', 'target', 'precision'],
+};
+
+function clamp(value, lo = 0.0, hi = 1.0) {
+  return Math.max(lo, Math.min(hi, value));
+}
+
+
+
+
+
+
+
+
+
 
 export class EmotionalParser {
-  parse(query = {}) {
-    const base = {
-      chaos: 0.5,
-      whimsy: 0.5,
-      darkTone: 0.5,
-      coherence: 0.5,
-      voiceWeight: 0.5,
-    };
+  /**
+   * Full deterministic parse pipeline:
+   *   1. Extract intent keywords -> score distribution
+   *   2. Compute 5-axis base vector from intent boosts
+   *   3. Apply coprime prime hash perturbation from token ASCII sum
+   *   4. Apply user context weighting (fatigue, etc.)
+   *
+   * Matches Python extract_intent() + _intent_to_vector() exactly.
+   * No randomness. No fallback to flat 0.5 defaults.
+   */
+  parse(query) {
+    const extraction = this.extractIntent(_nullishCoalesce(query.text, () => ( '')));
+    const vec = { ...extraction.intentVector };
 
     if (query.user_context) {
-      this.applyContext(base, query.user_context);
+      this.applyContext(vec, query.user_context);
     }
 
     if (query.emotional_input !== undefined) {
       const normalized = query.emotional_input / 100;
-      base.whimsy = normalized;
-      base.darkTone = 1 - normalized;
+      vec.whimsy = clamp(vec.whimsy * 0.7 + normalized * 0.3);
+      vec.darkTone = clamp(vec.darkTone * 0.7 + (1 - normalized) * 0.3);
     }
 
-    return base;
+    return vec;
   }
 
-  applyContext(vec, ctx = {}) {
+  extractIntent(text) {
+    const lower = (_nullishCoalesce(text, () => ( ''))).toLowerCase();
+    const words = _nullishCoalesce(lower.match(/[a-z0-9]+/g), () => ( []));
+    const wordSet = new Set(words);
+
+    const matched = {};
+    for (const [intent, keywords] of Object.entries(INTENT_KEYWORDS)) {
+      let score = 0;
+      for (let i = 0; i < keywords.length; i++) {
+        if (wordSet.has(keywords[i])) {
+          score += 1.0 / (i + 1);
+        }
+      }
+      if (score > 0) matched[intent] = score;
+    }
+
+    const dominantIntent = Object.keys(matched).length > 0
+      ? Object.entries(matched).reduce((a, b) => a[1] >= b[1] ? a : b)[0]
+      : 'understand';
+
+    const total = Object.values(matched).reduce((a, b) => a + b, 0);
+    const normalized = {};
+    if (total > 0) {
+      for (const [k, v] of Object.entries(matched)) {
+        normalized[k] = v / total;
+      }
+    }
+
+    const intensity = lower.trim().length > 0
+      ? clamp(lower.split(/\s+/).length / 50.0)
+      : 0.0;
+
+    const intentVector = this.intentToVector(normalized, wordSet);
+
+    return {
+      queryTokens: wordSet,
+      matchedIntents: matched,
+      dominantIntent,
+      intensity,
+      wordCount: words.length,
+      intentVector,
+    };
+  }
+
+   intentToVector(
+    intentScores,
+    wordSet
+  ) {
+    const base = [0.1, 0.1, 0.1, 0.8, 0.85];
+
+    const chaosBoost =
+      (_nullishCoalesce(intentScores.conflict, () => ( 0))) * 0.4 +
+      (_nullishCoalesce(intentScores.destroy, () => ( 0))) * 0.3 +
+      (_nullishCoalesce(intentScores.transform, () => ( 0))) * 0.2 +
+      (_nullishCoalesce(intentScores.create, () => ( 0))) * 0.15;
+    base[0] = clamp(base[0] + chaosBoost);
+
+    const whimsyBoost =
+      (_nullishCoalesce(intentScores.explore, () => ( 0))) * 0.3 +
+      (_nullishCoalesce(intentScores.feel, () => ( 0))) * 0.3 +
+      (_nullishCoalesce(intentScores.heal, () => ( 0))) * 0.2 +
+      (_nullishCoalesce(intentScores.release, () => ( 0))) * 0.2;
+    base[1] = clamp(base[1] + whimsyBoost);
+
+    const darkBoost =
+      (_nullishCoalesce(intentScores.destroy, () => ( 0))) * 0.3 +
+      (_nullishCoalesce(intentScores.conflict, () => ( 0))) * 0.25 +
+      (_nullishCoalesce(intentScores.transform, () => ( 0))) * 0.15;
+    base[2] = clamp(base[2] + darkBoost);
+
+    const cohBoost =
+      (_nullishCoalesce(intentScores.understand, () => ( 0))) * 0.15 +
+      (_nullishCoalesce(intentScores.focus, () => ( 0))) * 0.15 +
+      (_nullishCoalesce(intentScores.speak, () => ( 0))) * 0.1 +
+      (_nullishCoalesce(intentScores.protect, () => ( 0))) * 0.1;
+    base[3] = clamp(base[3] + cohBoost);
+
+    const vwBoost =
+      (_nullishCoalesce(intentScores.speak, () => ( 0))) * 0.15 +
+      (_nullishCoalesce(intentScores.protect, () => ( 0))) * 0.1 +
+      (_nullishCoalesce(intentScores.connect, () => ( 0))) * 0.1 +
+      (_nullishCoalesce(intentScores.grow, () => ( 0))) * 0.15;
+    base[4] = clamp(base[4] + vwBoost);
+
+    if (wordSet.size > 0) {
+      const hashVal = computeTokenSum(wordSet);
+      const primeVec = extractCoprimePrimeVector(hashVal);
+      base[0] = clamp(base[0] + primeVec.chaos);
+      base[1] = clamp(base[1] + primeVec.whimsy);
+      base[2] = clamp(base[2] + primeVec.darkTone);
+      base[3] = clamp(base[3] + primeVec.coherence);
+      base[4] = clamp(base[4] + primeVec.voiceWeight);
+    }
+
+    return {
+      chaos: base[0],
+      whimsy: base[1],
+      darkTone: base[2],
+      coherence: base[3],
+      voiceWeight: base[4],
+    };
+  }
+
+  toIntentEmotional(vec) {
+    return [vec.chaos, vec.whimsy, vec.darkTone];
+  }
+
+   applyContext(vec, ctx) {
     if (ctx.fatigue !== undefined) {
-      vec.chaos = Math.min(1, vec.chaos + (ctx.fatigue / 100) * 0.3);
-      vec.coherence = Math.max(0, vec.coherence - (ctx.fatigue / 100) * 0.2);
+      vec.chaos = clamp(vec.chaos + (ctx.fatigue / 100) * 0.3);
+      vec.coherence = clamp(vec.coherence - (ctx.fatigue / 100) * 0.2);
     }
   }
 }

@@ -222,9 +222,11 @@ def process_paper(arxiv_id, html, url):
     solvable_count = 0
     partial_count = 0
     rejected_count = 0
+    unresolved_count = 0
 
     for eq in equations:
         expr = eq.get("expr", "")
+        counted = False  # Ensure each equation counted exactly once
 
         # Try integral parsing first
         mathml = eq.get("mathml", "")
@@ -237,11 +239,11 @@ def process_paper(arxiv_id, html, url):
                     partial_count += 1
                 else:
                     solvable_count += 1
-            else:
-                rejected_count += 1
+                counted = True  # Integral parse produced valid terminal result
+            # Fall through to SymPy fallback if integral parse failed (node falsy)
 
-        # Try SymPy solving
-        if expr:
+        # Try SymPy solving — only if not already counted
+        if not counted and expr:
             solvable, result, error = try_solve(expr)
             if solvable:
                 eq["solved"] = result
@@ -252,10 +254,16 @@ def process_paper(arxiv_id, html, url):
                     partial_count += 1
                 else:
                     rejected_count += 1
+            counted = True
+
+        # Equation not classified by either layer — unresolved
+        if not counted:
+            unresolved_count += 1
 
     print(f"  Solvable: {solvable_count}")
     print(f"  Partial:  {partial_count}")
     print(f"  Rejected: {rejected_count}")
+    print(f"  Unresolved: {unresolved_count}")
 
     # Step 3: Relate
     print("\nSTEP 3: Relate equations to context")
@@ -271,6 +279,7 @@ def process_paper(arxiv_id, html, url):
         "solvable": solvable_count,
         "partial": partial_count,
         "rejected": rejected_count,
+        "unresolved": unresolved_count,
         "equations": equations,
     }
 

@@ -22,9 +22,15 @@ import sys
 import json
 from pathlib import Path
 try:
-    import fitz  # type: ignore[import-not-found]
+    import pymupdf
+    fitz = pymupdf
 except ImportError:
-    fitz = None  # type: ignore[assignment]
+    try:
+        import fitz  # type: ignore[import-not-found]
+        pymupdf = fitz
+    except ImportError:
+        pymupdf = None  # type: ignore[assignment]
+        fitz = None  # type: ignore[assignment]
 
 if sys.platform == 'win32':
     if hasattr(sys.stdout, 'reconfigure'):
@@ -197,12 +203,12 @@ def run_audit(save_manifest: bool = True, output_path: Path | None = None) -> di
         assert provenance, f"Missing reference_provenance for {cid}"
 
         # 5. Extract text from PDF clip rects
-        doc = fitz.open(str(pdf_path))
+        doc = pymupdf.open(str(pdf_path))
         page = doc[page_num]
 
-        exact_rect = fitz.Rect(bbox['x0'], bbox['y0'], bbox['x1'], bbox['y1'])
-        pad_rect = fitz.Rect(bbox['x0'] - 3, bbox['y0'] - 2, bbox['x1'] + 3, bbox['y1'] + 2)
-        wide_rect = fitz.Rect(bbox['x0'] - 15, bbox['y0'] - 10, bbox['x1'] + 15, bbox['y1'] + 10)
+        exact_rect = pymupdf.Rect(bbox['x0'], bbox['y0'], bbox['x1'], bbox['y1'])
+        pad_rect = pymupdf.Rect(bbox['x0'] - 3, bbox['y0'] - 2, bbox['x1'] + 3, bbox['y1'] + 2)
+        wide_rect = pymupdf.Rect(bbox['x0'] - 15, bbox['y0'] - 10, bbox['x1'] + 15, bbox['y1'] + 10)
 
         exact_text = page.get_text('text', clip=exact_rect).strip().replace('\n', ' ')
         pad_text = page.get_text('text', clip=pad_rect).strip().replace('\n', ' ')

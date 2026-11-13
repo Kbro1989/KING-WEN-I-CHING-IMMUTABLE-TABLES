@@ -1,0 +1,432 @@
+# Sidecar Association Contract — AST-to-Spatial Association Layer
+
+**Document:** `scripts/association_bridge.py` + `association_schema.json`
+**Purpose:** Sidecar association contract that connects visual evidence, mathematical structure, and spatial relationships
+**Design principle:** Never manufacture a relationship merely because gold standard says one exists
+**Status:** Reference implementation
+
+---
+
+## 1. Why a Sidecar Contract
+
+The D1–D6 engine recovers delimiters, defines gates D1–D6, and classifies visual
+regions. The AST extractor defines semantic structure. But neither produces the
+**association** between them.
+
+| Layer | Exists? | Proves |
+|---|---|---|
+| Source evidence (glyphs, fonts, coordinates) | ✅ Yes (spatial_syntactic_observer) | Raw PDF observations |
+| Visual region detection | ✅ Yes (chroma_visual_reader) | Segmented regions |
+| Extensible delimiter assembly | ⚠️ Partial | Token-level, not piece-level |
+| Fraction geometry | ✅ Partially (chroma) | Candidate regions only |
+| Script geometry | ✅ Partially (targeted_math_detector) | Unresolved candidates |
+| Integral limits | ❌ Not established | No limit association |
+| AST-to-PDF association | ❌ No | **This contract is the bridge** |
+
+The sidecar contract is a detached data layer. It reads each layer independently
+and writes association records. It does not create relationships; it records
+which visual evidence supports which AST node — with confidence and verification
+status. If the underlying layers don't support a relationship, the record is
+`unverified` or `unresolved`, never `verified`.
+
+---
+
+## 2. Association Record Schema
+
+```json
+{
+  "association_id": "string",
+  "source_occurrence": {
+    "pdf_sha256": "string",
+    "paper_id": "string",
+    "page_number": "integer",
+    "page_index": "integer",
+    "source_type": "text_layer|mupdf_rawdict|visual_region|glyph_observation"
+  },
+  "glyph_observations": [
+    {
+      "glyph_id": "string",
+      "unicode_char": "string",
+      "font_name": "string",
+      "font_size_pt": "float",
+      "pdf_bbox": [x0, y0, x1, y1],
+      "origin": [x, y],
+      "reading_order": "integer",
+      "coordinate_space": "mupdf_page_points"
+    }
+  ],
+  "visual_evidence": {
+    "region_id": "string",
+    "structure_type": "fraction|cases|stacked_limits|delimited_group|script_group|wide_accent",
+    "bbox": [x0, y0, x1, y1],
+    "aspect_ratio": "float",
+    "fill_ratio": "float",
+    "confidence": "float",
+    "embedding_coord_space": "mupdf_page_points"
+  },
+  "ast_node": {
+    "node_id": "string",
+    "kind": "Fraction|FractionNumerator|FractionDenominator|Subscript|Superscript|Integral|Sum|Product|Limit|Inf",
+    "tree_path": "string",
+    "operator_name": "string",
+    "semantics": "string"
+  },
+  "parent_child_relationship": {
+    "parent": "string (AST node_id or 'root')",
+    "child": "string (AST node_id)",
+    "relationship_type": "base_to_exponent|numerator_to_denominator|integral_to_upper|integral_to_lower|operator_to_operand|containment",
+    "bbox_provenance": {
+      "parent_box": [x0, y0, x1, y1],
+      "child_box": [x0, y0, x1, y1],
+      "spatial_rule": "contains|overlaps_adjacent|vertical_overlaps|horizontally_adjacent|above_beneath",
+      "probe_passed": "boolean",
+      "probe_fail_reason": "string|null"
+    }
+  },
+  "confidence": {
+    "overall": "float",
+    "per_layer": {
+      "glyph_observation": "float",
+      "visual_region": "float",
+      "ast_node": "float",
+      "spatial_probe": "float"
+    },
+    "verification_status": "unverified|unresolved|verified|refuted",
+    "evidence_notes": "string"
+  },
+  "recorded_at": "iso8601"
+}
+```
+
+### 2.1 Field Semantics
+
+| Field | Rule |
+|---|---|
+| `source_occurrence` | Links back to the exact PDF bytes and page — always preserved |
+| `glyph_observations` | Raw observations pulled from `spatial_syntactic_observer` — never transformed |
+| `visual_evidence` | Region proposal from `chroma_visual_reader` or `targeted_math_detector` |
+| `ast_node` | Node identity from `structural_ast_extractor` / `mathml_parser` |
+| `parent_child_relationship` | Spatial relationship between parent and child — only recorded if supported by evidence |
+| `bbox_provenance.probe_passed` | The geometric probe that validates the relationship — recorded even when `false` |
+| `confidence.overall` | Normalized evidence score — `0.0` to `1.0` |
+| `confidence.verification_status` | `unverified` (no probe run), `unresolved` (probe failed), `verified` (probe passed), `refuted` (probe indicates different relationship) |
+
+### 2.2 Verification Status Semantics
+
+| Status | Meaning | Confidence |
+|---|---|---|
+| `unverified` | Relationship proposed but no geometric probe executed | ≤0.5 |
+| `unresolved` | Probe executed, failed; relationship NOT established | 0.0 (not fabricated) |
+| `verified` | Probe executed, passed; spatial rule confirmed | >0.5 |
+| `refuted` | Probe executed and indicates the parent-child mapping is wrong (e.g., visual grouping suggests different hierarchy) | 0.0 (not fabricated) |
+
+**Critical rule:** `unresolved` and `refuted` records are still written to the ledger.
+They are evidence. Omitting them is the same as manufacturing a relationship.
+
+---
+
+## 3. Association Ledger
+
+All association records are appended to `association_ledger.jsonl` under the
+repo root. Each line is one association record.
+
+```json
+{
+  "association_id": "kwid_1212.0957_p8_0001",
+  "source_occurrence": { "pdf_sha256": "...", "paper_id": "1212.0957", "page_number": 8 },
+  "glyph_observations": [ ... ],
+  "visual_evidence": { ... },
+  "ast_node": { ... },
+  "parent_child_relationship": { ... },
+  "confidence": { ... },
+  "recorded_at": "2026-11-12T14:30:00Z"
+}
+```
+
+### 3.1 Ledger Query Interface
+
+```python
+import json
+from pathlib import Path
+
+LEDGER_PATH = Path("association_ledger.jsonl")
+
+def load_ledger() -> list:
+    records = []
+    if not LEDGER_PATH.exists():
+        return records
+    for line in LEDGER_PATH.read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            records.append(json.loads(line))
+    return records
+
+def query_by_page(paper_id: str, page_number: int) -> list:
+    return [r for r in load_ledger()
+            if r["source_occurrence"]["paper_id"] == paper_id
+            and r["source_occurrence"]["page_number"] == page_number]
+
+def query_by_association_kind(kind: str) -> list:
+    return [r for r in load_ledger() if r["parent_child_relationship"]["relationship_type"] == kind]
+```
+
+---
+
+## 4. Association Builder — `scripts/association_bridge.py`
+
+The bridge connects existing recovery layers into association records. It does
+not create new detection; it consumes existing layers and writes association
+records.
+
+```python
+#!/usr/bin/env python3
+"""
+"""Association bridge: connects visual evidence, mathematical structure, and
+spatial relationships into association records for the sidecar ledger.
+
+Consumes:
+  1. spatial_syntactic_observer.GlyphObservation -- glyph coordinates
+  2. chroma_visual_reader.VisualRegion/VisionMathStructure -- visual regions
+  3. structural_ast_extractor -- AST node identity
+
+Produces:
+  1. association_ledger.jsonl -- one association record per line
+
+Does NOT:
+  - Create new detection
+  - Resolve ambiguous relations (leave unresolved)
+  - Fabricate relationships (leave unverified/refuted with evidence)""",
+"""
+```
+
+### 4.1 Key Functions
+
+```python
+def build_association(paper_id: str, page_number: int) -> list:
+    """
+    Build association records for a single paper page.
+    Returns a list of association records (may be empty).
+    """
+    # 1. Load glyph observations from spatial_syntactic_observer
+    glyphs = load_glyph_observations(paper_id, page_number)
+    
+    # 2. Load visual regions from chroma_visual_reader
+    regions = load_visual_regions(paper_id, page_number)
+    
+    # 3. Load AST nodes from structural_ast_extractor
+    ast_nodes = load_ast_nodes(paper_id, page_number)
+    
+    # 4. Build association records
+    records = []
+    for node in ast_nodes:
+        assoc = build_node_association(node, glyphs, regions)
+        if assoc:
+            records.append(assoc)
+    
+    return records
+
+def build_node_association(node: dict, glyphs: list, regions: list) -> dict | None:
+    """
+    Build a single association record for one AST node.
+    Returns None if no evidence supports the node.
+    """
+    assoc = {
+        "association_id": generate_id(paper_id, page_number, node["node_id"]),
+        "source_occurrence": {
+            "pdf_sha256": load_pdf_sha256(paper_id),
+            "paper_id": paper_id,
+            "page_number": page_number,
+            "source_type": "text_layer"
+        },
+        "glyph_observations": [],
+        "visual_evidence": None,
+        "ast_node": node,
+        "parent_child_relationship": {
+            "parent": "root",
+            "child": node["node_id"],
+            "relationship_type": "unknown",
+            "bbox_provenance": {
+                "parent_box": [],
+                "child_box": [],
+                "spatial_rule": None,
+                "probe_passed": False,
+                "probe_fail_reason": "no_spatially_connected_parent"
+            }
+        },
+        "confidence": {
+            "overall": 0.0,
+            "per_layer": {
+                "glyph_observation": 0.0,
+                "visual_region": 0.0,
+                "ast_node": 0.0,
+                "spatial_probe": 0.0
+            },
+            "verification_status": "unverified",
+            "evidence_notes": ""
+        },
+        "recorded_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Populate glyph observations from spatial observer
+    assoc["glyph_observations"] = find_glyphs_for_node(node, glyphs)
+    assoc["confidence"]["per_layer"]["glyph_observation"] = len(assoc["glyph_observations"]) / max(len(glyphs), 1)
+    
+    # Populate visual evidence (if any)
+    if regions:
+        assoc["visual_evidence"] = find_region_for_node(node, regions)
+        assoc["confidence"]["per_layer"]["visual_region"] = assoc["visual_evidence"]["confidence"]
+    
+    # Run spatial probes
+    if assoc["visual_evidence"]:
+        probe = run_spatial_probe(node, assoc["visual_evidence"], assoc["glyph_observations"])
+        assoc["parent_child_relationship"].update(probe["probe_result"])
+        assoc["confidence"]["per_layer"]["spatial_probe"] = probe["score"]
+        assoc["confidence"]["overall"] = (
+            assoc["confidence"]["per_layer"]["glyph_observation"] * 0.25
+            + assoc["confidence"]["per_layer"]["visual_region"] * 0.25
+            + assoc["confidence"]["per_layer"]["spatial_probe"] * 0.50
+        )
+        
+        if probe["probe_passed"]:
+            assoc["confidence"]["verification_status"] = "verified"
+        elif probe["probe_fail_reason"]:
+            assoc["confidence"]["verification_status"] = "unresolved"
+    
+    return assoc
+```
+
+### 4.2 Spatial Probes
+
+The probe evaluates the geometric relationship proposed by the AST against the
+spatial evidence. It returns a probe result — even when the probe fails.
+
+```python
+def run_spatial_probe(node: dict, region: dict, glyphs: list) -> dict:
+    """
+    Run geometric probe for a proposed parent-child relationship.
+    Returns probe result regardless of outcome.
+    """
+    parent_box = region["bbox"]  # derived from visual region bbox
+    child_box = extract_glyph_bbox(node["glyph_observations"])
+    
+    if not child_box:
+        return {
+            "probe_passed": False,
+            "probe_fail_reason": "no_glyph_coordinates",
+            "score": 0.0
+        }
+    
+    parent_center = [(parent_box[0] + parent_box[2]) / 2, (parent_box[1] + parent_box[3]) / 2]
+    child_center = [(child_box[0] + child_box[2]) / 2, (child_box[1] + child_box[3]) / 2]
+    
+    # Vertical containment (base → exponent)
+    if node["parent_child_relationship"]["relationship_type"] == "base_to_exponent":
+        # Exponent is typically above base, not contained in the base bbox
+        parent_height = parent_box[3] - parent_box[1]
+        return {
+            "probe_passed": child_center[1] < parent_box[1],
+            "probe_fail_reason": None,
+            "score": 0.8 if child_center[1] < parent_box[1] else 0.2
+        }
+    
+    # Numerator/denominator containment (fraction)
+    if node["parent_child_relationship"]["relationship_type"] == "numerator_to_denominator":
+        # Numerator should be above fraction bar, denominator below
+        # This probe requires fraction bar geometry — not yet available in v1
+        return {
+            "probe_passed": False,
+            "probe_fail_reason": "no_fraction_bar_geometry",
+            "score": 0.0
+        }
+    
+    # Default containment probe
+    return {
+        "probe_passed": parent_box[0] <= child_box[0] and parent_box[2] >= child_box[2]
+        and parent_box[1] <= child_box[1] and parent_box[3] >= child_box[3],
+        "probe_fail_reason": None,
+        "score": 0.9 if parent_box[0] <= child_box[0] and parent_box[2] >= child_box[2] and parent_box[1] <= child_box[1] and parent_box[3] >= child_box[3] else 0.1
+    }
+```
+
+---
+
+## 5. Evidence-Rich Association Types
+
+The association contract supports 8 relationship types, each with its own spatial
+probe and verification criteria.
+
+| Relationship | Spatial Rule | Probe |
+|---|---|---|
+| `base_to_exponent` | Exponent bbox is above base bbox, not contained | `child_center.y < parent_box.y0` |
+| `numerator_to_denominator` | Numerator above fraction bar, denominator below | Requires fraction bar geometry (v2+) |
+| `integral_to_upper_lower` | Limits above/below integral, not inside | `child.y < integral.y0` or `child.y > integral.y1` |
+| `operator_to_operand` | Operator bbox overlaps adjacent operand bounds | `overlaps` with 5pt tolerance |
+| `delimited_group` | Delimiter bbox contains interior bbox | `parent_box.contains(child_box)` |
+| `stacked_limit` | Subscript below, superscript above | `child.y < base.y` and `child.y > base.y` |
+| `wide_accent` | Over/under accent bbox is wider than base | `child.w > base.w` |
+| `crossed_script` | Subscript and superscript relative to base | Vertical offset magnitude + sign |
+
+Each probe returns a result — including `False` and a `probe_fail_reason`.
+The result is recorded in the ledger. `unresolved` and `refuted` records are
+legitimate ledger entries.
+
+---
+
+## 6. Verification Requirements
+
+The association contract requires independent verification:
+
+### 6.1 Coordinate Verification
+- Glyph coordinates come from `spatial_syntactic_observer` (PyMuPDF rawdict)
+- Visual region coordinates come from `chroma_visual_reader` (K-Means + connected components)
+- Both layers record coordinate space as `mupdf_page_points`
+- No coordinate transformation between layers without explicit conversion
+
+### 6.2 Visual Region Gold Comparison
+- `chroma_visual_reader` regions must be compared against gold-labeled regions
+- Any mismatch (false positive/negative) must be recorded in the ledger
+- The comparison is part of the `confidence` calculation
+
+### 6.3 Association Consistency
+- For each association: glyph count ≥ 1, region count ≥ 0 (indicating no regional evidence)
+- For `parent_child_relationship.probe_passed == true`: probe must be recorded with spatial rule
+- For `verification_status == "refuted"`: `probe_fail_reason` must explain why
+
+### 6.4 Provenance Preservation
+Every association record carries:
+- `source_occurrence.pdf_sha256` — paper PDF checksum
+- `source_occurrence.page_number` — page number
+- `source_occurrence.pdf_sha256` — paper PDF checksum
+- `recorded_at` — submission timestamp
+
+---
+
+## 7. Usage
+
+```bash
+# Build associations for all pages of a paper
+python scripts/association_bridge.py --paper_id 1212.0957
+
+# Build associations for a single page
+python scripts/association_bridge.py --paper_id 1505.05770 --page 1
+
+# Query the ledger
+python -c "from association_bridge import load_ledger; [print(r['association_id']) for r in load_ledger()]"
+```
+
+---
+
+## 8. What the Association Contract Does NOT Do
+
+| Does not | Reason |
+|---|---|
+| Detect new glyphs | Chroma reader already does visual segmentation |
+| Classify delimiter types | Delimiter identity already established |
+| Fix OCR errors | That is upstream work, not association work |
+| Resolve ambiguous scripts | Ambiguity is preserved as `unresolved` |
+| Force-match visual to AST | Each relationship is probe-tested independently |
+| Rebuild exclusion | Existing V2.1/V2.1.1-A history is untouched |
+
+The sidecar contract is a **data layer**, not an algorithm layer. It records what
+exists, connects independent evidence, and preserves uncertainty. It does not
+create detection. It does not resolve ambiguity. It does not manufacture
+relationships. It only records them — with confidence and provenance.
