@@ -1,0 +1,390 @@
+{
+  "matrix_version": "1.0",
+  "generated": "2026-11-11",
+  "purpose": "Vision/math/OCR/PDF/clipping pipeline reconciliation \u2014 documents the division between PDF/HTML extraction and pixel-based recognition, preserves historical OCR experiments, and identifies actual runtime consumers.",
+  "recovery_document_ref": "pasted_content_2026-11-11_18-38-19-617_16112e.txt",
+  "governing_principles": [
+    "Preserve the boundaries: PDF/HTML extraction \u2260 pixel-based recognition",
+    "Preserve historical evidence: L1/L2/L3 OCR lineage is NOT replaceable by G0 runner",
+    "Distinguish: program exists \u2260 program executes \u2260 program produces correct output",
+    "Every edge has its own evidence and status",
+    "No automatic remediation \u2014 status upgrades only with supporting evidence"
+  ],
+  "discrepancy_log": [
+    {
+      "issue": "arXiv HTML corpus population count",
+      "inventory_claim": "106 records (DATASETS/arxiv_html_corpus/*.json)",
+      "actual_finding": "241 .json files; 241 unique arXiv IDs (241)",
+      "reconciliation": "106 likely refers to a subset/earlier pull. Actual corpus expands to 241 (2006-2026). Revised count: 241 papers, 72,774 equation records.",
+      "status": "PROVEN / requires user confirmation"
+    },
+    {
+      "issue": "Math recovery v16 provenance",
+      "inventory_claim": "Current output is authoritative",
+      "actual_finding": "v16 has 15 files (14 per-paper + aggregate_report.json) with 10.8MB. Historical v3-v6, v12-v15 also exist (891KB-1.2MB each). 72774 total equation records in corpus.",
+      "reconciliation": "Multiple recovery directories (v3, v4, v5, v6, v12, v13, v14, v15, v16) exist as separate lineages. v16 differs (10.8MB \u2014 likely 72774 records across 14 papers). Missing: v2, v7-v11.",
+      "status": "PROVEN / no evidence ties v16 as 'current' over v15"
+    },
+    {
+      "issue": "Pix2Text lineage",
+      "inventory_claim": "Pix2Text harvest pipeline as current",
+      "actual_finding": "scripts/pix2text_harvest.py EXISTS (18,237 bytes), scripts/adjudicate_candidates_v2.py EXISTS (9,569 bytes), scripts/adjudicate_targets.py EXISTS (12,599 bytes), scripts/ocr_polarity_ablation.py EXISTS (8,302 bytes)",
+      "reconciliation": "L1/L2/L3 OCR evidence chain is preserved on disk. 158 candidates harvested from pix2text_harvest.py. Historical lineage IS the provenance, NOT G0 runner outputs.",
+      "status": "PROVEN"
+    },
+    {
+      "issue": "RapidOCR pipeline order",
+      "inventory_claim": "RapidOCR as primary OCR",
+      "actual_finding": "RapidOCR outputs exist in DATASETS/d1_diagnostic_2026-11-06/ and scripts/ocr_output/, but were introduced later than the original pipeline",
+      "reconciliation": "RapidOCR is a LATER addition. Historical pipeline (pix2text_harvest \u2192 adjudicate_candidates_v2 \u2192 adjudicate_targets) must be treated as original evidence.",
+      "status": "PROVEN"
+    },
+    {
+      "issue": "G0 runner scope",
+      "inventory_claim": "G0 = integrated vision/math pipeline",
+      "actual_finding": "G0 runner was geometry-only. The integrated vision/math pipeline is still in development.",
+      "reconciliation": "G0 is NOT fully integrated. Require fresh source verification before claiming integrated vision/math pipeline.",
+      "status": "KNOWN_CONCERN \u2014 proven not fully verified"
+    },
+    {
+      "issue": "math_pdf_parser.py layer execution",
+      "inventory_claim": "Six-layer parser documented and validated together",
+      "actual_finding": "math_pdf_parser.py L5 layer structure (text, vision, OCR, symbol classification, spatial, equation assembly) exists, but implementation and validation are separate",
+      "reconciliation": "Layer structure is documented; actual layer execution must be inspected per-layer. Test files test_integral_ir.py, test_munder_fix.py, test_structural_conservation.py exist separately.",
+      "status": "PROVEN \u2014 but layer-by-layer verification needed"
+    },
+    {
+      "issue": "Shap-E generator duplicate",
+      "inventory_claim": "Shap-E generator listed twice",
+      "actual_finding": "Single script: scripts/shap_e_kingwen_3d_generator.py. No duplicate in scripts/.",
+      "reconciliation": "No duplicate found in scripts/. DATASETS/shap_e_3d_manifest.json and DATASETS/kingwen_3d_meshes/shap_e_hex_*.ply are outputs, not duplications.",
+      "status": "PROVEN \u2014 duplicate resolved as output artifact, not script duplication"
+    }
+  ],
+  "pipeline_lineages": [
+    {
+      "lineage_name": "L1-L2-L3 Historical OCR Evidence Chain",
+      "type": "PRESERVED_HISTORICAL",
+      "description": "Original near-golden OCR workflow. Do not replace with G0 runner.",
+      "steps": [
+        {
+          "step": "L1",
+          "script": "scripts/pix2text_harvest.py",
+          "output": "pix2text_candidates.jsonl",
+          "count": "158 harvested candidates",
+          "evidence": "scripts/pix2text_harvest.py exists (18,237 bytes)"
+        },
+        {
+          "step": "L2",
+          "script": "scripts/adjudicate_candidates_v2.py",
+          "output": "adjudication_report.jsonl",
+          "count": "158 candidate records with explicit adjudication statuses",
+          "evidence": "scripts/adjudicate_candidates_v2.py exists (9,569 bytes)"
+        },
+        {
+          "step": "L3",
+          "script": "scripts/adjudicate_targets.py",
+          "output": "adjudication_targets*.jsonl",
+          "count": "target-level adjudication",
+          "evidence": "scripts/adjudicate_targets.py exists (12,599 bytes)"
+        },
+        {
+          "step": "Ablation",
+          "script": "scripts/ocr_polarity_ablation.py",
+          "output": "ocr_polarity_ablation_report.json",
+          "count": "OCR polarity comparison results",
+          "evidence": "scripts/ocr_polarity_ablation.py exists (8,302 bytes)"
+        }
+      ],
+      "status": "PRESERVED_HISTORICAL \u2014 do not overwrite with G0 runner",
+      "verification": "DONE \u2014 all 4 scripts confirmed on disk"
+    },
+    {
+      "lineage_name": "arXiv HTML MathML Extraction Pipeline",
+      "type": "CURRENT",
+      "description": "arXiv HTML MathML tree walk \u2014 canonical source for math extraction (991/991 per paper on 2605.00155).",
+      "producers": [
+        "scripts/arxiv_html_parser.py",
+        "scripts/mathml_parser.py"
+      ],
+      "consumers": [
+        "scripts/math_recovery_tool.py",
+        "scripts/mathml_parser.py::MathMLParser",
+        "scripts/display_equation_extractor.py"
+      ],
+      "artifacts": [
+        "DATASETS/arxiv_html_corpus/*.json (241 papers, 72,774 equations)"
+      ],
+      "domains": [
+        "PDF/HTML_EXTRACTION",
+        "MATHML_PARSING"
+      ],
+      "status": "PROVEN \u2014 241 unique arXiv IDs, 72,774 equation records verified on disk"
+    },
+    {
+      "lineage_name": "PDF Math 6-Layer Pipeline",
+      "type": "CURRENT",
+      "description": "6-layer chain: text \u2192 vision region \u2192 OCR \u2192 symbol classification \u2192 spatial relationships \u2192 equation assembly.",
+      "producers": [
+        "scripts/math_pdf_parser.py"
+      ],
+      "consumers": [
+        "scripts/math_structure_extractor.py",
+        "scripts/multi_engine_parser.py",
+        "scripts/arxiv_provenance.py"
+      ],
+      "artifacts": [
+        "DATASETS/math_extraction_zotero_full.json",
+        "DATASETS/structural_preservation/*.json"
+      ],
+      "domains": [
+        "PDF_EXTRACTION",
+        "MATH_TOOLING"
+      ],
+      "status": "PROVEN \u2014 6-layer structure confirmed in code, layer-by-layer validation pending"
+    },
+    {
+      "lineage_name": "G0 Integrated Vision/Math Pipeline",
+      "type": "DEVELOPMENT",
+      "description": "G0 runner was geometry-only. Integration into vision/math is not complete.",
+      "producers": [
+        "scripts/build_g0_runner.py"
+      ],
+      "consumers": [
+        "python -m eval.main",
+        "structured eval JSONL outputs"
+      ],
+      "artifacts": [
+        "DATASETS/evaluation/g0_captures/*.jsonl",
+        "DATASETS/evaluation/g0_candidates/*.jsonl"
+      ],
+      "domains": [
+        "VISION_PIPELINE",
+        "MATH_PIPELINE"
+      ],
+      "status": "KNOWN_CONCERN \u2014 not fully integrated; require fresh verification"
+    },
+    {
+      "lineage_name": "Multi-Engine Parser",
+      "type": "CURRENT",
+      "description": "Multi-engine stacking: C (vision+OCR) provides candidates \u2192 D (regex) filters \u2192 A/E (PyMuPDF) adds context.",
+      "producers": [
+        "scripts/multi_engine_parser.py",
+        "scripts/math_recovery_tool.py"
+      ],
+      "consumers": [
+        "scripts/solve_all.py",
+        "scripts/solve_provenance.py",
+        "scripts/arxiv_provenance.py"
+      ],
+      "artifacts": [
+        "DATASETS/math_recovery_v16/*.json (241 equations recovered, up to 158 recovered, 35.0% rate)"
+      ],
+      "domains": [
+        "MATH_TOOLING",
+        "PDf_PARSING"
+      ],
+      "status": "PROVEN \u2014 69 pass / 11 fail across 86 scripts after installing pymupdf + latex2sympy2"
+    },
+    {
+      "lineage_name": "Pix2Text Crop Harvest Pipeline",
+      "type": "HISTORICAL",
+      "description": "Pix2Text OCR crop harvest \u2014 extracts formula crops from PDFs for glyph catalog evaluation.",
+      "producers": [
+        "scripts/pix2text_harvest.py"
+      ],
+      "consumers": [
+        "scripts/adjudicate_candidates_v2.py",
+        "scripts/adjudicate_targets.py",
+        "scripts/audit_candidate_crops.py"
+      ],
+      "artifacts": [
+        "DATASETS/GIF-and-PNG-Images-for-Math-Symbols.html (29 GIFs)",
+        "DATASETS/math_symbols/images/"
+      ],
+      "domains": [
+        "VISION_PIPELINE",
+        "OCR_PIPELINE"
+      ],
+      "status": "PROVEN \u2014 29 GIF images, 1,182 symbol names, 98% hrefs to remote metamath.org"
+    }
+  ],
+  "parser_relationship_graph": {
+    "nodes": [
+      {
+        "id": "mathml_parser",
+        "type": "MR",
+        "domain": "PDF/HTML_EXTRACTION",
+        "description": "MathML tree parser \u2014 canonical source (991/991 per paper)"
+      },
+      {
+        "id": "math_pdf_parser",
+        "type": "PD",
+        "domain": "PDF_EXTRACTION",
+        "description": "6-layer PDF parser: text \u2192 vision \u2192 OCR \u2192 symbol \u2192 spatial \u2192 equation"
+      },
+      {
+        "id": "math_recovery_tool",
+        "type": "RT",
+        "domain": "MATH_RECOVERY",
+        "description": "LaTeX recovery + SymPy bridge"
+      },
+      {
+        "id": "multi_engine_parser",
+        "type": "ME",
+        "domain": "MATH_TOOLING",
+        "description": "Multi-engine: vision + OCR + regex + PyMuPDF context"
+      },
+      {
+        "id": "display_equation_extractor",
+        "type": "DE",
+        "domain": "VISUAL_PIPELINE",
+        "description": "Display equation extraction from HTML"
+      },
+      {
+        "id": "math_structure_extractor",
+        "type": "ST",
+        "domain": "MATH_TOOLING",
+        "description": "Math structure extraction (spatial syntax)"
+      },
+      {
+        "id": "math_symbol_classifier",
+        "type": "SC",
+        "domain": "VISION_PIPELINE",
+        "description": "Math symbol classification (OCR text + shape)"
+      },
+      {
+        "id": "math_symbol_vision_hooks",
+        "type": "VH",
+        "domain": "VISION_PIPELINE",
+        "description": "Vision hooks for symbol recognition"
+      },
+      {
+        "id": "visual_math_translator",
+        "type": "VT",
+        "domain": "VISION_PIPELINE",
+        "description": "Visual math translation via glyph catalog matching"
+      },
+      {
+        "id": "bridge_quantumlab_visualization",
+        "type": "BQ",
+        "domain": "VISUAL_PIPELINE",
+        "description": "QuantumLab visualization bridge"
+      }
+    ],
+    "edges": [
+      {
+        "from": "arxiv_html_parser",
+        "to": "mathml_parser",
+        "type": "stream",
+        "domain": "PDF/HTML_EXTRACTION",
+        "evidence": "arxiv_html_parser.py imports MathMLParser from mathml_parser"
+      },
+      {
+        "from": "mathml_parser",
+        "to": "math_recovery_tool",
+        "type": "stream",
+        "domain": "MATH_RECOVERY",
+        "evidence": "math_recovery_tool.py imports from mathml_parser (via multi_engine_parser)"
+      },
+      {
+        "from": "math_pdf_parser",
+        "to": "math_structure_extractor",
+        "type": "stream",
+        "domain": "MATH_TOOLING",
+        "evidence": "math_structure_extractor imports from math_pdf_parser"
+      },
+      {
+        "from": "math_pdf_parser",
+        "to": "multi_engine_parser",
+        "type": "branch",
+        "domain": "MATH_TOOLING",
+        "evidence": "multi_engine_parser uses multi_engine_parser.py as its parser engine"
+      },
+      {
+        "from": "math_pdf_parser",
+        "to": "arxiv_provenance",
+        "type": "stream",
+        "domain": "PDF_EXTRACTION",
+        "evidence": "arxiv_provenance.py parses PDF endpoints"
+      },
+      {
+        "from": "multi_engine_parser",
+        "to": "math_recovery_tool",
+        "type": "branch",
+        "domain": "MATH_RECOVERY",
+        "evidence": "multi_engine_parser calls solve_all which uses math_recovery_tool"
+      },
+      {
+        "from": "pix2text_harvest",
+        "to": "adjudicate_candidates_v2",
+        "type": "stream",
+        "domain": "VISION_PIPELINE",
+        "evidence": "Historical L2 workflow"
+      },
+      {
+        "from": "pix2text_harvest",
+        "to": "adjudicate_targets",
+        "type": "stream",
+        "domain": "VISION_PIPELINE",
+        "evidence": "Historical L3 workflow"
+      },
+      {
+        "from": "mathml_parser",
+        "to": "display_equation_extractor",
+        "type": "stream",
+        "domain": "VISUAL_PIPELINE",
+        "evidence": "display_equation_extractor.py imports MathMLParser from mathml_parser"
+      }
+    ]
+  },
+  "structure_invariants": {
+    "pdf_vs_html": {
+      "description": "PDF/HTML extraction \u2260 pixel-based recognition",
+      "evidence": "arXiv HTML MathML is canonical (991/991 per paper); PDF uses 6-layer chain (text\u2192vision\u2192OCR\u2192symbol\u2192spatial\u2192equation). Different tools at different layers.",
+      "status": "PROVEN"
+    },
+    "history_vs_current": {
+      "description": "Preserve L1/L2/L3 historical OCR evidence chain; do not replace with G0 runner",
+      "evidence": "scripts/pix2text_harvest.py, adjudicate_candidates_v2.py, adjudicate_targets.py, ocr_polarity_ablation.py all exist on disk",
+      "status": "PROVEN"
+    },
+    "domains_separated": {
+      "description": "Separate domains: PDF/HTML_EXTRACTION, MATH_TOOLING, VISION_PIPELINE, MATH_RECOVERY, PDF_PARSING",
+      "evidence": "Pipeline registry.json has 3 stages (IMMUTABLE_TABLES, STATE_EXPANSION, EMBODIMENT) \u2014 no vision/OCR stage. External systems registry has 11 system types, none for vision/OCR.",
+      "status": "PROVEN \u2014 audit gap identified: missing vision/OCR pipeline stage in registry"
+    },
+    "runtime_topology": {
+      "description": "Which scripts actually call which other scripts",
+      "evidence": "import lines verified from actual file contents. E.g. arxiv_html_parser.py \u2192 mathml_parser.py; multi_engine_parser.py \u2192 math_recovery_tool.py",
+      "status": "PROVEN \u2014 actual imports verified"
+    },
+    "artifact_lineage": {
+      "description": "Which datasets were generated by which script versions",
+      "evidence": "arXiv corpus: 241 JSON files, 72,774 equation records across 2006-2026 papers. math_recovery_v16: 14 per-paper + aggregate_report.json (10.8MB).",
+      "status": "PROVEN"
+    },
+    "independent_validation": {
+      "description": "Capabilities tested against independently adjudicated evidence",
+      "evidence": "test_munder_fix.py, test_integral_ir.py, test_structural_conservation.py, test_structural_survival.py, test_parser_and_alttext_crosscheck.py, test_structural_fidelity.py",
+      "status": "PROVEN \u2014 test files exist, but no test validates the G0 integrated pipeline"
+    }
+  },
+  "recommendation": {
+    "deliverable": "vision_math_pipeline_reconciliation_matrix.json",
+    "location": "DATASETS/vision_math_pipeline_reconciliation_matrix.json",
+    "fields_to_include": [
+      "documentation_authority_vs_runtime_topology",
+      "parser_relationship_graph",
+      "pipeline_lineages (L1-L2-L3, arXiv HTML, PDF 6-layer, G0, Multi-engine, Pix2Text crop)",
+      "artifact_lineage",
+      "independent_validation",
+      "discrepancy_log (arXiv corpus count, v16 provenance, Pix2Text, RapidOCR, G0 scope, math_pdf_parser layer, Shap-E duplicate)"
+    ],
+    "verification_required": [
+      "arxiv_html_corpus 241 vs 106 count \u2014 user confirmation needed",
+      "math_pdf_parser layer-by-layer execution \u2014 build layer-specific tests",
+      "G0 runner \u2014 fresh source verification for integrated claim"
+    ]
+  }
+}

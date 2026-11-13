@@ -1,0 +1,156 @@
+{
+  "version": "1.0.0",
+  "created": "2026-11-11T12:00:00Z",
+  "description": "Evidence registry — verification, certification, evidence status, frozen baselines",
+  "evidence_status_definitions": {
+    "DEVELOPMENT": "Implementation in progress, not yet validated against independent criteria",
+    "REGRESSION": "Known regression fixture — used to detect regressions in subsequent changes",
+    "FROZEN_BASELINE": "Explicitly frozen population/hash — must not be overwritten during regeneration",
+    "INDEPENDENTLY_VALIDATED": "Validated against criteria external to the producing system",
+    "CERTIFIED": "Meets gated certification criteria (G0–G5 for math extraction, etc.)",
+    "NOT_VERIFIED": "No validation evidence recorded"
+  },
+  "certification_gates": {
+    "IMMUTABLE_TABLES": {
+      "description": "64 hexagrams, 512 states, 729 ternary, 5832 phase-resolved, 46656 total — verified",
+      "requirements": [
+        "64 unique hexagram binaries",
+        "28 inversion pairs",
+        "6 complementary pairs",
+        "9-bit encoding roundtrip",
+        "512 binary resolved states",
+        "729 ternary permutations per hexagram",
+        "5832 phase-resolved ternary states",
+        "46656 total ternary permutations"
+      ],
+      "status": "CERTIFIED",
+      "evidence": [
+        "kingwen_ternary_tables_complete.py 512 roundtrip clean",
+        "cyclic verification: changing-lines back-link proper",
+        "64 emotional weights present",
+        "docs/immutable-table-math-decoded.md specification"
+      ]
+    },
+    "G0_PREDICTION_INDEPENDENCE": {
+      "description": "Prediction-generation path must not read gold data; serialized + hashed before adjudication",
+      "requirements": [
+        "Prediction serialized + hashed before matcher receives adjudication data",
+        "Evaluator may read gold; prediction path must not",
+        "Gold perturbation test passes",
+        "Contract validation passes"
+      ],
+      "status": "BLOCKED",
+      "evidence": [
+        "G0 evaluation adapter implemented: scripts/evaluation/prediction_adapter.py",
+        "Independence gates: import audit, signature audit, artifact audit, determinism, gold perturbation, prediction-before-matching, contract validation",
+        "All 7 independence checks PASS (commit befa228927, branch v2-remediation)"
+      ],
+      "blocker": "G0–G5 certification not established; development evidence must not be promoted to generalization certification"
+    },
+    "PDF_DELIMITER_RECOVERY": {
+      "description": "Delimiter-aware structural recovery of mathematical notation from PDF",
+      "requirements": [
+        "Delimiter identity preserved: langle/rangle, lVert/rVert, lfloor/rfloor, lceil/rceil, conditional |",
+        "Nested braces handled via balancing-brace scanner",
+        "Escaped literals (\\_ \\& \\% \\# \\$ \\{ \\}) mapped correctly",
+        "Big operator limits (sum/prod/int) with braced bounds parsed",
+        "MathML structural conservation: munder/mover/munderover children preserved"
+      ],
+      "status": "DEVELOPMENT",
+      "evidence": [
+        "scripts/delimiter_aware_structural_recovery.py implementation",
+        "scripts/math_recovery_tool.py: balancing-brace scanner, zero-arg rules, escaped literals",
+        "Semantic honesty scoreboard: v13 tree path = 2864 structurally faithful (84.0%), FALSE_RECOVERY = 0",
+        "v6 regex path = 2794 faithful (82.0%), FALSE_RECOVERY = 63 (relations → '=' fabrication)",
+        "Test structural_conservation.py: 21/21 pass"
+      ],
+      "note": "Development evidence must not be promoted to generalization certification. Original frozen v1 baseline must remain untouched."
+    },
+    "RAHMANI_1212_GENERALIZATION": {
+      "description": "6×6 matrix delimiter recovery from arXiv:1212.0957 via targeted OCR",
+      "requirements": [
+        "Zoom-4 detection → zoom-8 crops",
+        "Two zoom-8 tall/narrow crops as paired visual regression fixture",
+        "Delimiter-aware recovery of 6×6 matrix structure",
+        "Freeze manifest with population hashes"
+      ],
+      "status": "FROZEN_BASELINE",
+      "evidence": [
+        "DATASETS/structural_preservation/rahmani_1212.0957_generalization_target.json (frozen benchmark target)",
+        "DATASETS/structural_preservation/rahmani_1212.0957_generalization_evaluation.json (evaluation evidence)",
+        "DATASETS/structural_preservation/rahmani_1212.0957_generalization_freeze_manifest.json (freeze provenance)",
+        "scripts/targeted_depth_ocr.py (active producer)",
+        "scripts/evaluate_rahmani_generalization.py (active evaluator)",
+        "Two zoom-8 delimiter crops: paired visual regression fixture"
+      ],
+      "note": "Original frozen v1 baseline untouched. G0–G5 certification not established."
+    },
+    "SEMANTIC_HONESTY_SCOREBOARD": {
+      "description": "Structural honesty measurement: EXACT / STRUCTURAL_EQUIV / LOSSY / CORRUPTED / FALSE_RECOVERY / UNRECOVERED",
+      "requirements": [
+        "Occurrence conservation: sum of buckets == total source occurrences",
+        "Headline derived FROM buckets, not hand-computed",
+        "FALSE_RECOVERY = 0 for tree path",
+        "Relation identity: ~=/≈/≃/≅ distinct tokens; ≡/= distinct"
+      ],
+      "status": "DEVELOPMENT",
+      "evidence": [
+        "scripts/semantic_honesty_scoreboard.py implementation",
+        "v13 tree path: 2864 structurally faithful (84.0%), FALSE_RECOVERY = 0",
+        "Conservation assertion: sum(all classification buckets) == total source occurrences",
+        "Three fixed false positives: \\in prefix of \\infty, fused limit tokens, subscript relations"
+      ]
+    }
+  },
+  "frozen_baselines": {
+    "mathematical_substrate": {
+      "files": [
+        "kingwen_ternary_tables_complete.py",
+        "KING_WEN_TABLES.py",
+        "data/hexagram-registry.json",
+        "docs/immutable-table-math-decoded.md"
+      ],
+      "hashes": "verified via verify_registry.py",
+      "note": "Must not be overwritten during inventory regeneration"
+    },
+    "rahmani_baseline": {
+      "files": [
+        "DATASETS/structural_preservation/rahmani_1212.0957_generalization_target.json",
+        "DATASETS/structural_preservation/rahmani_1212.0957_generalization_evaluation.json",
+        "DATASETS/structural_preservation/rahmani_1212.0957_generalization_freeze_manifest.json",
+        "Two zoom-8 delimiter crops (paired visual regression fixture)"
+      ],
+      "note": "Original frozen v1 baseline must remain untouched. Development evidence ≠ certification."
+    },
+    "skill_graph_baseline": {
+      "metrics": {
+        "original_skills": 241,
+        "original_edges": 155,
+        "active_only_skills": 131,
+        "active_only_edges": 64,
+        "stem_lookup_provenance_records": 32,
+        "unresolved_active_targets": 64,
+        "archived_resolutions": 86
+      },
+      "note": "Preserve Tier-1 findings: 7/8 supported, T1-07 inconclusive. Uncertainty preserved."
+    },
+    "math_extraction_baseline": {
+      "corpus": "14 papers, 3409 equations, arxiv HTML MathML + x-tex annotations canonical",
+      "metrics": {
+        "recoverable": 667,
+        "solvable": 331,
+        "structurally_faithful": 2864,
+        "false_recovery": 0,
+        "parse_failures": 139
+      },
+      "note": "MathML + x-tex = canonical source (991/991 on 2605.00155). PDF text = fallback only."
+    }
+  },
+  "provenance_coverage": {
+    "active_frozen_total": 643,
+    "with_full_provenance": 284,
+    "missing_provenance": 359,
+    "coverage_percent": 44.17,
+    "note": "Do not fill missing fields with inferred values. Use UNKNOWN or UNVERIFIED where evidence unavailable."
+  }
+}

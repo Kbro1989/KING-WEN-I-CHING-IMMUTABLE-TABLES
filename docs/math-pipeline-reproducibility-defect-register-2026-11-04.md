@@ -21,6 +21,33 @@ criteria.
 
 ---
 
+
+
+## Dependency Edge Classification (2026-11-11)
+
+Dependency edges between pipeline components are labeled by evidence type:
+
+| Edge | Label | Evidence |
+|------|-------|----------|
+| mathml_parser -> math_recovery_tool | declared_dependency | math_recovery_tool imports mathml_parser tokens |
+| math_recovery_tool -> delimiter_identity | declared_dependency | delimiter_identity imported by math_recovery_tool |
+| targeted_math_detector -> v2_delimiter_aware_structural_recovery | declared_dependency | V2 detector interface documented; no confirmed caller |
+| delimiter_aware_structural_recovery -> evaluate_cross_paper_v2_strict | verified_runtime_dependency | V1 pairing called by evaluation scripts at evaluate_cross_paper_v2_strict.py:55 |
+| math_contract -> cross_stage_drop_trace | declared_dependency | cross_stage_drop_trace imports math_contract.source_hash |
+| math_contract -> math_reconstruction_evidence | declared_dependency | math_reconstruction_evidence imports math_contract |
+| semantic_honesty_scoreboard -> solve_all, solve_dual_path | proposed_integration | Solver and scoreboard both exist; shared call path not yet established |
+
+### Status Taxonomy (final)
+
+| Status | Meaning |
+|--------|---------|
+| CONFIRMED | Caller or implementation path found on disk |
+| DECLARATION | Interface or capability described in docs, no runtime caller |
+| PARTIAL | Caller exists, contracts not fully traced |
+| NOT_TESTED | Capability discovered, no behavior verified |
+| INACTIVE | Code exists but no invocation in current pipeline |
+| NOT IMPLEMENTED | Contract requires capability that does not exist |
+| VERIFIED_RUNTIME_DEPENDENCY | Actual execution path confirms the call |
 ## DEFECT 1: None MathML crash in source_hash()
 
 ### ID
@@ -91,6 +118,56 @@ MathML should not silently determine it.
 OPEN — read-only, no fix authorized
 
 ---
+
+
+
+### Capability Attribution (C1-C11) — added 2026-11-11
+
+| # | Capability | Tool | Input | Output | Status |
+|---|-----------|------|-------|--------|--------|
+| C1 | MathML extraction | mathml_parser.py | MathML + x-tex | ExprNode tree | CONFIRMED |
+| C2 | LaTeX reconstruction | math_recovery_tool.py | MathML, gold, LaTeX | Reconstructed LaTeX | CONFIRMED |
+| C3 | Structural recovery V1 | delimiter_aware_structural_recovery.py | bbox candidates | Paired/unpaired | CONFIRMED caller |
+| C4 | Structural recovery V2 | v2_delimiter_aware_structural_recovery.py | bbox candidates | Paired/unpaired | DECLARATION only |
+| C5 | AST extraction | structural_ast_extractor.py | MathML tree | ExprNode tree | NOT_TESTED |
+| C6 | Visual detection | targeted_math_detector.py, vision_math_extractor.py | PDF page rawdict | Bbox, candidates | CONFIRMED CLI |
+| C7 | OCR | Pix2Text, Tesseract (Lua doc only) | PDF image/crop | Char/text | n/a - Lua doc |
+| C8 | Semantic validation | math_contract.py, semantic_honesty_scoreboard.py | Recovered math tree | Validation status | PARTIAL |
+| C9 | Equation solving | solve_all.py, solve_dual_path.py | Recovered IR | Solution | PARTIAL |
+| C10 | Geometric validation | test_geometry_generalization.py | Geometry ops | Pass/fail | NOT_TESTED |
+| C11 | Provenance tracing | verify_provenance_trace.py | Artifact + trace | Verification result | n/a - not executed |
+
+### JSON / PNG / PDF / HTML Usage Pointers (tagged items, re-examined)
+
+| Tagged item | Related artifacts | Capability | Status | Evidence source |
+|-------------|-------------------|------------|--------|-----------------|
+| MPRD-001 | math_contract.py:300 source_hash, math_reconstruction_evidence.py:761 | C2 | OPEN - None mathml crash | math_reconstruction_evidence.py:761 TypeError |
+| MPRD-003 | structural_survival.py, structural_survival.jsonl | C4 | OPEN - baseline staleness | Structural survival baseline revision not identified |
+| MPRD-004 | pix2text_harvest, audit_candidate_crops | C6 | OPEN - bbox list-vs-dict mismatch | 2 consumers, schema inconsistent |
+| MPRD-005 | test_canonical_extraction.py | C8 | OPEN - PYEOF leak | Code hygiene not applied |
+| MPRD-006 | arxiv_html_corpus/*.json (240 files) | C1 | OPEN - network dependency | 51.6 MB, must re-download |
+| MPRD-007 | semantic_math_zotero_full.json (159.2 MB) | C1, C2 | Verified | 14 content consumers, regenerable |
+| math_reconstruction_evidence.jsonl | DATASETS/math_reconstruction_evidence.jsonl (8.1 MB) | C2 | OPEN - consumers crash | 2 consumers at crash point |
+| structural_survival.jsonl | DATASETS/structural_survival.jsonl (6.5 MB) | C4 | OPEN - baseline unknown | Baseline revision unverified |
+| cross_stage_drop_trace.jsonl | DATASETS/cross_stage_drop_trace.jsonl (2.2 MB) | C11 | OPEN - crash on None | math_contract.py:300 crash |
+| arxiv_html_corpus/2605.00155.json | DATASETS/arxiv_html_corpus/2605.00155.json (1.1 MB) | C1 | OPEN - needs args | arxiv_provenance.py requires args |
+| structural_preservation/*.json | 83 files, 9.2 MB | C4 | n/a - visual domain | 370/370 empty consumers per manifest |
+| vision_comparison/*.jsonl | 113 files, 11.5 MB | C6, C10 | Verified | No changes needed |
+
+## Key Findings Retention (2026-11-04 — updated with capability tags)
+
+1. **281.0 MB across 495 tracked JSON/JSONL files** are generated math-paper outputs.
+2. **42 files** have content-consuming dependencies (scripts open/read them directly).
+3. **450 files** have no script references (by-name-only or unreferenced).
+4. **237 of 240** arxiv_html_corpus files have no script references - pure parse output.
+5. **14 of 15** math_recovery version directories contain identical copies of the same
+   15 papers (v3-v16), representing ~12x duplication of recovery output.
+6. Largest single file: semantic_math_zotero_full.json (159.2 MB) - extracted math
+   from 245 Zotero papers.
+7. **Capability coverage:** 11 capabilities C1-C11 defined; 3 CONFIRMED, 4 PARTIAL,
+   2 DECLARATION, 2 NOT_TESTED, 2 n/a (Lua doc only), 2 OPEN (crash), 1 OPEN (network).
+
+
 
 ## DEFECT 2: Training-data population variance
 

@@ -39,6 +39,23 @@ These are NOT interchangeable. A system reporting 457 SOLVABLE does not establis
 
 ---
 
+---
+
+## Dependency Edge Classification (2026-11-11)
+
+Dependency edges are labeled by evidence type:
+
+| Edge | Label | Evidence |
+|------|-------|----------|
+| arxiv_html_parser -> mathml_parser | declared_dependency | arxiv_html_parser imports mathml_parser.extract_from_html |
+| mathml_parser -> math_recovery_tool | declared_dependency | mathml_parser tokens used by recovery |
+| math_recovery_tool -> delimiter_identity | declared_dependency | delimiter_identity imported for token normalization |
+| targeted_math_detector -> v2_delimiter_aware_structural_recovery | declared_dependency | Interface documented; no runtime caller confirmed |
+| delimiter_aware_structural_recovery -> evaluate_cross_paper_v2_strict | verified_runtime_dependency | Caller verified at evaluate_cross_paper_v2_strict.py:55 |
+| math_contract -> math_reconstruction_evidence | declared_dependency | Import verified |
+| math_contract -> cross_stage_drop_trace | declared_dependency | Import verified |
+| semantic_honesty_scoreboard -> solve_all / solve_dual_path | proposed_integration | Shared call path not yet established |
+
 ## Workstream B: Mathematical Reconstruction
 
 | ID | Finding | Source Artifact | Measured Population | Verification Method | Status | Acceptance Requirement |
@@ -60,6 +77,90 @@ These are NOT interchangeable. A system reporting 457 SOLVABLE does not establis
 | B-15 | No test for e2e pipeline | scripts/e2e_math_pipeline.py | N/A | No test file exists | UNTESTED | Need integration test covering full pipeline on at least one paper |
 
 ---
+
+
+
+### Capability Attribution (C1-C11) — added 2026-11-11
+
+| # | Capability | Tool | Input | Output | Status |
+|---|-----------|------|-------|--------|--------|
+| C1 | MathML extraction | mathml_parser.py | MathML + x-tex | ExprNode tree | CONFIRMED |
+| C2 | LaTeX reconstruction | math_recovery_tool.py | MathML, gold, LaTeX | Reconstructed LaTeX | CONFIRMED |
+| C3 | Structural recovery V1 | delimiter_aware_structural_recovery.py | bbox candidates | Paired/unpaired | CONFIRMED caller |
+| C4 | Structural recovery V2 | v2_delimiter_aware_structural_recovery.py | bbox candidates | Paired/unpaired | DECLARATION only |
+| C5 | AST extraction | structural_ast_extractor.py | MathML tree | ExprNode tree | NOT_TESTED |
+| C6 | Visual detection | targeted_math_detector.py, vision_math_extractor.py | PDF page rawdict | Bbox, candidates | CONFIRMED CLI |
+| C7 | OCR | Pix2Text, Tesseract (Lua doc only) | PDF image/crop | Char/text | n/a - Lua doc |
+| C8 | Semantic validation | math_contract.py, semantic_honesty_scoreboard.py | Recovered math tree | Validation status | PARTIAL |
+| C9 | Equation solving | solve_all.py, solve_dual_path.py | Recovered IR | Solution | PARTIAL |
+| C10 | Geometric validation | test_geometry_generalization.py | Geometry ops | Pass/fail | NOT_TESTED |
+| C11 | Provenance tracing | verify_provenance_trace.py | Artifact + trace | Verification result | n/a - not executed |
+
+### JSON / PNG / PDF / HTML Usage Pointers (tagged items, re-examined)
+
+| Tagged item | Related artifacts | Capability | Status | Evidence source |
+|-------------|-------------------|------------|--------|-----------------|
+| MPRD-001 | math_contract.py:300 source_hash, math_reconstruction_evidence.py:761 | C2 | OPEN - None mathml crash | math_reconstruction_evidence.py:761 TypeError |
+| MPRD-003 | structural_survival.py, structural_survival.jsonl | C4 | OPEN - baseline staleness | Structural survival baseline revision not identified |
+| MPRD-004 | pix2text_harvest, audit_candidate_crops | C6 | OPEN - bbox list-vs-dict mismatch | 2 consumers, schema inconsistent |
+| MPRD-005 | test_canonical_extraction.py | C8 | OPEN - PYEOF leak | Code hygiene not applied |
+| MPRD-006 | arxiv_html_corpus/*.json (240 files) | C1 | OPEN - network dependency | 51.6 MB, must re-download |
+| MPRD-007 | semantic_math_zotero_full.json (159.2 MB) | C1, C2 | Verified | 14 content consumers, regenerable |
+| math_reconstruction_evidence.jsonl | DATASETS/math_reconstruction_evidence.jsonl (8.1 MB) | C2 | OPEN - consumers crash | 2 consumers at crash point |
+| structural_survival.jsonl | DATASETS/structural_survival.jsonl (6.5 MB) | C4 | OPEN - baseline unknown | Baseline revision unverified |
+| cross_stage_drop_trace.jsonl | DATASETS/cross_stage_drop_trace.jsonl (2.2 MB) | C11 | OPEN - crash on None | math_contract.py:300 crash |
+| arxiv_html_corpus/2605.00155.json | DATASETS/arxiv_html_corpus/2605.00155.json (1.1 MB) | C1 | OPEN - needs args | arxiv_provenance.py requires args |
+| structural_preservation/*.json | 83 files, 9.2 MB | C4 | n/a - visual domain | 370/370 empty consumers per manifest |
+| vision_comparison/*.jsonl | 113 files, 11.5 MB | C6, C10 | Verified | No changes needed |
+
+## Key Findings Retention (2026-11-04 — updated with capability tags)
+
+1. **281.0 MB across 495 tracked JSON/JSONL files** are generated math-paper outputs.
+2. **42 files** have content-consuming dependencies (scripts open/read them directly).
+3. **450 files** have no script references (by-name-only or unreferenced).
+4. **237 of 240** arxiv_html_corpus files have no script references - pure parse output.
+5. **14 of 15** math_recovery version directories contain identical copies of the same
+   15 papers (v3-v16), representing ~12x duplication of recovery output.
+6. Largest single file: semantic_math_zotero_full.json (159.2 MB) - extracted math
+   from 245 Zotero papers.
+7. **Capability coverage:** 11 capabilities C1-C11 defined; 3 CONFIRMED, 4 PARTIAL,
+   2 DECLARATION, 2 NOT_TESTED, 2 n/a (Lua doc only), 2 OPEN (crash), 1 OPEN (network).
+
+
+
+
+
+## Candidate Test Qualification Criteria (2026-11-11)
+
+Each test script in the pipeline must be qualified before being treated as
+an oracle. The following six criteria are enforced:
+
+| # | Criterion | How to verify |
+|---|----------|---------------|
+| 1 | Expected result comes from independently adjudicated evidence | Cross-check test expected values against gold corpus (GS-001 through GS-005), not test-authored values |
+| 2 | Fixtures do not leak the evaluator's answer into candidate generation | Audit test fixtures for unintended information flow |
+| 3 | Assertions test the stated capability rather than merely successful execution | Read each assertion; verify it validates capability-specific behavior, not just that the function returned |
+| 4 | Meaningful negative controls present | Test fails on malformed input (e.g., broken MathML, unrecoverable LaTeX) |
+| 5 | Actually runs against intended corpus or bounded population | Execute test and record pass/fail counts; do not infer from test existence |
+| 6 | Does not share implementation defect with the system being evaluated | Independent implementation required for oracle status |
+
+### Application to current candidate tests
+
+| Test script | Cap | Criterion 3 | Criterion 4 | Verdict |
+|------------|-----|-------------|-------------|---------|
+| test_structural_conservation.py | C1, C4 | Unknown | Unknown | NOT READY |
+| test_semantic_fidelity.py | C8 | Unknown | Unknown | NOT READY |
+| test_provenance_corruption.py | C11 | Unknown | Unknown | NOT READY |
+| test_geometry_generalization.py | C10 | Unknown | Unknown | NOT READY |
+| test_adversarial_clearance_gate.py | C10 | Unknown | Unknown | NOT READY |
+| test_mathml_parser_on_corpus.py | C1 | Unknown | Unknown | NOT READY |
+| test_nested_args.py | C2 | Unknown | Unknown | NOT READY |
+| test_mbox_dollar_recovery.py | C2 | Unknown | Unknown | NOT READY |
+| test_relation_identity.py | C2 | Unknown | Unknown | NOT READY |
+| test_structural_survival.py | C4 | Unknown | Unknown | NOT READY |
+
+**All 10 tests remain CANDIDATES until their assertions are read, fixtures
+audited, and negative controls added. A passing test is not yet an oracle.**
 
 ## Workstream C: Solving and Validation
 

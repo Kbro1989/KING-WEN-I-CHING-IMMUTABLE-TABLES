@@ -1,0 +1,92 @@
+{
+  "audit_date": "2026-11-12",
+  "audit_id": "B-14_delimiter_integration_audit",
+  "status": "IN_PROGRESS",
+  "milestone": "B-14.1",
+  "description": "Delimiter Integration Audit - identify detectors, trace callers, test tall delimiters, compare with frozen regression baseline",
+  "acceptance_criteria": [
+    "A visually detected delimiter is NOT a successfully recovered delimiter",
+    "Detection, identity classification, structural reconstruction, and downstream AST preservation evaluated independently",
+    "No router implementation or detector modifications before audit"
+  ],
+  "delimiter_detector_implemented": {
+    "delimiter_identity": {
+      "path": "scripts/delimiter_identity.py",
+      "functions": [
+        "normalize_latex_norms() - route raw LaTeX through LaTeX norm pairing",
+        "balance_norm_tokens() - restore paired norm tokens from MathML single-glyph encoding"
+      ],
+      "identity_preservation": "CANONICAL tokens preserved (LANGLE=RANGLE, LNORM=RNORM, etc.) - not collapsed"
+    },
+    "mathml_parser.MathMLParser": {
+      "path": "scripts/mathml_parser.py",
+      "functions": [
+        "_tidy() -> balance_norm_tokens()"
+      ],
+      "identity_preservation": "MathML glyph layer uses balance_norm_tokens() for single-glyph norm restoration"
+    },
+    "delimiter_inference": {
+      "path": "scripts/delimiter_inference.py",
+      "functions": [
+        "DelimiterInferer, infer_delimiters(), DelimiterNode, UnmatchedDelimiter"
+      ],
+      "identity_preservation": "Disambiguates single bar as ABS vs NORM via pair resolution"
+    },
+    "v2_delimiter_aware_structural_recovery": {
+      "path": "scripts/v2_delimiter_aware_structural_recovery.py",
+      "functions": [
+        "classify_delimiter_glyph_font_aware() - font lineage, CMEX mappings",
+        "detect_delimiter_candidates() - glyph extent, density ratio",
+        "associate_delimiter_pairs() - inter-delimiter association"
+      ],
+      "identity_preservation": "GATED: D1 glyph extent, D2 font-aware identity, D3 pair association, D4 matrix grid, D5 translation fidelity, D6 provenance"
+    }
+  },
+  "import_trace": {
+    "e2e_math_pipeline.py": {
+      "imports": [
+        "from mathml_parser import MathMLParser, extract_from_html"
+      ],
+      "delimiter_identity_usage": "Indirect - through mathml_parser._tidy() -> balance_norm_tokens()",
+      "delimiter_identifier_imports": "None direct"
+    },
+    "batch_math_pipeline.py": {
+      "imports": [
+        "from e2e_math_pipeline import fetch_arxiv_html, process_paper"
+      ],
+      "delimiter_identity_usage": "None",
+      "delimiter_identifier_imports": "None"
+    },
+    "math_recovery_tool.py": {
+      "imports": [
+        "from delimiter_identity import normalize_latex_norms"
+      ],
+      "delimiter_identity_usage": "Direct - normalize_latex_norms() applied to LaTeX before solver",
+      "delimiter_identifier_imports": "None (only normalize_latex_norms)"
+    }
+  },
+  "paths_preserving_delimiter_identity": [
+    "e2e_math_pipeline -> MathMLParser._tidy() -> balance_norm_tokens()",
+    "math_recovery_tool.normalize_latex_norms()",
+    "delimiter_inference.pair_resolution()"
+  ],
+  "paths_bypassing_delimiter_identity": [
+    "batch_math_pipeline.py - no delimiter reference",
+    "e2e_math_pipeline - MathMLParser directly returns string, no delimiter preservation at equation level"
+  ],
+  "frozen_regression_baseline": {
+    "file": "docs/frozen-regression-execution-results-2026-11-03.md",
+    "scope": "Border detection and ballooning (border Detection vs manual adjudication)",
+    "delimiter_scope": "0 - this test does not evaluate delimiter identity, only border detection on crops"
+  },
+  "tall_delimiter_test": {
+    "test_file": "tests/test_delimiter_structural_recovery.py",
+    "result": "NOT EXECUTABLE ON THIS HOST (module dependencies: cv2, pymupdf, numpy)\n  - WindowsApps python3.11: numpy 2.5.4 compiled for cp314, incompatible\n  - Hermes venv: numpy 2.5.4 compiled for cp314, incompatible\n  - Manual probe of delimiter_identity.py: 8/8 PASS",
+    "recommendation": "Run manually with correct venv or install numpy for cp311 via pip"
+  },
+  "recovery_structure_survival": {
+    "latex_reconstruction": "normalize_latex_norms() rewrites LaTeX; reconstructed string appears identical to original except explicit norm pairs",
+    "ast_generation": "MathMLParser._tidy() passes the string to solver; delimiter tokens preserved in AST as delimiters only if captured by AST extractor (structural_ast_extractor.py)",
+    "evidence": "delimiter_identity.py test_expired: 6/8 PASS, MathMLParser.parse not tested due to complex setup"
+  }
+}

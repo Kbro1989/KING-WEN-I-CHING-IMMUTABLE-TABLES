@@ -1,7 +1,7 @@
 
 ═══════════════════════════════════════════════════════════════════════════════
 KING WEN ORACLE — AGENT DISCOVERY & ONBOARDING PROTOCOL
-Version: 2026-08-04
+Version: 2026-11-10
 Repository: KING-WEN-I-CHING-IMMUTABLE-TABLES
 Author: Kbro1989
 ═══════════════════════════════════════════════════════════════════════════════
@@ -97,7 +97,7 @@ FILES (read ALL before proceeding):
   • kingwen_quantum_process.py — possibility tensor generator
   • superposition_capture.py — capture pipeline
   • kingwen_expansion_wrapper.py — multi-domain wrapper
-  • scripts/full_hexagram_shotgun.py — shotgun logic
+  • scripts/full_hexagram_shotgun.py::shotgun_expand() — canonical expansion entry point: 64 hexagrams × 8 phases = 512 resolved states; 729 ternary per hex = 46,656 total; 35,000 domained routes; 1,152 personality_subsets_total [Updated 2026-11-10]
   • scripts/multi_layer_expand.py — layered expansion
 
 COMPREHENSION GATE:
@@ -279,4 +279,15 @@ a fix that uses randomness, template concatenation, or 1-hex collapse,
 your output will be REJECTED and you will start over from Layer 0.
 
 This is not punishment. This is conservation of the field.
+
 ═══════════════════════════════════════════════════════════════════════════════
+
+## [Added 2026-11-10] Documentation Synchronization
+
+Priority order for doc maintenance:
+
+- **P0**: `AGENTS.md` — preserve as current engineering anchor
+- **P1**: `KINGWEN_AGENT_ONBOARDING.md`, `lua-math-tool.md`, `docs/immutable-table-math-decoded.md` — reconcile with six-layer architecture and current expansion engine
+- **P2**: `king-wen-workflow-paths.md`, `codebasemap.md` — reconcile with canonical entry points and current state
+
+Canonical expansion entry point: `shotgun_expand()` in `scripts/full_hexagram_shotgun.py`.

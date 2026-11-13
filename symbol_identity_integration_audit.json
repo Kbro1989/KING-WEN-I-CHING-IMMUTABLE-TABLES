@@ -1,0 +1,257 @@
+{
+  "schema": "1.0",
+  "generated": "2026-11-12T23:00:00Z",
+  "title": "Symbol Identity Integration Audit",
+  "description": "Source-level audit of whether the visual catalog, identity crosswalk, notation mappings, and association bridge can share a stable occurrence identity without a new parallel symbol system.",
+  "source_systems": {
+    "A_visual_catalog": {
+      "path": "symbols.zip (3,301 images: 2,118 GIF + 1,183 PNG)",
+      "key_fields": [
+        "filename (visual asset identity)",
+        "no Unicode mapping available in filename alone"
+      ],
+      "consumers": [
+        "scripts/vision_comparison_pipeline.py",
+        "scripts/audit_glyph_catalog.py"
+      ],
+      "identity_status": "visual asset only; no Unicode or Metamath name linkage in the archive itself"
+    },
+    "B_identity_crosswalk": {
+      "path": "DATASETS/math_symbols/references/glyph_identity_crosswalk.json",
+      "entries": 4,
+      "key_fields": [
+        "metamath_name",
+        "unicode_code_point (U+XXXX)",
+        "wolfram",
+        "sympy",
+        "mapping_status"
+      ],
+      "consumers": [
+        "none currently - crosswalk has no runtime consumers"
+      ],
+      "identity_status": "verified for Metamath source; only 2/4 also covered by Wolfram/SymPy notation dictionaries"
+    },
+    "C_notation_mappings": {
+      "path": "scripts/math_notation_mapping.py",
+      "keys_wolfram": 82,
+      "keys_sympy": 77,
+      "key_fields": [
+        "unicode_char -> wolfram_name",
+        "unicode_char -> sympy_name"
+      ],
+      "consumers": [
+        "scripts/multi_engine_parser.py",
+        "scripts/math_pdf_parser.py"
+      ],
+      "identity_status": "hard-coded runtime mappings; not linked to visual catalog or crosswalk"
+    },
+    "D_association_bridge": {
+      "path": "scripts/association_bridge.py",
+      "consumes": [
+        "character_observations (targeted_math_detection)",
+        "geometry_candidates",
+        "visual_candidates",
+        "math_like_text_spans"
+      ],
+      "produces": [
+        "association_ledger.jsonl"
+      ],
+      "key_fields": [
+        "source_occurrence (PDF SHA, paper, page, coords)",
+        "glyph_observations",
+        "visual_evidence",
+        "ast_node"
+      ],
+      "identity_status": "no reference to glyph identity, Unicode, or canonical symbol name"
+    }
+  },
+  "linkage_matrix": [
+    {
+      "from": "A_visual_catalog",
+      "to": "B_identity_crosswalk",
+      "status": "BROKEN",
+      "evidence": "ZIP has no Unicode or Metamath mapping; only 4 crosswalk entries exist for 3,301 images",
+      "need": "Crosswalk must be populated from catalog analysis, or catalog must reference crosswalk entries"
+    },
+    {
+      "from": "B_identity_crosswalk",
+      "to": "C_notation_mappings",
+      "status": "PARTIAL",
+      "evidence": "4 crosswalk entries; 2 (sigma, sum) have Wolfram/SymPy coverage; 2 (subscrl, rmw) do not",
+      "need": "Complete crosswalk entries for all visual assets; populate notation dictionaries or mark out-of-scope"
+    },
+    {
+      "from": "C_notation_mappings",
+      "to": "D_association_bridge",
+      "status": "BROKEN",
+      "evidence": "Association bridge has no field for glyph identity, Unicode, or canonical name",
+      "need": "Add glyph_identity and unicode fields to AssociationRecord"
+    },
+    {
+      "from": "A_visual_catalog",
+      "to": "D_association_bridge",
+      "status": "BROKEN",
+      "evidence": "Bridge consumes evidence from targeted_math_detection, not from catalog filenames",
+      "need": "Bridge must receive per-glyph identity (Metamath name, Unicode) in addition to visual candidates"
+    }
+  ],
+  "identity_contract": {
+    "requirement": "A stable occurrence identity must survive across all four systems without a new parallel symbol system.",
+    "minimal_required_fields": [
+      "source_occurrence_id",
+      "glyph_identity",
+      "unicode_code_point",
+      "wolfram_name",
+      "sympy_name",
+      "visual_asset",
+      "ast_node_ref"
+    ],
+    "governing_rule": "Never convert an absent mapping into an inferred identity merely because the glyph looks similar. Record missing mappings as explicit nulls, not inferred values."
+  },
+  "gaps_found": [
+    "crosswalk_coverage: 4 entries vs 3,301 catalog assets - massive coverage gap",
+    "no_source_of_unicode: visual catalog filenames do not encode Unicode; no mapping exists",
+    "no_canonical_name_in_bridge: Association bridge AcquisitionRecord lacks glyph_identity, unicode, wolfram_name, sympy_name fields",
+    "crosswalk_consumers: glyph_identity_crosswalk.json has zero runtime consumers",
+    "missing_unmapped_records: subscrl and rmw are verified in Metamath but absent from notation dictionaries",
+    "no_identical_namespace: Metamath chart (1,182 entries), ZIP (3,301 images), and notation dicts (82/77 keys) use different identifier namespaces"
+  ],
+  "mapping_status": {
+    "visual_catalog_to_identity": "NOT ESTABLISHED - need crosswalk coverage of catalog",
+    "identity_to_notation": "PARTIAL - 2/4 crosswalk entries have notation coverage",
+    "notation_to_bridge": "NOT ESTABLISHED - bridge lacks identity fields",
+    "symbol_identity_integration": "NOT VERIFIED - audit of all four systems simultaneously"
+  },
+  "recommendations": [
+    "recover_crosswalk: expand glyph_identity_crosswalk.json from catalog analysis or acquire Metamath name mapping for visual assets",
+    "add_identity_fields_to_bridge: add glyph_identity, unicode_code_point, wolfram_name, sympy_name to AssociationRecord",
+    "align_canonical_namespace: choose ONE namespace for symbols (Metamath name, Unicode, or Wolfram name) and use it consistently across all artifacts",
+    "populate_missing_notations: investigate subscrl and rmw against original Metamath definitions before changing notation dictionaries",
+    "no_new_symbol_system: do not create a new symbol identity system; reuse existing Metamath, Unicode, Wolfram, or SymPy identifiers"
+  ],
+  "test_plan": [
+    "identity_field_present: verify AssociationRecord has glyph_identity field",
+    "identity_not_inferred: verify unmapped entries have explicit None, not inferred values",
+    "coverage_metrics_separate: verify identity coverage, unicode coverage, notation coverage are computed separately",
+    "no_new_namespace: verify integration audit does not introduce new symbol identity namespace"
+  ],
+  "architectural_corrections": {
+    "universal_identity_rejected": true,
+    "correction": "Do not make Metamath name the universal identity. Separate identifier responsibilities:",
+    "identifier_separation": {
+      "glyph_asset_id": "Specific visual reference asset",
+      "glyph_identity": "Canonical symbolic identity",
+      "unicode_code_point": "Unicode representation, potentially multiple",
+      "metamath_name": "Metamath reference identifier, when available",
+      "wolfram_name": "Wolfram normalization",
+      "sympy_name": "SymPy normalization",
+      "occurrence_id": "Specific observed glyph in a source document",
+      "relationship_id": "Semantic relationship between mathematical occurrences"
+    },
+    "rationale": [
+      "One mathematical symbol can have multiple visual representations",
+      "One Unicode character can have multiple font/style variants",
+      "Some ZIP assets may have no Metamath chart counterpart",
+      "A glyph's mathematical role depends on its expression context"
+    ]
+  },
+  "implementation_sequence": [
+    {
+      "stage": 1,
+      "deliverable": "Visual catalog inventory",
+      "acceptance": "All 3,301 assets accounted for"
+    },
+    {
+      "stage": 2,
+      "deliverable": "Expanded identity crosswalk",
+      "acceptance": "Every mapping has provenance and status"
+    },
+    {
+      "stage": 3,
+      "deliverable": "Unicode normalization integration",
+      "acceptance": "Existing dictionaries reused, not duplicated"
+    },
+    {
+      "stage": 4,
+      "deliverable": "Symbol occurrence contract",
+      "acceptance": "Stable occurrence identity and source provenance"
+    },
+    {
+      "stage": 5,
+      "deliverable": "Association bridge integration",
+      "acceptance": "Identity fields consumed without automatic verification"
+    },
+    {
+      "stage": 6,
+      "deliverable": "Regression and integration tests",
+      "acceptance": "Existing behavior preserved; no premature state promotion"
+    }
+  ],
+  "certification_gates": {
+    "G1": "Visual asset identification",
+    "G2": "Canonical glyph identity",
+    "G3": "Unicode and notation normalization",
+    "G4": "Document occurrence association",
+    "G5": "Mathematical semantic interpretation",
+    "independence_rule": "Passing G2 must not imply G3, and passing G3 must not imply G4 or G5"
+  },
+  "recommendation": "Before modifying AssociationRecord, build the expanded crosswalk and establish its identity contract. Otherwise, you risk adding fields to the bridge that encode assumptions the reference catalog cannot yet support. The goal should be to reuse the existing 3,301-image catalog, four-entry crosswalk, 82 Wolfram mappings, 77 SymPy mappings, and existing AST infrastructure - not create competing implementations. The next meaningful milestone is a provenance-backed glyph identity registry, with zero inferred mappings and explicit unresolved identities.",
+  "registry_completion": {
+    "registry_file": "glyph_identity_registry.json",
+    "total_entries": 1182,
+    "coverage": {
+      "visual_assets_mapped": 1181,
+      "provenance_sha256": 1182,
+      "unicode_code_points": 4,
+      "wolfram_mappings": 2,
+      "sympy_mappings": 2,
+      "mapped_status": 2,
+      "unmapped_status": 1178,
+      "verified_status": 2
+    },
+    "missing_asset": "asteroid number 134340 formerly known as Pluto (no visual asset in ZIP)",
+    "unicode_gap": "1,178 entries lack Unicode mappings - must be sourced from Metamath symbols.html page",
+    "status": "REGISTRY_COMPLETE_PENDING_UNICODE"
+  },
+  "next_milestone": {
+    "name": "Unicode Mapping Expansion",
+    "description": "Source Unicode code points for all 1,182 Metamath symbols from the authoritative Metamath symbols.html page, then propagate to Wolfram/SymPy mappings and registry",
+    "required_actions": [
+      "Fetch/parse Metamath symbols.html for Unicode \u2194 Metamath name mappings",
+      "Populate unicode_code_point for all 1,178 unmapped registry entries",
+      "Reconcile with existing 82 Wolfram and 77 SymPy dictionary keys",
+      "Update mapping_status for each entry (verified/unmapped/ambiguous)",
+      "Build regression tests for identity contract"
+    ]
+  },
+  "implementation_boundary": {
+    "canonical_source": "Metamath manifest (1,182 entries) - DATASETS/math_symbols/manifest.json",
+    "unicode_authority": "Metamath symbols.html (authoritative Unicode \u2194 Metamath name mappings)",
+    "existing_dictionaries": {
+      "wolfram": "scripts/math_notation_mapping.py:UNICODE_TO_WOLFRAM (82 keys, read-only)",
+      "sympy": "scripts/math_notation_mapping.py:UNICODE_TO_SYMPY (77 keys, read-only)"
+    },
+    "regression_anchors": "Original four crosswalk entries: sigma, sum, subscrl, rmw",
+    "unresolved_policy": "Explicitly retained as unmapped/ambiguous; never inferred",
+    "association_bridge": "Untouched - no modifications to AssociationRecord or bridge logic",
+    "versioning": {
+      "baseline_registry": "glyph_identity_registry.json (immutable, pre-Unicode)",
+      "updated_registry": "glyph_identity_registry_v1.json (post-Unicode expansion)",
+      "reconciliation_report": "glyph_unicode_reconciliation_report.md (or .json)"
+    }
+  },
+  "acceptance_checkpoint": {
+    "description": "Next acceptance checkpoint: 1,182 entries reconciled with per-entry Unicode provenance and complete mapped/unmapped/ambiguous accounting report",
+    "criteria": [
+      "1,182 canonical identities retained",
+      "Every Unicode assignment has source-level provenance (Metamath symbols.html)",
+      "No inferred mappings",
+      "Ambiguous mappings remain explicitly ambiguous (recorded in ambiguity_notes)",
+      "Existing notation dictionaries remain unchanged (read-only inputs)",
+      "Original four crosswalk entries pass regression tests (sigma, sum, subscrl, rmw)",
+      "Baseline registry preserved as immutable artifact",
+      "Versioned updated registry produced"
+    ],
+    "no_certification": "No certification claims until actual source extraction and regression tests pass"
+  }
+}
