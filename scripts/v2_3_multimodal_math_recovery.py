@@ -407,18 +407,93 @@ class MultimodalMathRecoveryEngine:
                     y_min <= ry0 <= y_max):
                 matched_fractions.append(r)
 
-        # Pre-process accent marks (tilde, hat, etc.) that attach to a base character
-        processed_glyphs = []
-        skip_indices = set()
+        # 1. Process Large Operators and their 2D vertical limits (e.g. \sum_{c=1}^C)
+        consumed_by_large_op = set()
+        large_op_latex = {}
         for idx, g in enumerate(glyphs):
-            if idx in skip_indices:
+            if g.get("role") == "large_operator":
+                ox0, oy0, ox1, oy1 = g["metric_bbox"]
+                upper = []
+                lower = []
+                for j, other in enumerate(glyphs):
+                    if j == idx or other.get("role") == "large_operator":
+                        continue
+                    other_cx = (other["metric_bbox"][0] + other["metric_bbox"][2]) / 2.0
+                    if ox0 - 4.0 <= other_cx <= ox1 + 4.0:
+                        if other["metric_bbox"][3] <= oy0 + 2.0:
+                            upper.append((j, other))
+                        elif other["metric_bbox"][1] >= oy1 - 2.0:
+                            lower.append((j, other))
+
+                upper.sort(key=lambda item: item[1]["metric_bbox"][0])
+                lower.sort(key=lambda item: item[1]["metric_bbox"][0])
+
+                for j, _ in upper:
+                    consumed_by_large_op.add(j)
+                for j, _ in lower:
+                    consumed_by_large_op.add(j)
+
+                op_latex = g["latex"]
+                if lower:
+                    low_str = "".join(item[1]["latex"] for item in lower)
+                    op_latex += f"_{{{low_str}}}"
+                if upper:
+                    up_str = "".join(item[1]["latex"] for item in upper)
+                    op_latex += f"^{{{up_str}}}"
+                large_op_latex[idx] = op_latex
+
+        # 2. Process Fractions from vector horizontal rules
+        consumed_by_fraction = set()
+        fraction_tokens = {}  # rule x0 -> token
+        for r in matched_fractions:
+            rx0, ry0, rx1, ry1 = r["rect"]
+            ry = r.get("y_center", (ry0 + ry1) / 2.0)
+            num = []
+            den = []
+            for j, g in enumerate(glyphs):
+                if j in consumed_by_large_op:
+                    continue
+                gcx = (g["metric_bbox"][0] + g["metric_bbox"][2]) / 2.0
+                if rx0 - 2.0 <= gcx <= rx1 + 2.0:
+                    if g["metric_bbox"][3] <= ry + 1.5:
+                        num.append((j, g))
+                    elif g["metric_bbox"][1] >= ry - 1.5:
+                        den.append((j, g))
+            if num and den:
+                for j, _ in num:
+                    consumed_by_fraction.add(j)
+                for j, _ in den:
+                    consumed_by_fraction.add(j)
+                num.sort(key=lambda item: item[1]["metric_bbox"][0])
+                den.sort(key=lambda item: item[1]["metric_bbox"][0])
+                num_lat = "".join(item[1]["latex"] for item in num)
+                den_lat = "".join(item[1]["latex"] for item in den)
+                frac_lat = f"\\frac{{{num_lat}}}{{{den_lat}}}"
+                fraction_tokens[rx0] = {
+                    "type": "standard",
+                    "char": "frac",
+                    "latex": frac_lat,
+                    "role": "fraction",
+                    "kind": "operator",
+                    "relation": "base",
+                    "size_pt": base_size,
+                    "metric_bbox": [rx0, ry0, rx1, ry1],
+                    "ink_bbox": [rx0, ry0, rx1, ry1],
+                }
+
+        # 3. Pre-process accents (tilde, hat, etc.) with clean attachment
+        modified_base = {}
+        skip_accents = set()
+        for idx, g in enumerate(glyphs):
+            if idx in consumed_by_large_op or idx in consumed_by_fraction:
                 continue
             if g.get("role") == "accent_tilde" or g.get("char") in ("~", "\u0303", "\u02dc", "\u223c"):
                 g_cx = (g["metric_bbox"][0] + g["metric_bbox"][2]) / 2.0
                 best_base_idx = None
                 best_dist = 999.0
                 for j, other in enumerate(glyphs):
-                    if j == idx or j in skip_indices or other.get("role") == "accent_tilde":
+                    if (j == idx or j in consumed_by_large_op or j in consumed_by_fraction
+                            or other.get("role") == "accent_tilde"):
                         continue
                     o_cx = (other["metric_bbox"][0] + other["metric_bbox"][2]) / 2.0
                     dist = abs(g_cx - o_cx)
@@ -426,46 +501,64 @@ class MultimodalMathRecoveryEngine:
                         best_dist = dist
                         best_base_idx = j
                 if best_base_idx is not None:
-                    base_g = glyphs[best_base_idx]
-                    base_g_copy = dict(base_g)
-                    base_g_copy["latex"] = f"\\tilde{{{base_g['latex']}}}"
-                    processed_glyphs.append(base_g_copy)
-                    skip_indices.add(best_base_idx)
-                    skip_indices.add(idx)
-                    continue
-            processed_glyphs.append(g)
+                    modified_base[best_base_idx] = f"\\tilde{{{glyphs[best_base_idx]['latex']}}}"
+                    skip_accents.add(idx)
 
-        # Build token sequence with script roles
+        # 4. Build sequential tokens
+        ordered_items = []
+        for idx, g in enumerate(glyphs):
+            if idx in consumed_by_large_op or idx in consumed_by_fraction or idx in skip_accents:
+                continue
+            g_copy = dict(g)
+            if idx in large_op_latex:
+                g_copy["latex"] = large_op_latex[idx]
+                g_copy["role"] = "large_operator"
+                g_copy["kind"] = "operator"
+                ordered_items.append((g["metric_bbox"][0], g_copy))
+            elif idx in modified_base:
+                g_copy["latex"] = modified_base[idx]
+                ordered_items.append((g["metric_bbox"][0], g_copy))
+            else:
+                ordered_items.append((g["metric_bbox"][0], g_copy))
+
+        for frac_x0, frac_token in fraction_tokens.items():
+            ordered_items.append((frac_x0, frac_token))
+
+        ordered_items.sort(key=lambda item: item[0])
+
         tokens = []
-        i = 0
-        while i < len(processed_glyphs):
-            g = processed_glyphs[i]
-
-            # Classify script vs base
-            rel = "base"
-            if g["size_pt"] < base_size * 0.85:
-                # Vertical position comparison against base line
+        for _, g in ordered_items:
+            rel = g.get("relation", "base")
+            if g.get("role") == "transpose":
+                rel = "superscript"
+                lat = "\\top"
+            elif g.get("role") == "large_operator":
+                rel = "base"
+                lat = g["latex"]
+            elif g.get("role") == "fraction":
+                rel = "base"
+                lat = g["latex"]
+            elif g.get("size_pt", base_size) < base_size * 0.85:
                 mid_y = (y_min + y_max) / 2.0
                 g_y = (g["metric_bbox"][1] + g["metric_bbox"][3]) / 2.0
-                if g_y > mid_y + 1.0:
-                    rel = "subscript"
-                else:
-                    rel = "superscript"
+                rel = "subscript" if g_y > mid_y + 1.0 else "superscript"
+                lat = g["latex"].lstrip("^").lstrip("_")
+            else:
+                lat = g["latex"]
 
             tokens.append({
                 "type": "standard",
                 "char": g["char"],
-                "latex": g["latex"],
-                "role": g["role"],
-                "kind": g["kind"],
+                "latex": lat,
+                "role": g.get("role", "symbol"),
+                "kind": g.get("kind", "symbol"),
                 "relation": rel,
                 "is_tall_delimiter": g.get("is_tall_delimiter", False),
                 "metric_bbox": g["metric_bbox"],
-                "ink_bbox": g["ink_bbox"],
+                "ink_bbox": g.get("ink_bbox"),
             })
-            i += 1
 
-        # Synthesize LaTeX string
+        # 5. Synthesize LaTeX string with strict script transition
         latex_parts = []
         in_sub = False
         in_sup = False
@@ -479,12 +572,18 @@ class MultimodalMathRecoveryEngine:
             lat = t["latex"]
 
             if rel == "subscript":
+                if in_sup:
+                    latex_parts.append("}")
+                    in_sup = False
                 if not in_sub:
                     latex_parts.append(f"_{{{lat}")
                     in_sub = True
                 else:
                     latex_parts.append(lat)
             elif rel == "superscript":
+                if in_sub:
+                    latex_parts.append("}")
+                    in_sub = False
                 if not in_sup:
                     latex_parts.append(f"^{{{lat}")
                     in_sup = True
@@ -522,7 +621,8 @@ class MultimodalMathRecoveryEngine:
         mathml_elements = []
         for t in tokens:
             kind = t.get("kind", "symbol")
-            val = t.get("char") or t.get("base") or t.get("latex")
+            raw_val = t.get("char") or t.get("base") or t.get("latex")
+            val = str(raw_val).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             if kind == "operator" or kind == "accent":
                 mathml_elements.append(f"<mo>{val}</mo>")
             elif kind == "relation":

@@ -123,6 +123,8 @@ def test_piaa_003_linear_discriminant_tilde_and_transpose(engine):
     assert res["gate_d4_verification"]["gate_d4_passed"] is True
     assert res["final_verdict"] == "PASSED_VERIFIED"
     assert r"\tilde" in res["reconstructed_latex"]
+    assert r"y\tilde" not in res["reconstructed_latex"], "Base char y must not be duplicated before \\tilde"
+    assert r"\top" in res["reconstructed_latex"], "Transpose symbol must be present"
     assert r"\mathbf" in res["reconstructed_latex"]
 
 
@@ -131,7 +133,7 @@ def test_piaa_004_clustered_quad_expressions(engine):
     PIAA-004 (Eq 4):
       - Two distinct equations on one line separated by quad spacing (\qquad)
       - Inv matrix \Sigma^{-1}
-      - Fraction -1/2
+      - Fraction -1/2 reconstructed from vector drawing rule
       - Gate D4 passes
     """
     res = engine.recover_equation_region(
@@ -144,6 +146,7 @@ def test_piaa_004_clustered_quad_expressions(engine):
     assert res["status"] == "RECOVERED"
     assert res["cluster_count"] >= 2, "Should partition line into clustered quad expressions"
     assert r"\qquad" in res["reconstructed_latex"]
+    assert r"\frac" in res["reconstructed_latex"], "Vector fraction bar must reconstruct \\frac{1}{2}"
     assert res["gate_d4_verification"]["gate_d4_passed"] is True
     assert res["final_verdict"] == "PASSED_VERIFIED"
 
@@ -151,7 +154,7 @@ def test_piaa_004_clustered_quad_expressions(engine):
 def test_piaa_005_summation_operator(engine):
     r"""
     PIAA-005 (Eq 5):
-      - Large summation operator \sum
+      - Large summation operator \sum with 2D vertical limits
       - Entropy expression H(x_i)
       - Gate D4 passes
     """
@@ -167,6 +170,8 @@ def test_piaa_005_summation_operator(engine):
     assert res["gate_d4_verification"]["gate_d4_passed"] is True
     assert res["final_verdict"] == "PASSED_VERIFIED"
     assert r"\sum" in res["reconstructed_latex"]
+    assert "c=1" in res["reconstructed_latex"], "Summation lower limit must be preserved"
+    assert "C" in res["reconstructed_latex"], "Summation upper limit must be preserved"
 
 
 def test_piaa_006_inline_prose_math(engine):
