@@ -129,7 +129,7 @@ def find_visual_regions(image_array: np.ndarray, assignments: np.ndarray, palett
         y_min, y_max = float(ys.min()), float(ys.max())
         w, h = max(1.0, x_max - x_min), max(1.0, y_max - y_min)
 
-        if w < 4 or h < 4:
+        if (w < 4 or h < 4) and not (w >= 10 and h >= 1 and (w / max(1.0, h)) >= 3.5):
             continue
 
         aspect_ratio = w / h

@@ -67,8 +67,6 @@ def _token_set(text):
 def _text_match(ocr_text, parser_line_text, threshold=0.5):
     a = _token_set(ocr_text)
     b = _token_set(parser_line_text)
-    if not a and not b:
-        return True
     if not a or not b:
         return False
     union = a | b
