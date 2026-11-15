@@ -71,6 +71,32 @@ def test_core_math_symbols_mapped(catalog):
     assert "top" in symbols and symbols["top"]["tex_macro"] == r"^\top"
     assert "propto" in symbols and symbols["propto"]["tex_macro"] == r"\propto"
     assert "in" in symbols and symbols["in"]["tex_macro"] == r"\in"
+    assert "notin" in symbols and symbols["notin"]["tex_macro"] == r"\notin"
+    assert "subset" in symbols and symbols["subset"]["tex_macro"] == r"\subset"
+    assert "subseteq" in symbols and symbols["subseteq"]["tex_macro"] == r"\subseteq"
+    assert "parallel" in symbols and symbols["parallel"]["tex_macro"] == r"\parallel"
+    assert "perp" in symbols and symbols["perp"]["tex_macro"] == r"\perp"
+
+    # Calligraphic and Fraktur expansions
+    assert "cala" in symbols and symbols["cala"]["tex_macro"] == r"\mathcal{A}"
+    assert "calc" in symbols and symbols["calc"]["tex_macro"] == r"\mathcal{C}"
+    assert "caln" in symbols and symbols["caln"]["tex_macro"] == r"\mathcal{N}"
+    assert "fraka" in symbols and symbols["fraka"]["tex_macro"] == r"\mathfrak{a}"
+
+    # Binary operators & Delimiters
+    assert "times" in symbols and symbols["times"]["tex_macro"] == r"\times"
+    assert "cdot" in symbols and symbols["cdot"]["tex_macro"] == r"\cdot"
+    assert "pm" in symbols and symbols["pm"]["tex_macro"] == r"\pm"
+    assert "lfloor" in symbols and symbols["lfloor"]["tex_macro"] == r"\lfloor"
+    assert "rfloor" in symbols and symbols["rfloor"]["tex_macro"] == r"\rfloor"
+    assert "langle" in symbols and symbols["langle"]["tex_macro"] == r"\langle"
+    assert "rangle" in symbols and symbols["rangle"]["tex_macro"] == r"\rangle"
+
+    # Arrows
+    assert "to" in symbols and symbols["to"]["tex_macro"] == r"\to"
+    assert "leftarrow" in symbols and symbols["leftarrow"]["tex_macro"] == r"\leftarrow"
+    assert "leftrightarrow" in symbols and symbols["leftrightarrow"]["tex_macro"] == r"\leftrightarrow"
+    assert "mapsto" in symbols and symbols["mapsto"]["tex_macro"] == r"\mapsto"
 
 
 def test_physical_raster_image_loading(catalog):
