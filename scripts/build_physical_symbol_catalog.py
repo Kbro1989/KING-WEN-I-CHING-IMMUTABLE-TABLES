@@ -114,50 +114,77 @@ def compile_physical_symbol_catalog() -> dict[str, Any]:
     )
 
     symbols = {}
-    verified_files = 0
-    missing_files = 0
 
     for m1, filename, w, h, m2 in matches:
         mnemonic = m1 if m1 == m2 else m1
-        img_path = SYMBOLS_DIR / filename
-        file_exists = img_path.exists()
+        raw_filename = filename
 
         # Handle known typo in searchindex.html
-        if not file_exists and filename == "kruez.png" and (SYMBOLS_DIR / "kreuz.png").exists():
-            filename = "kreuz.png"
-            img_path = SYMBOLS_DIR / filename
-            file_exists = True
+        if filename.startswith("kruez."):
+            filename = filename.replace("kruez.", "kreuz.")
 
+        img_path = SYMBOLS_DIR / filename
+        file_exists = img_path.exists()
         file_size = img_path.stat().st_size if file_exists else 0
-
-        if file_exists:
-            verified_files += 1
-        else:
-            missing_files += 1
 
         tex_meta = TEX_MNEMONIC_MAP.get(mnemonic, {})
 
-        # Compute file SHA-256 if file exists
+        # Compute file SHA-256 and inspect physical properties if file exists
         file_sha256 = None
+        actual_w = int(w)
+        actual_h = int(h)
+        mode = None
+        has_transparency = False
+
         if file_exists:
             hasher = hashlib.sha256()
             with open(img_path, "rb") as img_f:
                 hasher.update(img_f.read())
             file_sha256 = hasher.hexdigest()
 
+            try:
+                from PIL import Image
+                with Image.open(img_path) as im:
+                    actual_w, actual_h = im.size
+                    mode = im.mode
+                    has_transparency = (
+                        "transparency" in im.info
+                        or im.mode in ("RGBA", "LA")
+                        or (im.mode == "P" and "transparency" in im.info)
+                    )
+            except Exception:
+                pass
+
+        # If mnemonic already seen (e.g. PNG vs GIF duplicate line in HTML), keep/update PNG as primary
+        ext = Path(filename).suffix.lower()
+        if mnemonic in symbols and symbols[mnemonic]["format"] == ".png" and ext == ".gif":
+            # Store gif companion
+            symbols[mnemonic]["gif_companion"] = {
+                "filename": filename,
+                "file_sha256": file_sha256,
+                "file_size_bytes": file_size,
+                "exists_on_disk": file_exists,
+            }
+            continue
+
         symbols[mnemonic] = {
             "mnemonic": mnemonic,
             "filename": filename,
+            "raw_html_filename": raw_filename,
             "relative_path": f"symbols/symbols/{filename}",
-            "width_px": int(w),
-            "height_px": int(h),
+            "width_px": actual_w,
+            "height_px": actual_h,
+            "tag_width_px": int(w),
+            "tag_height_px": int(h),
+            "image_mode": mode,
+            "has_transparency": has_transparency,
             "file_size_bytes": file_size,
             "file_sha256": file_sha256,
             "exists_on_disk": file_exists,
-            "format": Path(filename).suffix.lower(),
+            "format": ext,
             "tex_macro": tex_meta.get("tex"),
             "unicode_char": tex_meta.get("unicode"),
-            "category": tex_meta.get("category", "symbol"),
+            "category": tex_meta.get("category", "unmapped_symbol"),
         }
 
     catalog = {
@@ -168,6 +195,12 @@ def compile_physical_symbol_catalog() -> dict[str, Any]:
         "total_symbols_indexed": len(symbols),
         "verified_files_on_disk": sum(1 for s in symbols.values() if s["exists_on_disk"]),
         "missing_files_on_disk": sum(1 for s in symbols.values() if not s["exists_on_disk"]),
+        "mapped_tex_count": sum(1 for s in symbols.values() if s["tex_macro"] is not None),
+        "unmapped_tex_count": sum(1 for s in symbols.values() if s["tex_macro"] is None),
+        "known_errata": [
+            {"original_tag": "kruez.png/kruez.gif", "corrected_filename": "kreuz.png/kreuz.gif", "type": "filename_typo"},
+            {"original_tag": 'WIDTH=12 HEIGHT=19 SRC="largetimes.png"', "actual_size": [11, 19], "type": "dimension_mismatch"}
+        ],
         "symbols": symbols,
     }
 
